@@ -1,0 +1,19 @@
+{
+  "name": "stash-skilltree",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test 'test/**/*.test.ts' && python3 test/test_extract_markers.py",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/react": "^17.0.80",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.0"
+  }
+}
