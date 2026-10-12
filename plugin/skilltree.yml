@@ -50,3 +50,65 @@ settings:
       flash is a much dimmer, slower pulse at most once per second. Turn this
       off if flashing light affects you.
     type: NUMBER
+  sensorService:
+    displayName: Distance sensor service UUID
+    description: >-
+      GATT service of the Bluetooth distance sensor used by track clips
+      (funscript following), e.g. 0xffe0 or a full UUID like
+      6e400001-b5a3-f393-e0a9-e50e24dcca9e. Don't know it? Open
+      /skilltree/sensor and use "Find my sensor": it lists what the sensor
+      offers and can save these settings for you. Needs Chrome or Edge and
+      stash over https (or http://localhost).
+    type: STRING
+  sensorCharacteristic:
+    displayName: Distance sensor characteristic UUID
+    description: >-
+      The characteristic inside that service that sends the distance as
+      notifications, e.g. 0xffe1. "Find my sensor" at /skilltree/sensor
+      shows which one changes when you move the sensor.
+    type: STRING
+  sensorFormat:
+    displayName: Distance sensor value format
+    description: >-
+      How the distance is encoded in each notification: uint8, uint16le
+      (default; 2 bytes, little-endian, what most sensors send), uint16be,
+      int16le, uint32le, float32le, or ascii (text like "123" followed by a
+      newline, common with ESP32/serial modules).
+    type: STRING
+  sensorOffset:
+    displayName: Distance sensor value offset (bytes)
+    description: >-
+      Where the value starts inside the notification, in bytes. Default 0;
+      use 1 or 2 when the sensor sends a header or flags byte first.
+    type: NUMBER
+  sensorScale:
+    displayName: Distance sensor scale
+    description: >-
+      Multiplies the decoded value, e.g. 0.1 when the sensor reports tenths
+      of a millimetre. Default 1. Only the relative movement matters: the
+      sensor calibration at /skilltree/sensor maps your rest and deepest
+      positions to 0 and 100.
+    type: NUMBER
+  sensorNamePrefix:
+    displayName: Distance sensor name filter
+    description: >-
+      Optional. Only devices whose Bluetooth name starts with this text are
+      offered in the browser's picker (e.g. "VL53" or "Reach"). Empty shows
+      every nearby device.
+    type: STRING
+  trackMaxDepth:
+    displayName: Track max depth (0-100)
+    description: >-
+      Your depth limit for track clips, as a position on the calibrated
+      scale (0 = rest, 100 = your deepest calibrated point). Default 100 =
+      no limit beyond the calibration. Below 100, sections that go deeper
+      are still shown in the guide (with a line at your limit) but never
+      scored, so there is no reason to go beyond it.
+    type: NUMBER
+  trackMaxHoldSec:
+    displayName: Track max hold (seconds)
+    description: >-
+      Your longest hold for track clips. Default 8. Longer holds are shown
+      but not scored. Stop the clip any time (Stop or Esc) if something
+      doesn't feel right.
+    type: NUMBER

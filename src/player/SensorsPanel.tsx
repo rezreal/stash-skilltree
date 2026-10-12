@@ -2,15 +2,24 @@
 // eye tracker's connection, rate, presence and last verdict, with the
 // "Show gaze" toggle and links to connect and calibrate. Self-contained
 // (reads the shared gaze source itself), so it can sit next to any player.
+// With `distanceSensor` it also shows the Bluetooth distance sensor of track
+// clips (connection, rate, calibrated) and, with `track`, the live score.
 import { router } from "./api.ts";
 import { CALIBRATE_ROUTE } from "./common.tsx";
 import { attentionSourceLabel, gazeChipView, gazeSensorView, type AttentionReading } from "./gazeView.ts";
 import { measuredRate, useGaze, useShowGaze } from "./useGaze.ts";
+import { TrackScoreLine } from "./TrackGuide.tsx";
+import { sensorRowView } from "./trackView.ts";
+import { SENSOR_ROUTE, useTicker, useTrackSensor, type TrackHandle } from "./useTrack.ts";
 
 export function SensorsPanel(props: {
   reading: AttentionReading;
   /** snap flashes in the clip (funscript snap axis), shown when > 0 */
   snapFlashes?: number;
+  /** show the distance sensor row (the clip has a track rule) */
+  distanceSensor?: boolean;
+  /** the clip's track session, for the live score line */
+  track?: TrackHandle;
 }) {
   const { Link } = router();
   const { reading } = props;
@@ -84,6 +93,51 @@ export function SensorsPanel(props: {
           )}
         </div>
       )}
+      {(props.distanceSensor || props.track) && <DistanceSensorRow track={props.track} />}
+    </div>
+  );
+}
+
+/** the Bluetooth distance sensor: connection, rate, calibrated, live track score */
+function DistanceSensorRow(props: { track: TrackHandle | undefined }) {
+  const { Link } = router();
+  const sensor = useTrackSensor();
+  const status = sensor.status;
+  const connected = status?.connection === "connected";
+  useTicker(connected, 1000); // the rate moves without status events
+  const view = sensorRowView(status, { configured: sensor.configured, calibrated: sensor.calibrated });
+  return (
+    <div className="stp-col stp-gap-sm stp-sensor-block">
+      <div className="stp-row">
+        <span>{view.title}</span>
+        <span className={`stp-tone-${view.tone}`}>{view.connection}</span>
+      </div>
+      {connected && (
+        <div className="stp-row stp-small">
+          <span className="stp-muted">Rate</span>
+          <span className="stp-mono">{view.rate}</span>
+        </div>
+      )}
+      {sensor.configured && (
+        <div className="stp-row stp-small">
+          <span className="stp-muted">Calibrated</span>
+          <span className={sensor.calibrated ? "" : "stp-orange"}>{view.calibrated}</span>
+        </div>
+      )}
+      <TrackScoreLine track={props.track} showLimits />
+      {!connected && view.hint && <p className="stp-small stp-muted stp-lh stp-sensor-hint">{view.hint}</p>}
+      <div className="stp-row stp-small">
+        {view.canConnect ? (
+          <button type="button" className="stp-btn stp-btn-outline stp-btn-sm" onClick={sensor.connect}>
+            Connect sensor
+          </button>
+        ) : (
+          <span />
+        )}
+        <Link to={SENSOR_ROUTE} className="stp-small stp-orange">
+          {sensor.configured && sensor.calibrated ? "Sensor setup" : sensor.configured ? "Calibrate sensor" : "Set up sensor"}
+        </Link>
+      </div>
     </div>
   );
 }
