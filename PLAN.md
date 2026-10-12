@@ -156,6 +156,15 @@ Watch policy = rules composed per scene from its tags:
   `eyesClosedDim`, default 30 %, capped at 60 % so the screen still lights
   the face for the webcam; 0.9 s fade in and out): the cue to close them and
   what a peek sees. The bar and the prompt banner stay bright.
+  While a gaze prompt with a region on the video runs (every target but
+  eyes_closed and off_screen), everything around the region blurs (setting
+  `focusBlur`, default 60 % = 12 px at the outer ring, 0 = off): three
+  backdrop-filter rings masked around the region's ellipse (a polygon by
+  the ellipse through its bounding box's corners), growing out from its
+  edge in units of its size (capped at 100 px so large regions keep blur
+  on screen). The blur builds up (smoothstep) over the first 8 s of the
+  window and eases out at the end or when the region is lost for 1.5 s
+  (src/player/focusBlur.ts, FocusBlur.tsx).
 - `track` — funscript + BLE distance sensor. Depth = 100 − pos (funscript
   pos 100 = top of the stroke = out, 0 = deepest; files marked `inverted`
   are taken as is); the guide shows IN at the top. Sections: stroke (range +

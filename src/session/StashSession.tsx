@@ -49,6 +49,8 @@ import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
 import { eyesClosedDimOpacity } from "../player/flash.ts";
+import { FocusBlur } from "../player/FocusBlur.tsx";
+import { focusBlurPx, wantsFocusBlur } from "../player/focusBlur.ts";
 import { trackGlowIntensity } from "../player/trackView.ts";
 import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
@@ -427,6 +429,7 @@ function SessionOverlay(props: {
   const prompt = checks.promptAttention();
   const dimOpacity = eyesClosedDimOpacity(rawSettings.eyesClosedDim);
   const dimOn = !finished && dimOpacity > 0 && prompt?.spec.target === "eyes_closed";
+  const focusSpec = !finished && wantsFocusBlur(prompt?.spec) ? prompt?.spec : undefined;
   const texts = attentionTexts(attention.reading, presence, required, prompt);
   const attendingNow = sessionAttending(attention.reading, presence, { required, prompt });
 
@@ -471,6 +474,13 @@ function SessionOverlay(props: {
         className={`stp-sp-dim${dimOn ? " is-on" : ""}`}
         style={dimOn ? { opacity: dimOpacity } : undefined}
         aria-hidden="true"
+      />
+      {/* a gaze prompt on a region: everything around it blurs, more the longer the prompt runs */}
+      <FocusBlur
+        spec={focusSpec}
+        regionFor={checks.regionFor}
+        getVideoTime={getVideoTime}
+        strength={focusBlurPx(rawSettings.focusBlur)}
       />
       <GazeDot getContainer={getContainer} />
       <FlashOverlay getContainer={getContainer} getVideoTime={getVideoTime} events={snaps} intensity={flashIntensity} />

@@ -49,6 +49,16 @@ settings:
       than 60 so the screen stays visible and still lights your face for
       the webcam.
     type: NUMBER
+  focusBlur:
+    displayName: Blur around the gaze target (%)
+    description: >-
+      While a marker asks you to look at part of the clip (the eyes, face,
+      mouth, hands, chest, ...), everything around that part blurs: more
+      the further from it, and more and more over the first seconds of the
+      prompt. The part you should look at stays sharp. Needs video analysis
+      for targets on the person. Default 60; 0 turns it off; 100 is the
+      strongest blur.
+    type: NUMBER
   snapFlash:
     displayName: Snap flash brightness (%)
     description: >-
