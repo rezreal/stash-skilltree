@@ -148,6 +148,30 @@ export async function searchTags(client: StashClient, q: string): Promise<TagHit
   return res.findTags.tags.map((t) => ({ id: t.id, name: t.name, sceneCount: t.scene_count ?? 0 }));
 }
 
+export const TAGS_BY_IDS = /* GraphQL */ `
+  query SkilltreeTestTagsByIds($ids: [ID!], $filter: FindFilterType) {
+    findTags(ids: $ids, filter: $filter) {
+      count
+      tags {
+        id
+        name
+        scene_count
+      }
+    }
+  }
+`;
+
+/** the tags with these ids (a deep link names tags by id), in the given order; unknown ids are skipped */
+export async function loadTagsByIds(client: StashClient, ids: readonly string[]): Promise<TagHit[]> {
+  if (ids.length === 0) return [];
+  const res = await client.gql<SearchTagsResult>(TAGS_BY_IDS, { ids: [...ids], filter: { per_page: -1 } });
+  const byId = new Map(res.findTags.tags.map((t) => [t.id, { id: t.id, name: t.name, sceneCount: t.scene_count ?? 0 }] as const));
+  return ids.flatMap((id) => {
+    const t = byId.get(id);
+    return t ? [t] : [];
+  });
+}
+
 // --- one scene -----------------------------------------------------------------
 
 /** One scene with the library loader's fields, mapped like the library; undefined if stash has none. */

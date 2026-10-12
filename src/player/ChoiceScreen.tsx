@@ -24,6 +24,7 @@ import {
   Balance,
   CoinIcon,
   DataGate,
+  PLAY_ROUTE,
   LockIcon,
   RefreshLine,
   TreeIcon,
@@ -38,6 +39,7 @@ import { performerGazeSummary } from "./gazeRegionsView.ts";
 import { PerformerAvatar } from "./PerformerAvatar.tsx";
 import { loadCurrentPerformer, loadTestMode, saveCurrentPerformer, saveTestMode } from "./storage.ts";
 import { TestPanel } from "./TestPanel.tsx";
+import { EMPTY_TEST_LINK, parsePlayLink, playLinkSearch, type TestLink } from "./playLink.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import { fogDepthRows } from "../ui/fogView.ts";
 import {
@@ -84,18 +86,39 @@ interface ChoiceViewProps {
 
 function ChoiceView(props: ChoiceViewProps) {
   const { data, reload } = props;
-  const [stored, setStored] = React.useState<Id | undefined>(() => loadCurrentPerformer());
+  const { useHistory, useLocation } = router();
+  const history = useHistory();
+  const location = useLocation();
+  // a deep link wins over the remembered choices (and becomes them)
+  const [initial] = React.useState(() => parsePlayLink(location.search));
+  const [stored, setStored] = React.useState<Id | undefined>(() =>
+    initial.has.performer ? initial.link.performer : loadCurrentPerformer(),
+  );
   const performerId = stored !== undefined && data.graph.performers.has(stored) ? stored : undefined;
   const choosePerformer = React.useCallback((id: Id | undefined) => {
     saveCurrentPerformer(id);
     setStored(id);
     window.scrollTo?.(0, 0);
   }, []);
-  const [testMode, setTestModeState] = React.useState(() => loadTestMode());
+  const [testMode, setTestModeState] = React.useState(() => (initial.has.test ? initial.link.test !== undefined : loadTestMode()));
   const setTestMode = React.useCallback((on: boolean) => {
     saveTestMode(on);
     setTestModeState(on);
   }, []);
+  React.useEffect(() => {
+    if (initial.has.performer) saveCurrentPerformer(initial.link.performer);
+    if (initial.has.test) saveTestMode(initial.link.test !== undefined);
+  }, []);
+  const [testLink, setTestLink] = React.useState<TestLink>(initial.link.test ?? EMPTY_TEST_LINK);
+
+  // what is shown goes into the URL (replace: no history entry per click)
+  const search = playLinkSearch({
+    ...(performerId !== undefined ? { performer: performerId } : {}),
+    ...(testMode ? { test: testLink } : {}),
+  });
+  React.useEffect(() => {
+    if (search !== location.search) history.replace(`${PLAY_ROUTE}${search}`);
+  }, [search]);
 
   // daily series change at the day boundary: suggestions follow the day,
   // cards the clock
@@ -139,7 +162,7 @@ function ChoiceView(props: ChoiceViewProps) {
       <main className="stp-main">
         <section className="stp-primary" aria-label={testMode ? "Test mode" : performerId ? "Suggestions" : "Start"}>
           {testMode ? (
-            <TestPanel data={data} />
+            <TestPanel data={data} initial={testLink} onChange={setTestLink} />
           ) : performerId === undefined || result === undefined ? (
             <StartView data={data} baseInput={baseInput} seriesCards={seriesCards} onPick={choosePerformer} />
           ) : (

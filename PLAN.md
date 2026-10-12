@@ -273,6 +273,11 @@ shared or reloaded (the author page also has a "Copy link" button):
 - `/skilltree?view=setup&tab=ladder&topic=Relaxation` — topic ladder
 - `/skilltree?view=setup&tab=series` — daily series setup
 - `/skilltree/sensor?tab=status|calibrate|range|device` — sensor menu
+- `/skilltree/play?performer=12` — play: that performer's suggestions
+- `/skilltree/play?test=1&funscript=1&prompts=1&tags=4,9&q=intro&page=2` — test mode with its search
+
+On the play page a link wins over the remembered performer / test mode and
+becomes the remembered choice.
 
 A tag implies the tags tab, a topic the ladder tab; fog=1 wins over setup
 (setup needs the author view); unknown nodes or performers are dropped.

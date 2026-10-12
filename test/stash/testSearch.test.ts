@@ -10,6 +10,8 @@ import {
   loadSceneById,
   pageCount,
   searchTags,
+  loadTagsByIds,
+  TAGS_BY_IDS,
   searchTestScenes,
   tagSearchVariables,
   testSceneFilter,
@@ -161,6 +163,20 @@ describe("tags and single scenes", () => {
       { id: "2", name: "Black", sceneCount: 0 },
     ]);
     assert.equal(calls[0].query, SEARCH_TAGS);
+  });
+
+  it("loadTagsByIds: keeps the given order and skips unknown ids", async () => {
+    const { client, calls } = fakeClient(() => ({
+      findTags: { count: 2, tags: [{ id: "2", name: "Black", scene_count: 3 }, { id: "1", name: "Blue", scene_count: null }] },
+    }));
+    assert.deepEqual(await loadTagsByIds(client, ["1", "9", "2"]), [
+      { id: "1", name: "Blue", sceneCount: 0 },
+      { id: "2", name: "Black", sceneCount: 3 },
+    ]);
+    assert.equal(calls[0].query, TAGS_BY_IDS);
+    assert.deepEqual(calls[0].variables, { ids: ["1", "9", "2"], filter: { per_page: -1 } });
+    assert.deepEqual(await loadTagsByIds(client, []), []);
+    assert.equal(calls.length, 1, "no request without ids");
   });
 
   it("loadSceneById: findScene with the same fields, mapped like the library", async () => {

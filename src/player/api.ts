@@ -21,6 +21,7 @@ export interface PlayRouter {
   Link: ReturnType<typeof pluginApi>["libraries"]["ReactRouterDOM"]["Link"];
   useParams: <T extends Record<string, string>>() => T;
   useHistory: () => History;
+  useLocation: () => { pathname: string; search: string };
 }
 
 export function router(): PlayRouter {

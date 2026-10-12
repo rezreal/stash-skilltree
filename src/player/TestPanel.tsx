@@ -9,6 +9,7 @@ import {
   EMPTY_CRITERIA,
   TEST_PER_PAGE,
   loadPromptTagIds,
+  loadTagsByIds,
   pageCount,
   searchTags,
   searchTestScenes,
@@ -20,6 +21,7 @@ import {
 import { wantsSensor, watchUrl } from "../session/watchUrl.ts";
 import { connectSensorForClip } from "./useTrack.ts";
 import { router } from "./api.ts";
+import { EMPTY_TEST_LINK, type TestLink } from "./playLink.ts";
 import { errorText } from "./common.tsx";
 import { dateLabel, formatDuration, plural } from "./format.ts";
 import { rangeLabel, testSceneChips } from "./testView.ts";
@@ -39,14 +41,37 @@ function useDebounced<T>(value: T, ms: number): T {
 
 type Load<T> = { status: "idle" } | { status: "loading" } | { status: "ready"; value: T } | { status: "error"; error: string };
 
-export function TestPanel(props: { data: PlayData }) {
+export function TestPanel(props: {
+  data: PlayData;
+  /** the search to start with (a deep link) */
+  initial?: TestLink;
+  /** the search changed (for the page's deep link) */
+  onChange?: (link: TestLink) => void;
+}) {
   const { data } = props;
   const client = data.client;
-  const [tags, setTags] = React.useState<TagHit[]>([]);
-  const [funscript, setFunscript] = React.useState(false);
-  const [promptMarkers, setPromptMarkers] = React.useState(false);
-  const [titleInput, setTitleInput] = React.useState("");
+  const start = props.initial ?? EMPTY_TEST_LINK;
+  // tags from a link carry only ids: shown by id until their names arrive
+  const [tags, setTags] = React.useState<TagHit[]>(() => start.tags.map((id) => ({ id, name: `tag ${id}`, sceneCount: 0 })));
+  const [funscript, setFunscript] = React.useState(start.funscript);
+  const [promptMarkers, setPromptMarkers] = React.useState(start.prompts);
+  const [titleInput, setTitleInput] = React.useState(start.title);
   const title = useDebounced(titleInput, DEBOUNCE_MS);
+  React.useEffect(() => {
+    if (start.tags.length === 0) return;
+    let live = true;
+    loadTagsByIds(client, start.tags).then(
+      (named) => {
+        if (!live) return;
+        // keep the user's picks if they changed the tags meanwhile
+        setTags((cur) => (cur.map((t) => t.id).join(",") === start.tags.join(",") ? named : cur));
+      },
+      () => undefined, // names stay "tag <id>"; the filter still works
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // prompt tag ids, once (needed for "has prompt markers")
   const [promptTags, setPromptTags] = React.useState<Load<string[]>>({ status: "idle" });
@@ -62,7 +87,7 @@ export function TestPanel(props: { data: PlayData }) {
   const tagKey = tags.map((t) => t.id).join(",");
   // the page belongs to one filter: a new filter starts at page 1
   const filterKey = JSON.stringify([tagKey, funscript, promptMarkers, title]);
-  const [paging, setPaging] = React.useState({ filterKey, page: 1 });
+  const [paging, setPaging] = React.useState({ filterKey, page: start.page });
   const page = paging.filterKey === filterKey ? paging.page : 1;
   const setPage = (p: number) => setPaging({ filterKey, page: p });
 
@@ -70,6 +95,11 @@ export function TestPanel(props: { data: PlayData }) {
     () => ({ ...EMPTY_CRITERIA, tagIds: tagKey ? tagKey.split(",") : [], funscript, promptMarkers, title, page }),
     [tagKey, funscript, promptMarkers, title, page],
   );
+  const onChange = React.useRef(props.onChange);
+  onChange.current = props.onChange;
+  React.useEffect(() => {
+    onChange.current?.({ tags: tagKey ? tagKey.split(",") : [], funscript, prompts: promptMarkers, title, page });
+  }, [tagKey, funscript, promptMarkers, title, page]);
   const promptIds = promptTags.status === "ready" ? promptTags.value : undefined;
   const [results, setResults] = React.useState<Load<TestSearchPage>>({ status: "idle" });
   const [searching, setSearching] = React.useState(false);
