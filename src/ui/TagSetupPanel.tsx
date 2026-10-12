@@ -398,20 +398,32 @@ function Field(props: FieldProps) {
     return (
       <fieldset className="form-group" aria-describedby={describedBy}>
         <legend className="col-form-label pt-0">{label}</legend>
-        {(spec.options ?? []).map((opt) => (
-          <div key={opt} className="custom-control custom-checkbox custom-control-inline">
-            <input
-              type="checkbox"
-              className={"custom-control-input" + (error ? " is-invalid" : "")}
-              id={`${id}-${opt}`}
-              checked={tokens.includes(opt)}
-              onChange={(e) => onChange(toggleListToken(value, opt, e.target.checked))}
-            />
-            <label className="custom-control-label" htmlFor={`${id}-${opt}`}>
-              {opt}
-            </label>
-          </div>
-        ))}
+        {(spec.options ?? []).map((opt) => {
+          const optHelp = spec.optionHelp?.[opt];
+          return (
+            <div
+              key={opt}
+              className={"custom-control custom-checkbox" + (optHelp ? " skilltree-option" : " custom-control-inline")}
+            >
+              <input
+                type="checkbox"
+                className={"custom-control-input" + (error ? " is-invalid" : "")}
+                id={`${id}-${opt}`}
+                checked={tokens.includes(opt)}
+                aria-describedby={optHelp ? `${id}-${opt}-help` : undefined}
+                onChange={(e) => onChange(toggleListToken(value, opt, e.target.checked))}
+              />
+              <label className="custom-control-label" htmlFor={`${id}-${opt}`}>
+                {opt}
+              </label>
+              {optHelp && (
+                <small id={`${id}-${opt}-help`} className="form-text text-muted skilltree-option-help">
+                  {optHelp}
+                </small>
+              )}
+            </div>
+          );
+        })}
         {errorLine}
         {help}
       </fieldset>
@@ -441,6 +453,7 @@ function Field(props: FieldProps) {
             </option>
           ))}
         </select>
+        {spec.optionHelp?.[value] && <small className="form-text text-muted skilltree-option-help">{spec.optionHelp[value]}</small>}
         {errorLine}
         {help}
       </div>

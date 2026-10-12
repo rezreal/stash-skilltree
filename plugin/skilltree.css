@@ -903,3 +903,12 @@
     max-height: none;
   }
 }
+
+/* setup: one line of explanation per option */
+.skilltree .skilltree-option {
+  margin-bottom: 0.5rem;
+}
+.skilltree .skilltree-option-help {
+  margin-top: 0.1rem;
+  line-height: 1.35;
+}

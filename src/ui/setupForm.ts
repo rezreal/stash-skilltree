@@ -65,9 +65,63 @@ export interface FieldSpec {
   min?: number;
   max?: number;
   help?: string;
+  /** a sentence per option, shown beside checkboxes or under the chosen value */
+  optionHelp?: Readonly<Record<string, string>>;
   /** the field only applies when this holds */
   when?: (values: FormValues) => boolean;
 }
+
+export const POLICY_RULE_HELP: Readonly<Record<(typeof POLICY_RULES)[number], string>> = {
+  attention:
+    "Watch with attention: at least 90% of the clip with the gaze on the video (eye tracker) or the window focused and in use, " +
+    "and in front of the camera when the webcam is on. Looking away pauses, staying away aborts.",
+  exposure:
+    "For loops: total listening time counts (Minimum minutes), added up across sessions, also in a background tab. " +
+    "Replaces attention; the loop may be paused.",
+  prompts:
+    "Follow the clip's prompt markers - repeat a phrase, look at a target, take a pose. At least 75% of the prompts " +
+    "that could be checked must pass. Added automatically when a clip has prompt markers.",
+  track:
+    "Follow the clip's funscript with the distance sensor: strokes, holds and ramps, scored against Minimum track score. " +
+    "Not scored without a calibrated sensor.",
+};
+
+export const PROMPT_CHECK_HELP: Readonly<Record<string, string>> = {
+  repeat: "the viewer says the marker's title out loud (checked by local speech recognition)",
+  gaze: "the viewer looks at a target on the person in the video, or away, for the hold time",
+  action: "the viewer does something the webcam can see: nod, close the eyes, a pose",
+  spend: "the clip asks for the amount in the marker's title in stashcoins; declining fails the clip",
+};
+
+export const GAZE_TARGET_HELP: Readonly<Record<string, string>> = {
+  eyes: "the person's eyes",
+  face: "the person's face",
+  mouth: "the person's mouth",
+  hands: "the person's hands",
+  chest: "the upper torso, below the shoulders",
+  torso: "shoulders to hips",
+  hips: "the band around the hips",
+  groin: "below the middle of the hips, towards the thighs",
+  legs: "hips down to the ankles",
+  feet_floor: "the floor in front of the person's feet",
+  screen_center: "the middle of the picture",
+  off_screen: "anywhere but the video",
+};
+
+export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
+  nod: "nod at least once (down and up)",
+  shake_head: "shake the head at least once",
+  eyes_closed: "keep both eyes closed",
+  eyes_open: "keep the eyes open (blinks are fine)",
+  hand_raised: "raise a hand above the shoulder",
+  still: "stay still in front of the camera",
+  arms_up: "both arms up above the head",
+  hands_on_head: "both hands on the head",
+  hands_together: "hands together in front of the chest",
+  kneel: "kneel (the camera must see the legs)",
+  stand: "stand upright (the camera must see the legs)",
+  lie_down: "lie down",
+};
 
 export const FIELD_SPECS: readonly FieldSpec[] = [
   { key: "st.topic", label: "Topic", kind: "interest", type: "text", required: true, help: "letters, digits, spaces, _ and -" },
@@ -82,14 +136,40 @@ export const FIELD_SPECS: readonly FieldSpec[] = [
   },
   { key: "st.trigger", label: "Trigger", kind: "trigger", type: "text", required: true, help: "pairs installed and used tags" },
   { key: "st.trigger_role", label: "Role", kind: "trigger", type: "choice", required: true, options: TRIGGER_ROLES },
-  { key: "st.policy", label: "Rules", kind: "policy", type: "list", required: true, options: POLICY_RULES },
-  { key: "st.min_minutes", label: "Minimum minutes", kind: "policy", type: "number", min: 0 },
-  { key: "st.track_min", label: "Minimum track score", kind: "policy", type: "number", min: 0, max: 1, help: "0 to 1" },
-  { key: "st.hold_tol", label: "Hold tolerance", kind: "policy", type: "number", min: 0 },
-  { key: "st.hold_min_ms", label: "Minimum hold (ms)", kind: "policy", type: "int", min: 0 },
-  { key: "st.idle_max", label: "Idle maximum", kind: "policy", type: "number", min: 0 },
-  { key: "st.reward_mult", label: "Reward multiplier", kind: "policy", type: "number", min: 0 },
-  { key: "st.check", label: "Check", kind: "prompt", type: "choice", required: true, options: PROMPT_CHECKS },
+  {
+    key: "st.policy",
+    label: "Rules",
+    kind: "policy",
+    type: "list",
+    required: true,
+    options: POLICY_RULES,
+    optionHelp: POLICY_RULE_HELP,
+    help:
+      "What a clip with this tag must do to count as completed; every checked rule applies. " +
+      "Clips without a policy tag use attention, plus prompts when they have prompt markers.",
+  },
+  {
+    key: "st.min_minutes",
+    label: "Minimum minutes",
+    kind: "policy",
+    type: "number",
+    min: 0,
+    help: "exposure: listening time needed, added up over sessions (default: one full play)",
+  },
+  {
+    key: "st.track_min",
+    label: "Minimum track score",
+    kind: "policy",
+    type: "number",
+    min: 0,
+    max: 1,
+    help: "track: score from 0 to 1 the following must reach (default 0.7)",
+  },
+  { key: "st.hold_tol", label: "Hold tolerance", kind: "policy", type: "number", min: 0, help: "track: how far from a hold's depth still counts, in script units (default 8)" },
+  { key: "st.hold_min_ms", label: "Minimum hold (ms)", kind: "policy", type: "int", min: 0, help: "track: shortest flat stretch treated as a hold (default 800)" },
+  { key: "st.idle_max", label: "Idle maximum", kind: "policy", type: "number", min: 0, help: "track: flat stretches at or below this depth are rest, not holds (default 5)" },
+  { key: "st.reward_mult", label: "Reward multiplier", kind: "policy", type: "number", min: 0, help: "coins earned are multiplied by this, e.g. 2 for effortful training clips" },
+  { key: "st.check", label: "Check", kind: "prompt", type: "choice", required: true, options: PROMPT_CHECKS, optionHelp: PROMPT_CHECK_HELP },
   {
     key: "st.target",
     label: "Gaze target",
@@ -97,6 +177,7 @@ export const FIELD_SPECS: readonly FieldSpec[] = [
     type: "choice",
     required: true,
     options: GAZE_TARGETS,
+    optionHelp: GAZE_TARGET_HELP,
     when: (v) => (v["st.check"] ?? "").trim().toLowerCase() === "gaze",
   },
   {
@@ -106,6 +187,7 @@ export const FIELD_SPECS: readonly FieldSpec[] = [
     type: "choice",
     required: true,
     options: PROMPT_ACTIONS,
+    optionHelp: PROMPT_ACTION_HELP,
     when: (v) => (v["st.check"] ?? "").trim().toLowerCase() === "action",
   },
 ];
