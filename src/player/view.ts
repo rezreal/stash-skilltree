@@ -220,6 +220,7 @@ const ABORT_TEXT: Record<AbortReason, string> = {
   "spend-declined": "A spend prompt was declined, so this clip fails.",
   "attention-below-threshold": "Not enough of the clip was attended.",
   "prompts-below-threshold": "Not enough prompts were followed.",
+  "track-below-threshold": "The script wasn't followed closely enough.",
   "exposure-below-minimum": "The loop didn't play long enough.",
   error: "The video could not be played.",
 };

@@ -91,6 +91,18 @@ describe("policyForScene", () => {
     assert.deepEqual(policyForScene(plain, tags).rules, ["attention"]);
   });
 
+  it("trackMin: strictest over tags, percent values read as shares, default 0.7", () => {
+    const tt: PolicyTagInput[] = [
+      { id: "t1", name: "t1", rules: ["track"], trackMin: 0.6 },
+      { id: "t2", name: "t2", rules: ["track"], trackMin: 80 },
+      { id: "t3", name: "t3", rules: ["track"], trackMin: 500 },
+    ];
+    assert.equal(policyForScene(scene("1", ["t1"]), tt).trackMin, 0.6);
+    assert.equal(policyForScene(scene("1", ["t1", "t2"]), tt).trackMin, 0.8);
+    assert.equal(policyForScene(scene("1", ["t3"]), tt).trackMin, 1);
+    assert.equal(policyForScene(scene("1", ["pp"]), tags).trackMin, 0.7);
+  });
+
   it("exposure drops attention, minMinutes is the max", () => {
     const p = policyForScene(scene("1", ["pa", "pe", "pe2"]), tags);
     assert.deepEqual(p.rules, ["exposure"]);

@@ -40,6 +40,11 @@ export function parsePolicyTag(tag: StashTag): PolicyTagInput {
   return out;
 }
 
+/** A share given as 0..1 or as percent (> 1), as 0..1. */
+function normalizeShare(v: number): number {
+  return Math.min(1, v > 1 ? v / 100 : v);
+}
+
 /** Tags with st.kind=policy (server filter: st.kind is set; kind checked here). */
 export async function loadPolicyTags(client: StashClient): Promise<PolicyTagInput[]> {
   const res = await client.gql<FindPolicyTagsResult>(FIND_POLICY_TAGS, policyTagsVariables());
@@ -58,6 +63,8 @@ export function hasPromptMarkers(scene: SceneInput): boolean {
  * - prompt markers add "prompts";
  * - "exposure" (loops) drops "attention": a loop may play in a background tab;
  * - minMinutes = max over tags; rewardMult = max over tags (default 1);
+ * - trackMin = max over tags (the strictest), values above 1 read as percent
+ *   ("70" = 0.7), capped at 1; default DEFAULT_POLICY.trackMin;
  * - other thresholds from DEFAULT_POLICY.
  */
 export function policyForScene(scene: SceneInput, policyTags: PolicyTagInput[]): WatchPolicy {
@@ -65,11 +72,13 @@ export function policyForScene(scene: SceneInput, policyTags: PolicyTagInput[]):
   const rules = new Set<RuleName>();
   let minMinutes: number | undefined;
   let rewardMult: number | undefined;
+  let trackMin: number | undefined;
   for (const tag of policyTags) {
     if (!tagIds.has(tag.id)) continue;
     for (const r of tag.rules) rules.add(r);
     if (tag.minMinutes !== undefined) minMinutes = Math.max(minMinutes ?? 0, tag.minMinutes);
     if (tag.rewardMult !== undefined) rewardMult = Math.max(rewardMult ?? 0, tag.rewardMult);
+    if (tag.trackMin !== undefined) trackMin = Math.max(trackMin ?? 0, normalizeShare(tag.trackMin));
   }
   if (rules.size === 0) rules.add("attention");
   if (hasPromptMarkers(scene)) rules.add("prompts");
@@ -81,6 +90,7 @@ export function policyForScene(scene: SceneInput, policyTags: PolicyTagInput[]):
     rewardMult: rewardMult ?? DEFAULT_POLICY.rewardMult,
   };
   if (minMinutes !== undefined) policy.minMinutes = minMinutes;
+  if (trackMin !== undefined) policy.trackMin = trackMin;
   // loops may be paused and resumed; watched clips may not
   if (!policy.rules.includes("attention") && policy.rules.includes("exposure")) policy.allowUserPause = true;
   return policy;

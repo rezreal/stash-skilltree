@@ -265,6 +265,41 @@ describe("session", () => {
     assert.deepEqual(qualityScores(s), { attention: 1 });
   });
 
+  it("track: the latest reported score is scored and checked against trackMin", () => {
+    const policy: WatchPolicy = { ...DEFAULT_POLICY, rules: ["attention", "track"] };
+    assert.equal(DEFAULT_POLICY.trackMin, 0.7);
+    let s = start(100, policy);
+    s = play(s, { from: 0, seconds: 100 });
+    s = step(s, { type: "track", score: 0.4 });
+    assert.equal(s.track, 0.4);
+    const failed = step(s, { type: "ended", nowMs: s.lastNowMs });
+    assert.equal(failed.phase, "aborted");
+    assert.equal(failed.abortReason, "track-below-threshold");
+    s = step(s, { type: "track", score: 0.8 });
+    s = step(s, { type: "ended", nowMs: s.lastNowMs });
+    assert.equal(s.phase, "complete");
+    assert.deepEqual(qualityScores(s), { attention: 1, track: 0.8 });
+    assert.ok(Math.abs(sessionQuality(s) - 0.9) < 1e-9);
+  });
+
+  it("track: scores are clamped, a stricter trackMin applies, and no score means not scored", () => {
+    const policy: WatchPolicy = { ...DEFAULT_POLICY, rules: ["track"], trackMin: 0.9 };
+    let s = start(100, policy);
+    s = play(s, { from: 0, seconds: 100 });
+    assert.equal(step(s, { type: "track", score: 7 }).track, 1);
+    assert.equal(step(s, { type: "track", score: Number.NaN }).track, undefined);
+    assert.equal(step(step(s, { type: "track", score: 0.85 }), { type: "ended", nowMs: s.lastNowMs }).abortReason, "track-below-threshold");
+    const none = step(s, { type: "ended", nowMs: s.lastNowMs });
+    assert.equal(none.phase, "complete");
+    assert.deepEqual(qualityScores(none), {});
+    // a track score without the track rule is ignored
+    let plain = start(100);
+    plain = play(plain, { from: 0, seconds: 100 });
+    plain = step(step(plain, { type: "track", score: 0.1 }), { type: "ended", nowMs: plain.lastNowMs });
+    assert.equal(plain.phase, "complete");
+    assert.deepEqual(qualityScores(plain), { attention: 1 });
+  });
+
   it("exposure-only loop: no attention needed, counts audible play across wraps, adds prior exposure", () => {
     const policy: WatchPolicy = { ...DEFAULT_POLICY, rules: ["exposure"], minMinutes: 2 };
     let s = start(30, policy, 30);

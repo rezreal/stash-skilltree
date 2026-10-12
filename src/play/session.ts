@@ -196,6 +196,7 @@ export function evaluateRules(state: SessionState): AbortReason | undefined {
     const passed = state.prompts.filter((r) => r.passed).length;
     if (passed / state.prompts.length < p.promptsMin) return "prompts-below-threshold";
   }
+  if (p.rules.includes("track") && state.track !== undefined && state.track < p.trackMin) return "track-below-threshold";
   if (p.rules.includes("exposure") && exposureTotal(state) < exposureTarget(state)) return "exposure-below-minimum";
   return undefined;
 }
@@ -240,6 +241,9 @@ export function step(state: SessionState, event: SessionEvent): SessionState {
     case "spend":
       s.spends = [...s.spends, event.event];
       return event.event.accepted ? s : abort(s, "spend-declined");
+    case "track":
+      if (Number.isFinite(event.score)) s.track = Math.max(0, Math.min(1, event.score));
+      return s;
     case "abort":
       return abort(s, event.reason, event.nowMs);
     case "ended": {
@@ -273,8 +277,9 @@ export function attentionScore(f: number, m: number): number {
 /**
  * Per-rule scores, usable live. attention: attentionScore; prompts: share of
  * reported prompt results that passed (prompts the UI cannot check yet are
- * not reported and so not scored); exposure: min(1, total / target). track is
- * not scored yet (phase 5).
+ * not reported and so not scored); exposure: min(1, total / target); track:
+ * the latest reported track score (none reported, e.g. no sensor or nothing
+ * scorable yet: not scored).
  */
 export function qualityScores(state: SessionState, policy: WatchPolicy = state.policy): QualityScores {
   const out: QualityScores = {};
@@ -287,6 +292,7 @@ export function qualityScores(state: SessionState, policy: WatchPolicy = state.p
     const target = m !== undefined && m > 0 ? m * 60 : effectiveDuration(state);
     out.exposure = target > 0 ? Math.min(1, exposureTotal(state) / target) : 1;
   }
+  if (policy.rules.includes("track") && state.track !== undefined) out.track = state.track;
   return out;
 }
 

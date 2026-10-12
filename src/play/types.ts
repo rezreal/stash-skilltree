@@ -19,6 +19,8 @@ export interface WatchPolicy {
   minMinutes?: number;
   /** prompts: share of prompts that must be followed (default 0.75) */
   promptsMin: number;
+  /** track: overall track score (0..1) needed (default 0.7, st.track_min) */
+  trackMin: number;
   rewardMult: number;
   /**
    * Whether the viewer may pause. Off for watched clips: only the plugin
@@ -71,6 +73,8 @@ export type AbortReason =
   | "attention-below-threshold"
   /** ended with passed prompt share < promptsMin */
   | "prompts-below-threshold"
+  /** ended with a track score < trackMin */
+  | "track-below-threshold"
   /** ended (or stopped) with less exposure than needed */
   | "exposure-below-minimum"
   /** player/video error, tab closed, anything else the UI detects */
@@ -104,6 +108,8 @@ export interface SessionState {
   /** latest result per prompt marker */
   prompts: PromptResult[];
   spends: SpendEvent[];
+  /** latest overall track score 0..1 (src/track scorer); undefined until something was scored */
+  track?: number;
   /** who paused: the user (no abort timer) or the attention rule */
   pausedBy?: "user" | "inattention";
   /** nowMs when inattention started while playing (grace running) */
@@ -133,6 +139,8 @@ export type SessionEvent =
     }
   | { type: "prompt"; result: PromptResult }
   | { type: "spend"; event: SpendEvent }
+  /** latest overall track score 0..1 (TrackScore.overall); replaces the previous one */
+  | { type: "track"; score: number }
   | { type: "ended"; nowMs: number }
   | { type: "abort"; reason: AbortReason; nowMs?: number };
 
@@ -141,6 +149,7 @@ export interface QualityScores {
   attention?: number;
   prompts?: number;
   exposure?: number;
+  track?: number;
 }
 
 /** what a finished session writes back; nothing is written for aborted ones */
@@ -268,5 +277,6 @@ export const DEFAULT_POLICY: WatchPolicy = {
   graceSec: 2,
   abortSec: 30,
   promptsMin: 0.75,
+  trackMin: 0.7,
   rewardMult: 1,
 };
