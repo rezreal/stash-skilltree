@@ -3,7 +3,7 @@
 import { eyesClosedHoldSec, isSustained, shareText, type GazeMoment } from "../prompts/gazeCheck.ts";
 import { sharePercentText } from "../prompts/hold.ts";
 import { isPoseAction } from "../prompts/posture.ts";
-import type { GazeTarget, PromptAction, PromptPhase, PromptProgress, PromptSpec } from "../prompts/types.ts";
+import type { GazeTarget, PromptAction, PromptProgress, PromptSpec } from "../prompts/types.ts";
 
 const TARGET_WORDS: Readonly<Record<GazeTarget, string>> = {
   eyes: "their eyes",
@@ -183,62 +183,89 @@ export interface LastResult {
 /** How long a finished prompt stays on the banner (ms). */
 export const RESULT_SHOW_MS = 2000;
 
-const OPEN: readonly PromptPhase[] = ["active", "replaying"];
-
-/** The active prompt that started last (a prompt inside a long gaze window shows over it). */
+/** The active prompt that started last. */
 function latestActive(progress: readonly PromptProgress[]): PromptProgress | undefined {
   let pick: PromptProgress | undefined;
   for (const p of progress) if (p.phase === "active" && (pick === undefined || p.spec.start > pick.spec.start)) pick = p;
   return pick;
 }
 
-/**
- * What the banner shows now: the active prompt that started last; else a
- * prompt waiting for its replay ("Replaying: try again"); else the last
- * result for RESULT_SHOW_MS ("Done" / "Missed"); else nothing.
- */
-export function bannerView(input: {
+type BannerInput = {
   progress: readonly PromptProgress[];
   videoTime?: number;
   nowMs: number;
   last?: LastResult;
   uncheckable?: (spec: PromptSpec) => string | undefined;
-}): BannerView | undefined {
-  const pick = latestActive(input.progress) ?? input.progress.find((p) => OPEN.includes(p.phase));
-  if (pick) {
-    const spec = pick.spec;
-    const view: BannerView = {
-      spec,
-      tone: pick.phase === "replaying" ? "replaying" : "active",
-      instruction: promptInstruction(spec),
-      progress: clamp01(pick.progress),
-      progressLabel: progressLabel(spec, pick.share),
-    };
-    if (sustainedWindow(spec)) view.shareText = view.progressLabel;
-    if (pick.phase === "replaying") view.status = "Replaying: try again";
-    else if (pick.replays > 0) view.status = "Second try";
-    const note = input.uncheckable?.(spec);
-    if (note !== undefined) view.note = note;
-    if (pick.phase === "active" && input.videoTime !== undefined && Number.isFinite(input.videoTime)) {
-      view.secondsLeft = Math.max(0, spec.end - input.videoTime);
-    }
-    return view;
+};
+
+function openView(pick: PromptProgress, input: BannerInput): BannerView {
+  const spec = pick.spec;
+  const view: BannerView = {
+    spec,
+    tone: pick.phase === "replaying" ? "replaying" : "active",
+    instruction: promptInstruction(spec),
+    progress: clamp01(pick.progress),
+    progressLabel: progressLabel(spec, pick.share),
+  };
+  if (sustainedWindow(spec)) view.shareText = view.progressLabel;
+  if (pick.phase === "replaying") view.status = "Replaying: try again";
+  else if (pick.replays > 0) view.status = "Second try";
+  const note = input.uncheckable?.(spec);
+  if (note !== undefined) view.note = note;
+  if (pick.phase === "active" && input.videoTime !== undefined && Number.isFinite(input.videoTime)) {
+    view.secondsLeft = Math.max(0, spec.end - input.videoTime);
+  }
+  return view;
+}
+
+function resultView(last: LastResult, progress: readonly PromptProgress[]): BannerView {
+  const p = progress.find((q) => q.spec.markerId === last.spec.markerId);
+  const view: BannerView = {
+    spec: last.spec,
+    tone: last.passed ? "passed" : "missed",
+    instruction: promptInstruction(last.spec),
+    status: last.passed ? "Done" : "Missed",
+    progress: last.passed ? 1 : clamp01(p?.progress ?? 0),
+    progressLabel: progressLabel(last.spec, p?.share),
+  };
+  if (sustainedWindow(last.spec)) view.shareText = view.progressLabel;
+  return view;
+}
+
+/**
+ * What the banner shows now, one row per prompt, in start order (rows don't
+ * jump when a later prompt begins):
+ * - every active prompt - overlapping prompts are checked side by side
+ *   (e.g. "Kneel and sit on your heels" for minutes with "Look at their
+ *   eyes" inside it). Of overlapping gaze prompts only the one that started
+ *   last is shown: it supersedes the others, which count no evidence
+ *   meanwhile (see runner.ts).
+ * - without an active prompt, a prompt waiting for its replay ("Replaying:
+ *   try again").
+ * - the last result for RESULT_SHOW_MS ("Done" / "Missed"), after the active
+ *   rows, unless a replay is waiting.
+ */
+export function bannerViews(input: BannerInput): BannerView[] {
+  const active = input.progress.filter((p) => p.phase === "active");
+  const leadGaze = latestActive(active.filter((p) => p.spec.check === "gaze"));
+  const views = active
+    .filter((p) => p.spec.check !== "gaze" || p === leadGaze)
+    .sort((a, b) => a.spec.start - b.spec.start)
+    .map((p) => openView(p, input));
+  if (views.length === 0) {
+    const waiting = input.progress.find((p) => p.phase === "replaying");
+    if (waiting) return [openView(waiting, input)];
   }
   const last = input.last;
-  if (last && input.nowMs - last.atMs >= 0 && input.nowMs - last.atMs < RESULT_SHOW_MS) {
-    const p = input.progress.find((q) => q.spec.markerId === last.spec.markerId);
-    const view: BannerView = {
-      spec: last.spec,
-      tone: last.passed ? "passed" : "missed",
-      instruction: promptInstruction(last.spec),
-      status: last.passed ? "Done" : "Missed",
-      progress: last.passed ? 1 : clamp01(p?.progress ?? 0),
-      progressLabel: progressLabel(last.spec, p?.share),
-    };
-    if (sustainedWindow(last.spec)) view.shareText = view.progressLabel;
-    return view;
+  if (
+    last &&
+    input.nowMs - last.atMs >= 0 &&
+    input.nowMs - last.atMs < RESULT_SHOW_MS &&
+    !views.some((v) => v.spec.markerId === last.spec.markerId)
+  ) {
+    views.push(resultView(last, input.progress));
   }
-  return undefined;
+  return views;
 }
 
 function clamp01(v: number): number {

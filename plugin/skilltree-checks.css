@@ -5,6 +5,12 @@
 
 /* --- prompt banner ----------------------------------------------------------- */
 
+.skilltree-play .stc-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .skilltree-play .stc-banner {
   backdrop-filter: blur(4px);
   background: rgba(12, 15, 19, 0.82);

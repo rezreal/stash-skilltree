@@ -1,4 +1,5 @@
-// The prompt banner over the video: the active prompt's instruction in plain
+// The prompt banner over the video, one row per active prompt (overlapping
+// prompts are checked side by side; see bannerViews): the instruction in plain
 // words, a progress bar (hold / phrase match / share), the seconds left (long
 // gaze windows: the share instead, "eyes closed 82% · need 75%"), and the
 // replaying / missed / done states. Polls the checks itself (~10 Hz) so the session controller
@@ -8,7 +9,7 @@
 // default (showRegion) so it isn't a giveaway unless the viewer wants it.
 import type { PromptSpec, Region } from "../prompts/types.ts";
 import type { PromptChecks } from "./usePromptChecks.ts";
-import { bannerView, type BannerView } from "./wording.ts";
+import { bannerViews, type BannerView } from "./wording.ts";
 
 const POLL_MS = 100;
 const IDLE_POLL_MS = 300;
@@ -30,10 +31,10 @@ export function PromptBanner(props: {
   className?: string;
 }) {
   const { checks } = props;
-  const view: BannerView | undefined =
+  const views: BannerView[] =
     checks.specs.length === 0
-      ? undefined
-      : bannerView({
+      ? []
+      : bannerViews({
           progress: checks.progress(),
           videoTime: checks.videoTime(),
           nowMs: performance.now(),
@@ -42,9 +43,20 @@ export function PromptBanner(props: {
         });
   // fast while something is on the banner, slower in between (results and
   // replays appear without the controller re-rendering)
-  usePoll(checks.specs.length > 0, view || checks.active.length > 0 ? POLL_MS : IDLE_POLL_MS);
+  usePoll(checks.specs.length > 0, views.length > 0 || checks.active.length > 0 ? POLL_MS : IDLE_POLL_MS);
 
-  if (!view) return null;
+  if (views.length === 0) return null;
+  return (
+    <div className="stc-banners">
+      {views.map((view) => (
+        <BannerRow key={view.spec.markerId} view={view} checks={checks} showRegion={props.showRegion} className={props.className} />
+      ))}
+    </div>
+  );
+}
+
+function BannerRow(props: { view: BannerView; checks: PromptChecks; showRegion?: boolean | undefined; className?: string | undefined }) {
+  const { view, checks } = props;
   const pct = Math.round(view.progress * 100);
   return (
     <div className={`stc-banner is-${view.tone}${view.note ? " is-unchecked" : ""}${props.className ? ` ${props.className}` : ""}`} role="status" aria-live="polite">
