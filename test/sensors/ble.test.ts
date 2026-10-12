@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   createBleDistanceSource,
+  POLL_MS,
   MSG_INSECURE,
   MSG_NEEDS_CLICK,
   MSG_NO_ADAPTER,
@@ -37,9 +38,9 @@ const CONFIG: BleSensorConfig = {
   scale: 1,
 };
 
-function setup(opts: { config?: Partial<BleSensorConfig>; getDevices?: boolean; notify?: boolean } = {}) {
+function setup(opts: { config?: Partial<BleSensorConfig>; getDevices?: boolean; notify?: boolean; read?: boolean } = {}) {
   const clock = new FakeClock();
-  const ch = new FakeCharacteristic("0xffe1", props({ notify: opts.notify ?? true, read: true }));
+  const ch = new FakeCharacteristic("0xffe1", props({ notify: opts.notify ?? true, read: opts.read ?? true }));
   const dev = new FakeDevice("dev-1", "VL53 Reach", [new FakeService("0xffe0", [ch])]);
   const bt = new FakeBluetooth(dev, opts.getDevices ?? true);
   const storage = new MemStorage();
@@ -224,9 +225,33 @@ describe("createBleDistanceSource", () => {
     await t.src.connect();
     assert.match(t.src.status().message!, /no characteristic 0x2a00.*Find my sensor/);
 
-    t = setup({ notify: false });
+    t = setup({ notify: false, read: false });
     await t.src.connect();
     assert.match(t.src.status().message!, /doesn't send notifications/);
+  });
+
+  it("polls a read-only characteristic", async () => {
+    const t = setup({ notify: false, read: true });
+    const ch = t.ch;
+    const bytes = new DataView(new Uint8Array([0x2c, 0x01]).buffer); // 300 as uint16le
+    ch.readResult = bytes;
+    await t.src.connect();
+    assert.equal(t.src.status().connection, "connected");
+    // reads run back to back, at most every POLL_MS
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setImmediate(r));
+      t.clock.advance(POLL_MS);
+    }
+    await new Promise((r) => setImmediate(r));
+    assert.ok(t.samples.length >= 3, `expected several polled samples, got ${t.samples.length}`);
+    assert.equal(t.samples[0].raw, 300);
+    t.src.disconnect();
+    const n = t.samples.length;
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setImmediate(r));
+      t.clock.advance(POLL_MS);
+    }
+    assert.equal(t.samples.length, n, "polling stops on disconnect");
   });
 
   it("explains missing configuration, bad UUIDs and no Web Bluetooth", async () => {

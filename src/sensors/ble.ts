@@ -86,8 +86,8 @@ export function msgCharacteristicNotFound(characteristic: string, service: strin
 
 export function msgNoNotify(characteristic: string): string {
   return (
-    `Characteristic ${characteristic} doesn't send notifications, so it can't stream distances. ` +
-    "Use “Find my sensor” to find the one marked notify."
+    `Characteristic ${characteristic} doesn't send notifications and can't be read, so it carries no distances. ` +
+    "Use “Find my sensor” to find one marked notify or read."
   );
 }
 
@@ -210,6 +210,9 @@ class Failure extends Error {
 
 // --- source -----------------------------------------------------------------------
 
+/** shortest time between two reads when a read-only characteristic is polled (25 Hz) */
+export const POLL_MS = 40;
+
 export function createBleDistanceSource(config: BleSensorConfig, opts: BleSourceOptions = {}): DistanceSource {
   const now = opts.now ?? defaultNow;
   const timers = opts.timers ?? GLOBAL_TIMERS;
@@ -254,8 +257,12 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     setStatus({ connection: "error", message, ...(deviceName() ? { device: deviceName()! } : {}) });
   }
 
+  /** notifications: the new value sits on the characteristic */
   const onValue = (): void => {
-    const dv = characteristic?.value;
+    handleValue(characteristic?.value ?? undefined);
+  };
+
+  function handleValue(dv: DataView | undefined): void {
     if (!dv) return;
     const t = now();
     const raw = parseValue(dv, config.format, config.offset, config.scale);
@@ -277,7 +284,7 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     rate.add(t);
     samples.emit({ t, raw });
     if (t - lastStatusEmit >= 1000) setStatus(st);
-  };
+  }
 
   const onGattDisconnected = (): void => {
     detachCharacteristic(false);
@@ -292,12 +299,46 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     scheduleReconnect();
   };
 
+  /** polling generation: bumping it ends the read loop */
+  let pollGen = 0;
+  let polling = false;
+
   function detachCharacteristic(stop: boolean): void {
     const c = characteristic;
     characteristic = undefined;
+    pollGen++;
+    const wasPolling = polling;
+    polling = false;
     if (!c) return;
     c.removeEventListener("characteristicvaluechanged", onValue);
-    if (stop) c.stopNotifications().catch(() => undefined);
+    if (stop && !wasPolling) c.stopNotifications().catch(() => undefined);
+  }
+
+  /**
+   * For sensors whose value can only be read: read again as soon as the last
+   * read returns, at most every POLL_MS. Reads never overlap. A failing read
+   * ends the loop; the GATT disconnect handling takes it from there.
+   */
+  function startPolling(ch: BluetoothRemoteGATTCharacteristic): void {
+    const mine = ++pollGen;
+    polling = true;
+    const loop = async (): Promise<void> => {
+      while (mine === pollGen) {
+        const began = now();
+        try {
+          const dv = await ch.readValue();
+          if (mine !== pollGen) return;
+          handleValue(dv);
+        } catch (e) {
+          if (mine !== pollGen) return;
+          setStatus({ ...st, message: `Reading the sensor failed: ${errMessage(e)}` });
+          return;
+        }
+        const wait = Math.max(0, POLL_MS - (now() - began));
+        if (wait > 0) await new Promise<void>((resolve) => timers.setTimeout(resolve, wait));
+      }
+    };
+    void loop();
   }
 
   function teardown(): void {
@@ -403,14 +444,23 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
       throw new Failure(`Couldn't read the sensor's characteristics: ${errMessage(e)}`, true);
     }
     if (gen !== generation) return false;
-    if (!ch.properties.notify && !ch.properties.indicate) throw new Failure(msgNoNotify(chLabel));
-    ch.addEventListener("characteristicvaluechanged", onValue);
+    const canNotify = ch.properties.notify || ch.properties.indicate;
+    if (!canNotify && !ch.properties.read) throw new Failure(msgNoNotify(chLabel));
     characteristic = ch;
-    try {
-      await ch.startNotifications();
-    } catch (e) {
-      detachCharacteristic(false);
-      throw new Failure(`The sensor refused to start notifications: ${errMessage(e)}`, true);
+    if (canNotify) {
+      ch.addEventListener("characteristicvaluechanged", onValue);
+      try {
+        await ch.startNotifications();
+      } catch (e) {
+        detachCharacteristic(false);
+        if (!ch.properties.read) throw new Failure(`The sensor refused to start notifications: ${errMessage(e)}`, true);
+        // notifications refused but the value is readable: poll it instead
+        characteristic = ch;
+        startPolling(ch);
+      }
+    } else {
+      // read-only characteristic (some sensors never notify): poll it
+      startPolling(ch);
     }
     if (gen !== generation) {
       detachCharacteristic(true);
