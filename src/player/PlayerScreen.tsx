@@ -13,6 +13,8 @@ import {
   isTerminal,
   policyForScene,
   saveExposure,
+  seriesForScene,
+  seriesStatus,
   step,
 } from "../play/index.ts";
 import type { Ledger, SessionCommit, SessionState, SpendEvent, Streak, WatchPolicy } from "../play/types.ts";
@@ -46,6 +48,7 @@ import {
   previousExposure,
   promptMarkers,
   promptsNeeded,
+  seriesSummaryLine,
   type PauseCause,
 } from "./view.ts";
 
@@ -287,7 +290,9 @@ function PlayerSession(props: SessionProps) {
             start.streak,
             start.ledger,
             new Date().toISOString(),
-            data.dailyEarnCap !== undefined ? { dailyCap: data.dailyEarnCap } : undefined,
+            data.dailyEarnCap !== undefined
+              ? { dailyCap: data.dailyEarnCap, dayStartHour: data.dayStartHour }
+              : undefined,
           );
         await commitSession(data.client, c);
       } catch (err) {
@@ -297,7 +302,7 @@ function PlayerSession(props: SessionProps) {
       await reload();
       setSave({ status: "saved", commit: c });
     },
-    [data.client, data.dailyEarnCap, scene, policy, start, reload],
+    [data.client, data.dailyEarnCap, data.dayStartHour, scene, policy, start, reload],
   );
   React.useEffect(() => {
     if (!isFinished(session)) return;
@@ -678,6 +683,12 @@ function CompleteSummary(props: {
     .join(", ");
   const before = start.ledger.balance;
   const after = commit ? before + commit.earnedNow - commit.spentNow : before;
+  // daily series this scene is a part of, judged on the reloaded library
+  const seriesLines = saved
+    ? seriesForScene(data.library.series, start.scene.id).map((s) =>
+        seriesSummaryLine(s, seriesStatus(s, data.graph.scenes, new Date(), data.dayStartHour)),
+      )
+    : [];
 
   return (
     <div className="stp-overlay is-dark">
@@ -748,6 +759,12 @@ function CompleteSummary(props: {
             </div>
           </div>
         )}
+        {seriesLines.map((line) => (
+          <div key={line} className="stp-fog-line stp-series-line">
+            <span className="stp-fog-dot" aria-hidden="true" />
+            {line}
+          </div>
+        ))}
         {saved && revealed.length > 0 && (
           <div className="stp-fog-line">
             <span className="stp-fog-dot" aria-hidden="true" />

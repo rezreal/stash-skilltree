@@ -103,12 +103,21 @@ export function lintGraph(graph: Graph, input?: LibraryInput): LintIssue[] {
   const issues: LintIssue[] = [...graph.buildIssues];
 
   for (const m of input?.malformed ?? []) {
-    issues.push({
-      severity: "error",
-      code: "malformed-tag",
-      message: `Tag "${m.tagName}": ${m.problem}`,
-      tagId: m.tagId,
-    });
+    if ("tagId" in m) {
+      issues.push({
+        severity: "error",
+        code: "malformed-tag",
+        message: `Tag "${m.tagName}": ${m.problem}`,
+        tagId: m.tagId,
+      });
+    } else {
+      issues.push({
+        severity: "error",
+        code: "malformed-series",
+        message: `Group "${m.groupName}": ${m.problem}`,
+        groupId: m.groupId,
+      });
+    }
   }
 
   const keys = [...graph.nodes.keys()].sort(compareNodeKeys);

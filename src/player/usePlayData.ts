@@ -2,12 +2,13 @@
 // progress, fog, ledger, streak and trigger edges from it. The last load is
 // cached for the page's lifetime, so moving between the choice screen and the
 // player doesn't reload the library; writes call reload() to refresh it.
+// Daily series statuses depend on the clock, so the screens derive them.
 import type { Graph, LibraryInput, NodeKey, Progress, Visibility } from "../core/types.ts";
 import type { TriggerEdge } from "../core/triggers.ts";
 import { buildGraph, computeProgress, computeVisibility, triggerEdges } from "../core/index.ts";
 import { createClient, type StashClient } from "../stash/client.ts";
 import { loadLibrary } from "../stash/load.ts";
-import { computeLedger, computeStreak, loadPolicyTags } from "../play/index.ts";
+import { computeLedger, computeStreak, loadPolicyTags, normalizeDayStartHour } from "../play/index.ts";
 import type { Ledger, PolicyTagInput, Streak } from "../play/types.ts";
 import { usePluginSettings } from "../ui/pluginApi.ts";
 
@@ -31,6 +32,8 @@ export interface PlayData {
   idleSec: number;
   /** plugin setting dailyEarnCap: most coins earned per day, if set */
   dailyEarnCap?: number;
+  /** plugin setting dayStartHour (0–23, default 4): when a new day begins */
+  dayStartHour: number;
 }
 
 export type PlayDataState =
@@ -70,6 +73,7 @@ export function usePlayData(): { state: PlayDataState; reload: () => Promise<voi
   const idleSec = typeof settings.idleSec === "number" && settings.idleSec > 0 ? settings.idleSec : DEFAULT_IDLE_SEC;
   const dailyEarnCap =
     typeof settings.dailyEarnCap === "number" && settings.dailyEarnCap > 0 ? settings.dailyEarnCap : undefined;
+  const dayStartHour = normalizeDayStartHour(settings.dayStartHour);
 
   const [rawState, setRawState] = React.useState<RawState>(() =>
     cache ? { status: "ready", raw: cache } : { status: "loading", message: "Loading library…" },
@@ -121,12 +125,13 @@ export function usePlayData(): { state: PlayDataState; reload: () => Promise<voi
       progress,
       visibility: computeVisibility(graph, progress),
       ledger: computeLedger(raw.library),
-      streak: computeStreak(raw.library, new Date(raw.loadedAt)),
+      streak: computeStreak(raw.library, new Date(raw.loadedAt), { dayStartHour }),
       edges: triggerEdges(raw.library),
       idleSec,
       dailyEarnCap,
+      dayStartHour,
     };
-  }, [raw, defaultNeed, idleSec, dailyEarnCap]);
+  }, [raw, defaultNeed, idleSec, dailyEarnCap, dayStartHour]);
 
   let state: PlayDataState;
   if (rawState.status === "ready" && data) {

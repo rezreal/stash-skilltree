@@ -1,11 +1,14 @@
-// Loads the skill tree input (tags, scenes, performers) from stash.
+// Loads the skill tree input (tags, series groups, scenes, performers) from stash.
 
 import type {
   InterestTagInput,
   LibraryInput,
+  MalformedInput,
   MarkerInput,
   PerformerInput,
   SceneInput,
+  SeriesInput,
+  SeriesPartInput,
   TriggerTagInput,
 } from "../core/types.ts";
 import type { StashClient } from "./client.ts";
@@ -14,18 +17,24 @@ import {
   markerPromptFields,
   parseInterestTag,
   parsePromptTag,
+  parseSeriesFields,
   parseTriggerTag,
   sceneProgressFields,
   tagKind,
 } from "./fields.ts";
 import {
+  FIND_SERIES_GROUPS,
   FIND_SKILL_SCENES,
   FIND_ST_TAGS,
+  seriesGroupsVariables,
+  seriesScenesVariables,
   skillScenesVariables,
   stTagsVariables,
+  type FindSeriesGroupsResult,
   type FindSkillScenesResult,
   type FindStTagsResult,
   type RawScene,
+  type RawSeriesGroup,
   type RawTag,
 } from "./queries.ts";
 
@@ -73,6 +82,60 @@ export function classifyTags(tags: RawTag[]): ClassifiedTags {
   return out;
 }
 
+/** Numeric ids compare as numbers, others as strings. */
+function compareIds(a: string, b: string): number {
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** scene_index ascending, parts without an index last, then scene id. */
+function comparePartsLoaded(a: SeriesPartInput, b: SeriesPartInput): number {
+  if (a.index !== b.index) {
+    if (a.index === undefined) return 1;
+    if (b.index === undefined) return -1;
+    return a.index - b.index;
+  }
+  return compareIds(a.sceneId, b.sceneId);
+}
+
+/**
+ * Groups with st.series become SeriesInput (parts with their scene_index in
+ * this group, sorted by index then id; play/series.ts refines ties by scene
+ * date). Unknown st.series / st.reset values and groups without scenes are
+ * malformed.
+ */
+export function classifySeriesGroups(groups: RawSeriesGroup[]): { series: SeriesInput[]; malformed: MalformedInput[] } {
+  const out: { series: SeriesInput[]; malformed: MalformedInput[] } = { series: [], malformed: [] };
+  for (const g of groups) {
+    const r = parseSeriesFields(g.custom_fields);
+    if (r === undefined) continue;
+    const parts: SeriesPartInput[] = [];
+    const seen = new Set<string>();
+    for (const sc of g.scenes ?? []) {
+      if (seen.has(sc.id)) continue;
+      seen.add(sc.id);
+      const link = (sc.groups ?? []).find((sg) => sg.group?.id === g.id);
+      const part: SeriesPartInput = { sceneId: sc.id };
+      const index = link?.scene_index;
+      if (typeof index === "number" && Number.isFinite(index)) part.index = index;
+      parts.push(part);
+    }
+    const problems: string[] = [];
+    if ("problem" in r) problems.push(r.problem);
+    if (parts.length === 0) problems.push("the series has no scenes");
+    if (problems.length > 0) {
+      out.malformed.push({ groupId: g.id, groupName: g.name, problem: problems.join("; ") });
+      continue;
+    }
+    if (!("ok" in r)) continue;
+    parts.sort(comparePartsLoaded);
+    out.series.push({ groupId: g.id, name: g.name, mode: r.ok.mode, reset: r.ok.reset, parts });
+  }
+  return out;
+}
+
 export function mapScene(raw: RawScene): SceneInput {
   const markers: MarkerInput[] = (raw.scene_markers ?? []).map((m) => {
     const marker: MarkerInput = { id: m.id, title: m.title ?? "", seconds: m.seconds };
@@ -102,31 +165,52 @@ export async function loadLibrary(client: StashClient, opts: LoadOptions = {}): 
   const tagsRes = await client.gql<FindStTagsResult>(FIND_ST_TAGS, stTagsVariables());
   const { interestTags, triggerTags, malformed } = classifyTags(tagsRes.findTags.tags);
 
-  const library: LibraryInput = { interestTags, triggerTags, scenes: [], performers: [], malformed };
-  if (interestTags.length === 0) return library;
+  progress("series");
+  const groupsRes = await client.gql<FindSeriesGroupsResult>(FIND_SERIES_GROUPS, seriesGroupsVariables());
+  const groups = classifySeriesGroups(groupsRes.findGroups.groups);
 
-  const tagIds = [...new Set([...interestTags, ...triggerTags].map((t) => t.id))];
+  const library: LibraryInput = {
+    interestTags,
+    triggerTags,
+    scenes: [],
+    performers: [],
+    series: groups.series,
+    malformed: [...malformed, ...groups.malformed],
+  };
+
   const seenScenes = new Set<string>();
   const performers = new Map<string, PerformerInput>();
 
-  progress("scenes");
-  for (let page = 1; ; page++) {
-    const res = await client.gql<FindSkillScenesResult>(
-      FIND_SKILL_SCENES,
-      skillScenesVariables(tagIds, page, pageSize),
-    );
-    const { count, scenes } = res.findScenes;
-    for (const raw of scenes) {
-      if (seenScenes.has(raw.id)) continue;
-      seenScenes.add(raw.id);
-      library.scenes.push(mapScene(raw));
-      for (const p of raw.performers ?? []) {
-        if (!performers.has(p.id)) performers.set(p.id, { id: p.id, name: p.name });
+  /** Pages through one scene filter, keeping scenes not seen before. */
+  const loadScenes = async (label: string, variables: (page: number) => Record<string, unknown>) => {
+    progress(label);
+    for (let page = 1; ; page++) {
+      const res = await client.gql<FindSkillScenesResult>(FIND_SKILL_SCENES, variables(page));
+      const { count, scenes } = res.findScenes;
+      for (const raw of scenes) {
+        if (seenScenes.has(raw.id)) continue;
+        seenScenes.add(raw.id);
+        library.scenes.push(mapScene(raw));
+        for (const p of raw.performers ?? []) {
+          if (!performers.has(p.id)) performers.set(p.id, { id: p.id, name: p.name });
+        }
       }
+      const fetched = Math.min((page - 1) * pageSize + scenes.length, count);
+      progress(`${label} ${fetched}/${count}`);
+      if (scenes.length < pageSize || page * pageSize >= count) break;
     }
-    const fetched = Math.min((page - 1) * pageSize + scenes.length, count);
-    progress(`scenes ${fetched}/${count}`);
-    if (scenes.length < pageSize || page * pageSize >= count) break;
+  };
+
+  if (interestTags.length > 0) {
+    const tagIds = [...new Set([...interestTags, ...triggerTags].map((t) => t.id))];
+    await loadScenes("scenes", (page) => skillScenesVariables(tagIds, page, pageSize));
+  }
+
+  // series parts that are not in the tree already
+  const missing = library.series.filter((s) => s.parts.some((p) => !seenScenes.has(p.sceneId)));
+  if (missing.length > 0) {
+    const groupIds = missing.map((s) => s.groupId);
+    await loadScenes("series scenes", (page) => seriesScenesVariables(groupIds, page, pageSize));
   }
 
   library.performers = [...performers.values()];

@@ -461,6 +461,62 @@
 
 .skilltree-play .stp-earns .stp-coin-icon { color: var(--st-gold); }
 
+/* --- daily series cards ----------------------------------------------------------- */
+
+.skilltree-play .stp-series { display: flex; flex-direction: column; gap: 12px; }
+.skilltree-play .stp-series-list { display: flex; flex-direction: column; gap: 10px; }
+
+.skilltree-play .stp-series-card {
+  align-items: center;
+  background: var(--stp-card);
+  border: 1px solid var(--st-border);
+  border-left: 3px solid var(--stp-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding: 0 18px 0 0;
+}
+
+.skilltree-play .stp-series-card.is-due { border-left-color: var(--st-open); }
+.skilltree-play .stp-series-card.is-done-today { border-left-color: var(--st-complete); }
+.skilltree-play .stp-series-card.is-broken { border-left-color: var(--st-error); }
+
+.skilltree-play .stp-series-thumb {
+  align-self: stretch;
+  aspect-ratio: 16 / 9;
+  background: var(--stp-thumb);
+  position: relative;
+}
+
+.skilltree-play .stp-series-thumb img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.skilltree-play .stp-series-thumb .stp-duration { bottom: 8px; right: 8px; }
+
+.skilltree-play .stp-series-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 0;
+}
+
+.skilltree-play .stp-series-body .stp-card-title { font-size: 16px; }
+.skilltree-play .stp-series-scene { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skilltree-play .stp-series-state { font-size: 14px; font-weight: 500; }
+.skilltree-play .stp-series-countdown { font-weight: 400; }
+
+@media (max-width: 575px) {
+  .skilltree-play .stp-series-card { grid-template-columns: 112px minmax(0, 1fr); padding: 0 12px 0 0; }
+  .skilltree-play .stp-series-action { grid-column: 1 / -1; padding: 0 0 12px 12px; }
+}
+
 /* --- switch performer ----------------------------------------------------------- */
 
 .skilltree-play .stp-switch { display: flex; flex-direction: column; gap: 12px; }

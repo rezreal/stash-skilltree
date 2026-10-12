@@ -71,13 +71,44 @@ export interface PerformerInput {
   name: string;
 }
 
+export type SeriesReset = "start" | "step_back";
+
+/** One part of a series: a scene of the group and its scene_index. */
+export interface SeriesPartInput {
+  sceneId: Id;
+  /** scene_index inside the group; missing when stash has none */
+  index?: number;
+}
+
+/**
+ * A stash group with st.series (only "daily" for now). Parts are in watch
+ * order: scene_index ascending, ties and parts without an index by scene
+ * date, then id (see orderedParts in src/play/series.ts).
+ */
+export interface SeriesInput {
+  groupId: Id;
+  name: string;
+  mode: "daily";
+  /** st.reset: what a missed day does (default "start") */
+  reset: SeriesReset;
+  parts: SeriesPartInput[];
+}
+
+/** A tag or a series group whose st.* fields could not be parsed. */
+export type MalformedInput =
+  | { tagId: Id; tagName: string; problem: string }
+  | { groupId: Id; groupName: string; problem: string };
+
 export interface LibraryInput {
   interestTags: InterestTagInput[];
   triggerTags: TriggerTagInput[];
+  /** every scene of the tree plus every part of a series */
   scenes: SceneInput[];
   performers: PerformerInput[];
-  /** tags whose st.* fields could not be parsed */
-  malformed: { tagId: Id; tagName: string; problem: string }[];
+  /** groups configured as daily series */
+  series: SeriesInput[];
+  /** tags and series groups whose st.* fields could not be parsed */
+  malformed: MalformedInput[];
 }
 
 // --- graph ------------------------------------------------------------------
@@ -150,6 +181,7 @@ export interface LintIssue {
   node?: NodeKey;
   tagId?: Id;
   sceneId?: Id;
+  groupId?: Id;
 }
 
 export const DEFAULT_NEED = 2;

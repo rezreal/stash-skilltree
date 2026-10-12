@@ -19,3 +19,10 @@ settings:
       Completed scenes needed to complete a level when its tag has no st.need.
       Default 2.
     type: NUMBER
+  dayStartHour:
+    displayName: Day starts at (hour)
+    description: >-
+      Hour of the day (0-23, local time) when a new day begins for streaks,
+      the daily earn cap and daily series. Default 4: a clip finished at
+      02:30 still counts for the evening before. 0 = midnight.
+    type: NUMBER

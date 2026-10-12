@@ -1,10 +1,12 @@
 // /skilltree/play: pick a performer, then choose the next clip from
-// one or two suggestions (continue / explore / earn).
+// one or two suggestions (continue / explore / earn). Daily series sit above
+// them as their own cards.
 import type { ChangeEvent } from "react";
 import type { Id } from "../core/types.ts";
 import { parseNodeKey, topicDepth } from "../core/index.ts";
 import { stashUrl } from "../stash/client.ts";
-import { payForNode, policyForScene, startPerformers, suggest } from "../play/index.ts";
+import { dailySeriesCards, localDayOf, payForNode, policyForScene, startPerformers, suggest } from "../play/index.ts";
+import type { DailySeriesCard } from "../play/index.ts";
 import type { Streak, Suggestion, SuggestionResult } from "../play/types.ts";
 import { router } from "./api.ts";
 import {
@@ -32,6 +34,9 @@ import {
   ledgerLabel,
   reasonsText,
   recentEntries,
+  runLabel,
+  seriesPartLabel,
+  seriesStateView,
   watchButtonLabel,
 } from "./view.ts";
 
@@ -70,6 +75,10 @@ function ChoiceView(props: ChoiceViewProps) {
     window.scrollTo?.(0, 0);
   }, []);
 
+  // daily series change at the day boundary: suggestions follow the day,
+  // cards the clock
+  const now = useNow(30_000);
+  const today = localDayOf(new Date(now), data.dayStartHour);
   const baseInput = React.useMemo(
     () => ({
       graph: data.graph,
@@ -80,12 +89,18 @@ function ChoiceView(props: ChoiceViewProps) {
       ledger: data.ledger,
       streak: data.streak,
       edges: data.edges,
+      now: new Date(),
+      dayStartHour: data.dayStartHour,
     }),
-    [data],
+    [data, today],
   );
   const result = React.useMemo(
     () => (performerId !== undefined ? suggest({ ...baseInput, performerId, max: 2 }) : undefined),
     [baseInput, performerId],
+  );
+  const seriesCards = React.useMemo(
+    () => dailySeriesCards({ library: data.library, ledger: data.ledger, now: new Date(now), dayStartHour: data.dayStartHour }),
+    [data, now],
   );
 
   return (
@@ -95,12 +110,13 @@ function ChoiceView(props: ChoiceViewProps) {
       <main className="stp-main">
         <section className="stp-primary" aria-label={performerId ? "Suggestions" : "Start"}>
           {performerId === undefined || result === undefined ? (
-            <StartView data={data} baseInput={baseInput} onPick={choosePerformer} />
+            <StartView data={data} baseInput={baseInput} seriesCards={seriesCards} onPick={choosePerformer} />
           ) : (
             <NextView
               data={data}
               performerId={performerId}
               result={result}
+              seriesCards={seriesCards}
               reload={reload}
               onPick={choosePerformer}
             />
@@ -146,7 +162,12 @@ function PlayHeader(props: { balance: number; streak: Streak }) {
 
 type BaseInput = Omit<Parameters<typeof suggest>[0], "performerId" | "max">;
 
-function StartView(props: { data: PlayData; baseInput: BaseInput; onPick: (id: Id) => void }) {
+function StartView(props: {
+  data: PlayData;
+  baseInput: BaseInput;
+  seriesCards: DailySeriesCard[];
+  onPick: (id: Id) => void;
+}) {
   const { data } = props;
   const { Link } = router();
   const [query, setQuery] = React.useState("");
@@ -163,6 +184,7 @@ function StartView(props: { data: PlayData; baseInput: BaseInput; onPick: (id: I
       <p className="stp-lead">
         Pick a performer. Suggestions follow their scenes in date order; levels you reach count for every performer.
       </p>
+      <SeriesSection data={data} cards={props.seriesCards} />
       {starts.length === 0 ? (
         <div className="stp-notice">
           <span>
@@ -214,6 +236,7 @@ interface NextViewProps {
   data: PlayData;
   performerId: Id;
   result: SuggestionResult;
+  seriesCards: DailySeriesCard[];
   reload: () => Promise<void>;
   onPick: (id: Id | undefined) => void;
 }
@@ -240,6 +263,8 @@ function NextView(props: NextViewProps) {
           <span>{blockedText(result.blocked)}</span>
         </div>
       )}
+
+      <SeriesSection data={data} cards={props.seriesCards} />
 
       {result.options.length === 0 ? (
         <p className="stp-muted">
@@ -366,6 +391,94 @@ function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number
           </Link>
         )}
       </div>
+    </article>
+  );
+}
+
+// --- daily series --------------------------------------------------------------------
+
+/** Current time in ms, refreshed every `intervalMs`. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+function SeriesSection(props: { data: PlayData; cards: DailySeriesCard[] }) {
+  if (props.cards.length === 0) return null;
+  return (
+    <section className="stp-series" aria-labelledby="stp-series-title">
+      <h2 className="stp-h2" id="stp-series-title">
+        Daily series
+      </h2>
+      <div className="stp-series-list">
+        {props.cards.map((c) => (
+          <SeriesCard key={c.series.groupId} data={props.data} card={c} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SeriesCard(props: { data: PlayData; card: DailySeriesCard }) {
+  const { data, card } = props;
+  const { series, status } = card;
+  const { Link } = router();
+  const [thumbOk, setThumbOk] = React.useState(true);
+  // the countdown ticks every second; other states only need the minute
+  const nowMs = useNow(status.state === "due" ? 1000 : 60_000);
+  const next = status.nextPart;
+  if (!next) return null;
+  const scene = data.graph.scenes.get(next.sceneId);
+  const view = seriesStateView(series, status, nowMs);
+
+  return (
+    <article className={`stp-series-card is-${status.state}`}>
+      <div className="stp-series-thumb">
+        {thumbOk ? (
+          <img src={stashUrl(`scene/${next.sceneId}/screenshot`)} alt="" loading="lazy" onError={() => setThumbOk(false)} />
+        ) : null}
+        {scene && <span className="stp-duration stp-mono">{formatDuration(scene.durationSec)}</span>}
+      </div>
+      <div className="stp-series-body">
+        <div className="stp-small stp-mono stp-muted">
+          {seriesPartLabel(status, series.parts.length)} · {runLabel(status.run)}
+        </div>
+        <h3 className="stp-card-title">{series.name}</h3>
+        {scene?.title ? <div className="stp-small stp-soft stp-series-scene">{scene.title}</div> : null}
+        <div className={`stp-series-state stp-tone-${view.tone}`}>
+          {view.text}
+          {view.countdown !== undefined && (
+            <span className="stp-mono stp-series-countdown" title={`Deadline ${status.deadline ?? ""}`}>
+              {" "}
+              · {view.countdown}
+            </span>
+          )}
+        </div>
+        {card.spendCost > 0 && (
+          <div className="stp-earns">
+            <CoinIcon size={14} strokeWidth={2.4} />
+            asks you to spend {card.spendCost}
+          </div>
+        )}
+      </div>
+      {status.state !== "done-today" && (
+        <div className="stp-series-action">
+          {card.affordable ? (
+            <Link to={playerRoute(next.sceneId)} className="stp-btn stp-btn-orange">
+              Watch
+            </Link>
+          ) : (
+            <button type="button" className="stp-btn stp-btn-orange" disabled>
+              Needs {card.spendCost} stashcoins
+            </button>
+          )}
+        </div>
+      )}
     </article>
   );
 }

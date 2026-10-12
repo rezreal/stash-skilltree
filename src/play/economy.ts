@@ -4,6 +4,7 @@
 
 import type { LibraryInput, SceneInput } from "../core/types.ts";
 import { nodeKey, normalizeTopic, parseSpendAmount } from "../core/index.ts";
+import { dayOfIso, localDayOf } from "./series.ts";
 import type { Ledger, LedgerEntry, RewardBreakdown, Streak, WatchPolicy } from "./types.ts";
 
 // --- ledger -----------------------------------------------------------------------
@@ -63,11 +64,6 @@ export function localDay(d: Date): number | undefined {
   return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
 }
 
-function dayOfIso(iso: string | undefined): number | undefined {
-  if (!iso) return undefined;
-  return localDay(new Date(iso));
-}
-
 // --- streak ------------------------------------------------------------------------
 
 /** 1 below 3 days, then +0.1 every two days: 3–4 -> 1.1, 5–6 -> 1.2, 7+ -> 1.3. */
@@ -77,21 +73,28 @@ export function streakBonus(days: number): number {
 }
 
 /**
- * Consecutive local calendar days with at least one completion, ending today
- * or yesterday. `restDays` (default 0) is how many empty days may sit between
- * two active days (and between the last active day and yesterday) without
- * breaking the streak; rest days are not counted.
+ * Consecutive days with at least one completion, ending today or yesterday.
+ * Days start at `dayStartHour` local time (default 4, see localDayOf), so a
+ * late session counts for the evening it began in. `restDays` (default 0) is
+ * how many empty days may sit between two active days (and between the last
+ * active day and yesterday) without breaking the streak; rest days are not
+ * counted.
  *
  * Only each scene's latest completion is stored, so a repeat moves that
  * scene's day forward; the streak is a best-effort lower bound.
  */
-export function computeStreak(library: LibraryInput, now: Date, opts?: { restDays?: number }): Streak {
+export function computeStreak(
+  library: LibraryInput,
+  now: Date,
+  opts?: { restDays?: number; dayStartHour?: number },
+): Streak {
   const rest = Math.max(0, Math.floor(opts?.restDays ?? 0));
-  const today = localDay(now);
+  const h = opts?.dayStartHour;
+  const today = localDayOf(now, h);
   if (today === undefined) return { days: 0, bonus: 1, activeToday: false };
   const days = new Set<number>();
   for (const s of library.scenes) {
-    const d = dayOfIso(s.completedAt);
+    const d = dayOfIso(s.completedAt, h);
     if (d !== undefined && d <= today) days.add(d);
   }
   const sorted = [...days].sort((a, b) => b - a);

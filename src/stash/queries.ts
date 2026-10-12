@@ -84,6 +84,57 @@ export const TAG_UPDATE_FIELDS = /* GraphQL */ `
   }
 `;
 
+/**
+ * Groups configured as series (server-side custom_fields NOT_NULL filter on
+ * st.series), with their scenes and each scene's scene_index per group.
+ */
+export const FIND_SERIES_GROUPS = /* GraphQL */ `
+  query SkilltreeSeriesGroups($filter: FindFilterType, $group_filter: GroupFilterType) {
+    findGroups(filter: $filter, group_filter: $group_filter) {
+      count
+      groups {
+        id
+        name
+        custom_fields
+        scenes {
+          id
+          groups {
+            group {
+              id
+            }
+            scene_index
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** Every group, for the series setup panel (name, scene count, custom fields). */
+export const FIND_ALL_GROUPS = /* GraphQL */ `
+  query SkilltreeAllGroups($filter: FindFilterType) {
+    findGroups(filter: $filter) {
+      count
+      groups {
+        id
+        name
+        scene_count
+        custom_fields
+      }
+    }
+  }
+`;
+
+/** Writes custom fields of one group (CustomFieldsInput partial / remove, like tags). */
+export const GROUP_UPDATE_FIELDS = /* GraphQL */ `
+  mutation SkilltreeGroupFields($input: GroupUpdateInput!) {
+    groupUpdate(input: $input) {
+      id
+      custom_fields
+    }
+  }
+`;
+
 export function stTagsVariables(): Record<string, unknown> {
   return {
     filter: { per_page: -1, sort: "id", direction: "ASC" },
@@ -96,6 +147,25 @@ export function skillScenesVariables(tagIds: string[], page: number, perPage: nu
     filter: { page, per_page: perPage, sort: "id", direction: "ASC" },
     scene_filter: { tags: { value: tagIds, modifier: "INCLUDES", depth: 0 } },
   };
+}
+
+export function seriesGroupsVariables(): Record<string, unknown> {
+  return {
+    filter: { per_page: -1, sort: "id", direction: "ASC" },
+    group_filter: { custom_fields: [{ field: "st.series", modifier: "NOT_NULL" }] },
+  };
+}
+
+/** Scenes in any of the given groups, one page at a time (same scene query). */
+export function seriesScenesVariables(groupIds: string[], page: number, perPage: number): Record<string, unknown> {
+  return {
+    filter: { page, per_page: perPage, sort: "id", direction: "ASC" },
+    scene_filter: { groups: { value: groupIds, modifier: "INCLUDES", depth: 0 } },
+  };
+}
+
+export function allGroupsVariables(): Record<string, unknown> {
+  return { filter: { per_page: -1, sort: "name", direction: "ASC" } };
 }
 
 export function allTagsVariables(): Record<string, unknown> {
@@ -145,6 +215,32 @@ export interface RawSetupTag extends RawTag {
 
 export interface FindAllTagsResult {
   findTags: { count: number; tags: RawSetupTag[] };
+}
+
+export interface RawSeriesGroup {
+  id: string;
+  name: string;
+  custom_fields: CustomFields | null;
+  scenes: { id: string; groups: { group: { id: string }; scene_index: number | null }[] | null }[] | null;
+}
+
+export interface FindSeriesGroupsResult {
+  findGroups: { count: number; groups: RawSeriesGroup[] };
+}
+
+export interface RawSetupGroup {
+  id: string;
+  name: string;
+  scene_count: number | null;
+  custom_fields: CustomFields | null;
+}
+
+export interface FindAllGroupsResult {
+  findGroups: { count: number; groups: RawSetupGroup[] };
+}
+
+export interface GroupUpdateFieldsResult {
+  groupUpdate: { id: string; custom_fields: CustomFields | null } | null;
 }
 
 export interface TagUpdateFieldsResult {

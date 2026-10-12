@@ -46,7 +46,7 @@ export function performer(id: string, name = id): PerformerInput {
 }
 
 export function library(partial: Partial<LibraryInput> = {}): LibraryInput {
-  return { interestTags: [], triggerTags: [], scenes: [], performers: [], malformed: [], ...partial };
+  return { interestTags: [], triggerTags: [], scenes: [], performers: [], series: [], malformed: [], ...partial };
 }
 
 export interface QuickNode {

@@ -1,8 +1,16 @@
 // View-model helpers for the choice and player screens.
 // Pure, tested under node --test.
-import type { Graph, Id, MarkerInput, NodeKey, Progress, SceneInput, Visibility } from "../core/types.ts";
-import type { AbortReason, LedgerEntry, SessionPhase, Suggestion, SuggestionKind, WatchPolicy } from "../play/types.ts";
-import { formatMinutes, nodeLabel } from "./format.ts";
+import type { Graph, Id, MarkerInput, NodeKey, Progress, SceneInput, SeriesInput, Visibility } from "../core/types.ts";
+import type {
+  AbortReason,
+  LedgerEntry,
+  SeriesStatus,
+  SessionPhase,
+  Suggestion,
+  SuggestionKind,
+  WatchPolicy,
+} from "../play/types.ts";
+import { formatDuration, formatMinutes, nodeLabel } from "./format.ts";
 
 // --- suggestion cards ------------------------------------------------------------
 
@@ -79,6 +87,66 @@ export function blockedText(b: { node: NodeKey; cost: number; balance: number })
     `${nodeLabel(b.node)} costs ${b.cost} and you have ${b.balance}. ` +
     "Its clips come back as suggestions once you can afford them. Earn clips pay the most."
   );
+}
+
+// --- daily series cards -------------------------------------------------------------
+
+/** "part 3 of 10" */
+export function seriesPartLabel(status: SeriesStatus, total: number): string {
+  const n = status.nextPart?.number ?? Math.min(total, status.run + 1);
+  return `part ${n} of ${total}`;
+}
+
+/** "3-day run" / "no run yet" */
+export function runLabel(run: number): string {
+  return run > 0 ? `${run}-day run` : "no run yet";
+}
+
+/** time left until `deadline` as h:mm:ss / mm:ss, "00:00" once passed */
+export function timeLeft(deadline: string | undefined, nowMs: number): string | undefined {
+  if (deadline === undefined) return undefined;
+  const ms = Date.parse(deadline) - nowMs;
+  if (!Number.isFinite(ms)) return undefined;
+  return formatDuration(Math.max(0, Math.ceil(ms / 1000)));
+}
+
+export interface SeriesStateView {
+  text: string;
+  tone: "orange" | "blue" | "red" | "muted";
+  /** due: the live countdown to the deadline */
+  countdown?: string;
+}
+
+/** The state line of a series card. */
+export function seriesStateView(series: Pick<SeriesInput, "reset">, status: SeriesStatus, nowMs: number): SeriesStateView {
+  const n = status.nextPart?.number;
+  switch (status.state) {
+    case "due": {
+      const miss = series.reset === "step_back" ? "steps back a part if missed" : "resets if missed";
+      const view: SeriesStateView = { text: `due today — ${miss}`, tone: "orange" };
+      const left = timeLeft(status.deadline, nowMs);
+      if (left !== undefined) view.countdown = `${left} left`;
+      return view;
+    }
+    case "done-today":
+      return { text: n ? `done for today — part ${n} unlocks tomorrow` : "done for today", tone: "blue" };
+    case "broken":
+      return {
+        text: n && n > 1 ? `run broken — stepped back to part ${n}` : "run broken — starts again at part 1",
+        tone: "red",
+      };
+    case "not-started":
+      return { text: "start any day", tone: "muted" };
+    case "finished":
+      return { text: "finished", tone: "blue" };
+  }
+}
+
+/** Summary line after a series part was counted: "Morning: part 4 of 10 · 4-day run". */
+export function seriesSummaryLine(series: SeriesInput, status: SeriesStatus): string {
+  const total = series.parts.length;
+  if (status.state === "finished") return `${series.name}: finished · all ${total} parts in a ${runLabel(total)}`;
+  return `${series.name}: part ${status.run} of ${total} · ${runLabel(status.run)}`;
 }
 
 // --- sidebar ---------------------------------------------------------------------

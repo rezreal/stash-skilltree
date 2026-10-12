@@ -772,6 +772,80 @@
   max-width: 28rem;
 }
 
+/* --- series setup ----------------------------------------------------------- */
+
+.skilltree-series-setup {
+  max-width: 56rem;
+}
+
+.skilltree-series-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.skilltree-series-filters input[type="search"] {
+  max-width: 20rem;
+}
+
+.skilltree-series-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.skilltree-series-row {
+  align-items: center;
+  border-left: 3px solid transparent;
+  border-top: 1px solid var(--st-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  padding: 0.4rem 0.4rem;
+}
+
+.skilltree-series-row.is-edited {
+  border-left-color: var(--st-open);
+}
+
+.skilltree-series-name {
+  align-items: baseline;
+  display: flex;
+  flex: 1 1 14rem;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.5rem;
+  min-width: 0;
+}
+
+.skilltree-series-name a {
+  color: inherit;
+}
+
+.skilltree-series-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+
+.skilltree-series-controls select {
+  width: auto;
+}
+
+.skilltree-series-row .skilltree-setup-warnings {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.skilltree-kind.is-series {
+  background: var(--st-complete);
+  color: #0d1a26;
+}
+
 /* --- phone width: side panel stacks below the tree ----------------------- */
 
 @media (max-width: 991px) {

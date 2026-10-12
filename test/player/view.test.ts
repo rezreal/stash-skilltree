@@ -20,8 +20,14 @@ import {
   promptsNeeded,
   reasonsText,
   recentEntries,
+  runLabel,
+  seriesPartLabel,
+  seriesStateView,
+  seriesSummaryLine,
+  timeLeft,
   watchButtonLabel,
 } from "../../src/player/view.ts";
+import type { SeriesInput } from "../../src/core/types.ts";
 
 const policy = (extra: Partial<WatchPolicy> = {}): WatchPolicy => ({ ...DEFAULT_POLICY, ...extra });
 const marker = (id: string, check?: MarkerInput["check"]): MarkerInput => ({ id, title: "", seconds: 0, check });
@@ -197,4 +203,49 @@ test("player helpers", () => {
   const s = { id: "x" } as SceneInput;
   assert.equal(previousExposure(s), 0);
   assert.equal(previousExposure({ ...s, exposureSec: 120 } as SceneInput), 120);
+});
+
+const daily = (reset: SeriesInput["reset"] = "start"): SeriesInput => ({
+  groupId: "g",
+  name: "Morning",
+  mode: "daily",
+  reset,
+  parts: [1, 2, 3, 4].map((i) => ({ sceneId: `s${i}`, index: i })),
+});
+
+test("series card labels", () => {
+  assert.equal(seriesPartLabel({ state: "due", run: 2, nextPart: { sceneId: "s3", number: 3 } }, 4), "part 3 of 4");
+  assert.equal(runLabel(3), "3-day run");
+  assert.equal(runLabel(0), "no run yet");
+  const now = Date.parse("2024-05-10T20:00:00Z");
+  assert.equal(timeLeft("2024-05-11T02:00:01Z", now), "6:00:01");
+  assert.equal(timeLeft("2024-05-10T20:05:00Z", now), "05:00");
+  assert.equal(timeLeft("2024-05-10T19:00:00Z", now), "00:00");
+  assert.equal(timeLeft(undefined, now), undefined);
+});
+
+test("seriesStateView: one line per state, countdown when due", () => {
+  const now = Date.parse("2024-05-10T20:00:00Z");
+  const next = (number: number) => ({ sceneId: `s${number}`, number });
+  assert.deepEqual(seriesStateView(daily(), { state: "due", run: 2, nextPart: next(3), deadline: "2024-05-11T02:00:00Z" }, now), {
+    text: "due today — resets if missed",
+    tone: "orange",
+    countdown: "6:00:00 left",
+  });
+  assert.equal(seriesStateView(daily("step_back"), { state: "due", run: 2, nextPart: next(3) }, now).text, "due today — steps back a part if missed");
+  assert.equal(
+    seriesStateView(daily(), { state: "done-today", run: 2, nextPart: next(3) }, now).text,
+    "done for today — part 3 unlocks tomorrow",
+  );
+  assert.equal(seriesStateView(daily(), { state: "broken", run: 0, nextPart: next(1) }, now).text, "run broken — starts again at part 1");
+  assert.equal(
+    seriesStateView(daily("step_back"), { state: "broken", run: 2, nextPart: next(3) }, now).text,
+    "run broken — stepped back to part 3",
+  );
+  assert.equal(seriesStateView(daily(), { state: "not-started", run: 0, nextPart: next(1) }, now).text, "start any day");
+});
+
+test("seriesSummaryLine", () => {
+  assert.equal(seriesSummaryLine(daily(), { state: "done-today", run: 3, nextPart: { sceneId: "s4", number: 4 } }), "Morning: part 3 of 4 · 3-day run");
+  assert.equal(seriesSummaryLine(daily(), { state: "finished", run: 4 }), "Morning: finished · all 4 parts in a 4-day run");
 });

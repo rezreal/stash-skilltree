@@ -5,7 +5,7 @@
 import type { Id, SceneInput } from "../core/types.ts";
 import type { StashClient } from "../stash/client.ts";
 import { fieldNumber } from "../stash/fields.ts";
-import { localDay, rewardFor } from "./economy.ts";
+import { rewardFor } from "./economy.ts";
 import {
   FIND_TAG_FIELDS,
   SCENE_ADD_PLAY,
@@ -13,21 +13,23 @@ import {
   TAG_UPDATE_PAID,
 } from "./queries.ts";
 import type { FindTagFieldsResult } from "./queries.ts";
+import { dayOfIso, localDayOf } from "./series.ts";
 import { sessionQuality } from "./session.ts";
 import type { Ledger, SessionCommit, SessionState, Streak, WatchPolicy } from "./types.ts";
 
 /**
- * Coins earned on the local day of `nowIso` according to the ledger. Best
- * effort: scenes store cumulative values at their latest completion, so a
- * scene repeated today counts with everything it ever earned.
+ * Coins earned on the day of `nowIso` (days start at `dayStartHour`, default
+ * 4) according to the ledger. Best effort: scenes store cumulative values at
+ * their latest completion, so a scene repeated today counts with everything
+ * it ever earned.
  */
-export function earnedOnDay(ledger: Ledger, nowIso: string): number {
-  const today = localDay(new Date(nowIso));
+export function earnedOnDay(ledger: Ledger, nowIso: string, dayStartHour?: number): number {
+  const today = localDayOf(new Date(nowIso), dayStartHour);
   if (today === undefined) return 0;
   let n = 0;
   for (const e of ledger.entries) {
     if (e.kind !== "earned" || !e.at) continue;
-    if (localDay(new Date(e.at)) === today) n += e.amount;
+    if (dayOfIso(e.at, dayStartHour) === today) n += e.amount;
   }
   return n;
 }
@@ -44,7 +46,7 @@ export function buildCommit(
   streak: Streak,
   ledger: Ledger,
   nowIso: string,
-  opts?: { dailyCap?: number; earnedToday?: number },
+  opts?: { dailyCap?: number; earnedToday?: number; dayStartHour?: number },
 ): SessionCommit {
   if (state.phase !== "complete") throw new Error(`cannot commit a session in phase "${state.phase}"`);
   if (state.sceneId !== scene.id) throw new Error(`session is for scene ${state.sceneId}, not ${scene.id}`);
@@ -52,7 +54,7 @@ export function buildCommit(
   const reward: Parameters<typeof rewardFor>[0] = { scene, quality, policy, streak };
   if (opts?.dailyCap !== undefined) {
     reward.dailyCap = opts.dailyCap;
-    reward.earnedToday = opts.earnedToday ?? earnedOnDay(ledger, nowIso);
+    reward.earnedToday = opts.earnedToday ?? earnedOnDay(ledger, nowIso, opts.dayStartHour);
   }
   const breakdown = rewardFor(reward);
   let spentNow = 0;

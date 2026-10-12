@@ -1,16 +1,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createClient } from "../../src/stash/client.ts";
-import { loadLibrary } from "../../src/stash/load.ts";
-import type { RawScene, RawTag } from "../../src/stash/queries.ts";
+import { classifySeriesGroups, loadLibrary } from "../../src/stash/load.ts";
+import type { RawScene, RawSeriesGroup, RawTag } from "../../src/stash/queries.ts";
 
 interface Posted {
   query: string;
   variables: Record<string, any>;
 }
 
-/** Fake stash server: answers findTags and findScenes like v0.31 would. */
-function fakeStash(tags: RawTag[], scenes: RawScene[]) {
+/** Fake stash server: answers findTags, findGroups and findScenes like v0.31 would. */
+function fakeStash(tags: RawTag[], scenes: RawScene[], groups: RawSeriesGroup[] = []) {
   const posted: Posted[] = [];
   const fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as Posted;
@@ -18,10 +18,22 @@ function fakeStash(tags: RawTag[], scenes: RawScene[]) {
     let data: unknown;
     if (body.query.includes("findTags")) {
       data = { findTags: { count: tags.length, tags } };
+    } else if (body.query.includes("findGroups")) {
+      // server-side custom_fields NOT_NULL filter on st.series
+      const series = groups.filter((g) => g.custom_fields?.["st.series"] != null);
+      data = { findGroups: { count: series.length, groups: series } };
     } else if (body.query.includes("findScenes")) {
       const { page, per_page } = body.variables.filter;
-      const wanted = new Set<string>(body.variables.scene_filter.tags.value);
-      const matching = scenes.filter((s) => s.tags.some((t) => wanted.has(t.id)));
+      const sf = body.variables.scene_filter;
+      let matching: RawScene[];
+      if (sf.tags) {
+        const wanted = new Set<string>(sf.tags.value);
+        matching = scenes.filter((s) => s.tags.some((t) => wanted.has(t.id)));
+      } else {
+        const inGroups = new Set<string>();
+        for (const g of groups) if (sf.groups.value.includes(g.id)) for (const sc of g.scenes ?? []) inGroups.add(sc.id);
+        matching = scenes.filter((s) => inGroups.has(s.id));
+      }
       data = {
         findScenes: { count: matching.length, scenes: matching.slice((page - 1) * per_page, page * per_page) },
       };
@@ -54,6 +66,27 @@ function scene(id: string, tagIds: string[], extra: Partial<RawScene> = {}): Raw
   };
 }
 
+/** A series group whose scenes are [id, scene_index] pairs (null index allowed). */
+function seriesGroup(
+  id: string,
+  name: string,
+  custom_fields: Record<string, unknown> | null,
+  parts: [string, number | null][],
+): RawSeriesGroup {
+  return {
+    id,
+    name,
+    custom_fields,
+    scenes: parts.map(([sid, index]) => ({
+      id: sid,
+      groups: [
+        { group: { id: "other" }, scene_index: 99 },
+        { group: { id }, scene_index: index },
+      ],
+    })),
+  };
+}
+
 const interestA0 = t("10", "A0", { "st.kind": "interest", "st.topic": "a", "st.level": "0" });
 const interestA1 = t("11", "A1", { "st.kind": "interest", "st.topic": "a", "st.level": 1, "st.need": "3", "st.requires": "b:0|$20" });
 const triggerIn = t("20", "X installed", { "st.kind": "trigger", "st.trigger": "x", "st.trigger_role": "installed" });
@@ -75,15 +108,16 @@ describe("loadLibrary", () => {
     const { client, posted } = fakeStash([triggerIn, policy], [scene("1", ["20"])]);
     const progress: string[] = [];
     const lib = await loadLibrary(client, { onProgress: (m) => progress.push(m) });
-    assert.equal(posted.length, 1, "no scene query");
+    assert.equal(posted.length, 2, "tags and series groups, no scene query");
     assert.deepEqual(lib, {
       interestTags: [],
       triggerTags: [{ id: "20", name: "X installed", trigger: "x", role: "installed" }],
       scenes: [],
       performers: [],
+      series: [],
       malformed: [],
     });
-    assert.deepEqual(progress, ["tags"]);
+    assert.deepEqual(progress, ["tags", "series"]);
   });
 
   it("classifies tags and collects malformed ones", async () => {
@@ -136,7 +170,7 @@ describe("loadLibrary", () => {
       lib.scenes.map((s) => s.id),
       ["1", "2", "3", "4", "5", "6", "7"],
     );
-    assert.deepEqual(progress, ["tags", "scenes", "scenes 3/7", "scenes 6/7", "scenes 7/7"]);
+    assert.deepEqual(progress, ["tags", "series", "scenes", "scenes 3/7", "scenes 6/7", "scenes 7/7"]);
   });
 
   it("stops after an exactly full last page", async () => {
@@ -150,7 +184,7 @@ describe("loadLibrary", () => {
   it("uses a default page size of 250", async () => {
     const { client, posted } = fakeStash([interestA0], [scene("1", ["10"])]);
     await loadLibrary(client);
-    assert.equal(posted[1].variables.filter.per_page, 250);
+    assert.equal(posted.find((p) => p.query.includes("findScenes"))?.variables.filter.per_page, 250);
   });
 
   it("maps scenes, markers and unique performers", async () => {
@@ -229,9 +263,93 @@ describe("loadLibrary", () => {
     ]);
   });
 
+  it("queries series groups with the server-side st.series filter", async () => {
+    const { client, posted } = fakeStash([], []);
+    await loadLibrary(client);
+    const call = posted.find((p) => p.query.includes("findGroups"));
+    assert.ok(call);
+    assert.match(call.query, /scene_index/);
+    assert.deepEqual(call.variables, {
+      filter: { per_page: -1, sort: "id", direction: "ASC" },
+      group_filter: { custom_fields: [{ field: "st.series", modifier: "NOT_NULL" }] },
+    });
+  });
+
+  it("loads series parts that are not in the tree, paginated by group", async () => {
+    const scenes = [scene("1", ["10"]), scene("2", []), scene("3", []), scene("4", []), scene("5", ["99"])];
+    const groups = [
+      seriesGroup("g1", "Daily", { "st.series": "daily" }, [["2", 2], ["1", 1], ["3", 3]]),
+      seriesGroup("g2", "Other", { "st.series": "daily", "st.reset": "step_back" }, [["4", 1]]),
+      seriesGroup("g3", "Not a series", { foo: "bar" }, [["5", 1]]),
+    ];
+    const { client, posted } = fakeStash([interestA0], scenes, groups);
+    const progress: string[] = [];
+    const lib = await loadLibrary(client, { pageSize: 2, onProgress: (m) => progress.push(m) });
+
+    assert.deepEqual(lib.series, [
+      { groupId: "g1", name: "Daily", mode: "daily", reset: "start", parts: [{ sceneId: "1", index: 1 }, { sceneId: "2", index: 2 }, { sceneId: "3", index: 3 }] },
+      { groupId: "g2", name: "Other", mode: "daily", reset: "step_back", parts: [{ sceneId: "4", index: 1 }] },
+    ]);
+    const seriesCalls = posted.filter((p) => p.query.includes("findScenes") && p.variables.scene_filter.groups);
+    assert.deepEqual(
+      seriesCalls.map((c) => c.variables),
+      [1, 2].map((page) => ({
+        filter: { page, per_page: 2, sort: "id", direction: "ASC" },
+        scene_filter: { groups: { value: ["g1", "g2"], modifier: "INCLUDES", depth: 0 } },
+      })),
+    );
+    assert.deepEqual(lib.scenes.map((s) => s.id), ["1", "2", "3", "4"]);
+    assert.deepEqual(progress, ["tags", "series", "scenes", "scenes 1/1", "series scenes", "series scenes 2/4", "series scenes 4/4"]);
+  });
+
+  it("loads series without any interest tag and skips the request when every part is loaded", async () => {
+    const groups = [seriesGroup("g1", "Daily", { "st.series": "Daily" }, [["2", 1]])];
+    const alone = fakeStash([], [scene("2", [])], groups);
+    const lib = await loadLibrary(alone.client);
+    assert.deepEqual(lib.scenes.map((s) => s.id), ["2"]);
+    assert.equal(lib.series.length, 1);
+
+    const inTree = fakeStash([interestA0], [scene("2", ["10"])], groups);
+    await loadLibrary(inTree.client);
+    assert.equal(inTree.posted.filter((p) => p.query.includes("findScenes")).length, 1, "only the tree query");
+  });
+
   it("propagates GraphQL errors", async () => {
     const fetch = (async () =>
       new Response(JSON.stringify({ errors: [{ message: "boom" }] }), { status: 200 })) as typeof globalThis.fetch;
     await assert.rejects(loadLibrary(createClient({ baseUrl: "/", fetch })), /boom/);
+  });
+});
+
+describe("classifySeriesGroups", () => {
+  it("keeps the group's own scene_index, sorts missing indices last and dedupes scenes", () => {
+    const g = seriesGroup("g", "S", { "st.series": " daily ", "st.reset": "START" }, [["9", null], ["7", 2], ["8", 1], ["7", 2], ["3", null]]);
+    assert.deepEqual(classifySeriesGroups([g]), {
+      series: [
+        {
+          groupId: "g",
+          name: "S",
+          mode: "daily",
+          reset: "start",
+          parts: [{ sceneId: "8", index: 1 }, { sceneId: "7", index: 2 }, { sceneId: "3" }, { sceneId: "9" }],
+        },
+      ],
+      malformed: [],
+    });
+  });
+
+  it("reports unknown values and empty series as malformed", () => {
+    const r = classifySeriesGroups([
+      seriesGroup("a", "Weekly", { "st.series": "weekly", "st.reset": "never" }, [["1", 1]]),
+      seriesGroup("b", "Empty", { "st.series": "daily" }, []),
+      { id: "c", name: "No scenes field", custom_fields: { "st.series": "daily" }, scenes: null },
+      seriesGroup("d", "Plain", {}, [["1", 1]]),
+    ]);
+    assert.deepEqual(r.series, []);
+    assert.deepEqual(r.malformed, [
+      { groupId: "a", groupName: "Weekly", problem: 'st.series must be "daily", got "weekly"; st.reset must be "start" or "step_back", got "never"' },
+      { groupId: "b", groupName: "Empty", problem: "the series has no scenes" },
+      { groupId: "c", groupName: "No scenes field", problem: "the series has no scenes" },
+    ]);
   });
 });

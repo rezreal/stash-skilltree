@@ -6,6 +6,7 @@ import {
   markerPromptFields,
   parseInterestTag,
   parsePromptTag,
+  parseSeriesFields,
   parseTriggerTag,
   sceneProgressFields,
   tagKind,
@@ -213,4 +214,28 @@ it("sceneProgressFields reads stored loop exposure", () => {
   assert.equal(sceneProgressFields({ "st.exposure_seconds": "1830.5" }).exposureSec, 1830.5);
   assert.equal(sceneProgressFields({ "st.exposure_seconds": 0 }).exposureSec, undefined);
   assert.equal(sceneProgressFields({}).exposureSec, undefined);
+});
+
+describe("parseSeriesFields", () => {
+  it("is undefined without st.series", () => {
+    assert.equal(parseSeriesFields({}), undefined);
+    assert.equal(parseSeriesFields(null), undefined);
+    assert.equal(parseSeriesFields({ "st.series": "  ", "st.reset": "step_back" }), undefined);
+  });
+
+  it("parses daily with the default and explicit reset modes", () => {
+    assert.deepEqual(parseSeriesFields({ "st.series": "Daily" }), { ok: { mode: "daily", reset: "start" } });
+    assert.deepEqual(parseSeriesFields({ "st.series": "daily", "st.reset": " STEP_BACK " }), {
+      ok: { mode: "daily", reset: "step_back" },
+    });
+  });
+
+  it("reports unknown values", () => {
+    assert.deepEqual(parseSeriesFields({ "st.series": "weekly", "st.reset": "start" }), {
+      problem: 'st.series must be "daily", got "weekly"',
+    });
+    assert.deepEqual(parseSeriesFields({ "st.series": "daily", "st.reset": 3 }), {
+      problem: 'st.reset must be "start" or "step_back", got 3',
+    });
+  });
 });

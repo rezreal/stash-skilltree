@@ -132,10 +132,31 @@ fields, so a series is configured on its group:
   yesterday. Rewatching part 1 after a miss overwrites its date, which breaks
   the old chain, so the run restarts naturally.
 - A plugin setting sets when the day ends (e.g. 04:00) so late sessions
-  count for the right day.
+  count for the right day. `dayStartHour` (default 4) also applies to the
+  streak and the daily earn cap.
+- Part order: `scene_index` ascending; parts without an index come after
+  those with one; ties by scene date (undated last), then scene id.
+- States: *not-started* (part 1 never done: any day, no deadline), *due*
+  (run ended yesterday: next part today, deadline = next day boundary),
+  *done-today* (next part unlocks tomorrow), *broken* (last run day before
+  yesterday), *finished* (all parts in one run; stays finished).
+- `step_back`: every missed day (from the day after the last watch up to
+  yesterday) steps the position back one part, never below 0; the next part
+  is the one after it. Parts are then watched again, which overwrites their
+  dates, so the position is derived from the most recent completion: part e
+  on day D means position e at the end of D if some history of daily watches
+  and misses explains the stored dates (walk backwards: part P's date = that
+  day → watched; otherwise a miss from P+1, or, if P's date is later, an
+  earlier watch overwritten by a rewatch). Today's position is
+  `max(0, e − missed days)`. A completion no history explains (a part
+  watched out of order) is skipped and its day counts as missed.
 - The choice screen shows an active series as its own card (part, run
-  length, time left today); later parts are not suggested early.
+  length, time left today); later parts are not suggested early: series
+  parts never appear as normal suggestions except the next part of a series
+  that is not done for today.
 - Falling back only moves the series position. Levels and coins earned stay.
+- Malformed `st.series` / `st.reset` values and series without scenes are
+  lint errors. The Setup view has a Series tab writing only these two keys.
 
 ## Flow
 

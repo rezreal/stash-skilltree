@@ -178,6 +178,27 @@ describe("suggest", () => {
     assert.ok(r.options[0].reasons.includes('uses the "x" trigger installed earlier'));
   });
 
+  it("trigger: a scene using two triggers needs an installer completed for each", () => {
+    const lib = base();
+    lib.triggerTags.push(
+      trigger("txi", "x", "installed"),
+      trigger("txu", "x", "used"),
+      trigger("tyi", "y", "installed"),
+      trigger("tyu", "y", "used"),
+    );
+    lib.interestTags.push(interest("tl2", "relax", 2));
+    lib.scenes.push(scene("instX", ["tl2", "txi"], { performerIds: ["P"], date: "2023-01-01", ...done }));
+    lib.scenes.push(scene("instY", ["tl2", "tyi"], { performerIds: ["P"], date: "2023-01-02" }));
+    lib.scenes.push(scene("use", ["tr1", "txu", "tyu"], { performerIds: ["P"], date: "2023-06-01" }));
+    // only x is installed: the scene stays out everywhere
+    let r = suggest(input(lib, { performerId: "P", max: 5 }));
+    assert.ok(!r.options.some((o) => o.sceneId === "use"));
+    assert.equal(r.options[0].sceneId, "r5");
+    // both installed: it comes first
+    r = suggest(input(replace(lib, "instY", done), { performerId: "P" }));
+    assert.equal(r.options[0].sceneId, "use");
+  });
+
   it("without a performer picks the one with most open scenes", () => {
     const r = suggest(input(base()));
     assert.equal(r.performerId, "Q");

@@ -4,7 +4,7 @@
 // boolean depending on how they were entered, so parsing is lenient:
 // strings are trimmed, "2" and 2 are the same value.
 
-import type { InterestTagInput, MarkerInput, TriggerTagInput } from "../core/types.ts";
+import type { InterestTagInput, MarkerInput, SeriesReset, TriggerTagInput } from "../core/types.ts";
 
 export type CustomFields = Record<string, unknown>;
 
@@ -159,6 +159,34 @@ export function markerPromptFields(tag: StashTag | null | undefined): Pick<Marke
   if (!tag) return {};
   const r = parsePromptTag(tag);
   return r && "ok" in r ? { ...r.ok } : {};
+}
+
+// --- groups (series) ------------------------------------------------------------
+
+export const SERIES_MODES = ["daily"] as const;
+export const SERIES_RESETS = ["start", "step_back"] as const;
+
+export interface SeriesConfig {
+  mode: "daily";
+  reset: SeriesReset;
+}
+
+/**
+ * st.series / st.reset of a group. Undefined when st.series is unset (the
+ * group is no series); st.reset defaults to "start". Collects every problem.
+ */
+export function parseSeriesFields(customFields: CustomFields | null | undefined): ParseResult<SeriesConfig> | undefined {
+  const f = customFields ?? {};
+  const mode = fieldKeyword(f["st.series"]);
+  if (mode === undefined) return undefined;
+  const problems: string[] = [];
+  if (!(SERIES_MODES as readonly string[]).includes(mode))
+    problems.push(`st.series must be ${SERIES_MODES.map((m) => JSON.stringify(m)).join(" or ")}, got ${show(f["st.series"])}`);
+  const reset = fieldKeyword(f["st.reset"]) ?? "start";
+  if (!(SERIES_RESETS as readonly string[]).includes(reset))
+    problems.push(`st.reset must be "start" or "step_back", got ${show(f["st.reset"])}`);
+  if (problems.length > 0) return { problem: problems.join("; ") };
+  return { ok: { mode: mode as "daily", reset: reset as SeriesReset } };
 }
 
 // --- scenes --------------------------------------------------------------------

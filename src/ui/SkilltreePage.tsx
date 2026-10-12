@@ -272,7 +272,7 @@ function libraryTagNames(library: LibraryInput): Map<Id, string> {
   const names = new Map<Id, string>();
   for (const t of library.interestTags) names.set(t.id, t.name);
   for (const t of library.triggerTags) names.set(t.id, t.name);
-  for (const m of library.malformed) names.set(m.tagId, m.tagName);
+  for (const m of library.malformed) if ("tagId" in m) names.set(m.tagId, m.tagName);
   return names;
 }
 

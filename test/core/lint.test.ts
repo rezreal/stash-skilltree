@@ -26,6 +26,15 @@ test("build issues and malformed tags are included", () => {
   assert.ok(issues.filter((i) => i.code === "malformed-tag").every((i) => i.severity === "error"));
 });
 
+test("malformed series groups are errors carrying the group id", () => {
+  const lib = quick({ "a:0": {} });
+  lib.malformed.push({ groupId: "g1", groupName: "Daily", problem: 'st.series must be "daily", got "weekly"' });
+  const issues = lint(lib).filter((i) => i.code === "malformed-series");
+  assert.deepEqual(issues, [
+    { severity: "error", code: "malformed-series", message: 'Group "Daily": st.series must be "daily", got "weekly"', groupId: "g1" },
+  ]);
+});
+
 test("unreachable: costs payable, OR escapes, closed cycles and gaps", () => {
   const g = buildGraph(
     quick({

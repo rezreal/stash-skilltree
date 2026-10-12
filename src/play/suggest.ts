@@ -1,12 +1,31 @@
 // Suggestions for the choice screen: continue / explore / earn, performer
 // switches and the start screen. Pure; inputs come from core + economy.
 
-import type { Graph, GraphNode, Id, LibraryInput, NodeKey, Progress, SceneInput, Visibility } from "../core/types.ts";
+import type {
+  Graph,
+  GraphNode,
+  Id,
+  LibraryInput,
+  NodeKey,
+  Progress,
+  SceneInput,
+  SeriesInput,
+  Visibility,
+} from "../core/types.ts";
 import type { TriggerEdge } from "../core/index.ts";
 import { groupSatisfied, parseNodeKey, topicDepth } from "../core/index.ts";
 import { effortScore, estimateEarn, repeatFactor, spendCost, promptCount } from "./economy.ts";
 import { policyForScene } from "./policy.ts";
-import type { Ledger, PerformerSwitch, PolicyTagInput, Streak, Suggestion, SuggestionResult } from "./types.ts";
+import { blockedSeriesScenes, seriesStatus } from "./series.ts";
+import type {
+  Ledger,
+  PerformerSwitch,
+  PolicyTagInput,
+  SeriesStatus,
+  Streak,
+  Suggestion,
+  SuggestionResult,
+} from "./types.ts";
 
 export interface SuggestInput {
   graph: Graph;
@@ -21,6 +40,10 @@ export interface SuggestInput {
   edges: TriggerEdge[];
   /** options to return (default 2) */
   max?: number;
+  /** the moment daily series are judged at (default: now) */
+  now?: Date;
+  /** day boundary hour for daily series (default 4) */
+  dayStartHour?: number;
 }
 
 /** Balance below which an earn option is always offered. */
@@ -72,18 +95,27 @@ export function gatePrice(graph: Graph, progress: Progress, key: NodeKey): numbe
   return Math.max(0, need - node.paid);
 }
 
-/** Scenes allowed by trigger pairs: a "used" scene needs one of its "installed" scenes completed. */
+/**
+ * Scenes allowed by trigger pairs: for every trigger with edges into a
+ * "used" scene, at least one of that trigger's "installed" scenes must be
+ * completed (AND across triggers, OR within one trigger). A sub-trigger
+ * scene also uses its parent trigger, so it needs both installed.
+ */
 function triggerAllowed(graph: Graph, edges: TriggerEdge[]): (sceneId: Id) => boolean {
-  const from = new Map<Id, Id[]>();
+  const from = new Map<Id, Map<string, Id[]>>();
   for (const e of edges) {
-    const list = from.get(e.to);
+    let byTrigger = from.get(e.to);
+    if (!byTrigger) from.set(e.to, (byTrigger = new Map()));
+    const list = byTrigger.get(e.trigger);
     if (list) list.push(e.from);
-    else from.set(e.to, [e.from]);
+    else byTrigger.set(e.trigger, [e.from]);
   }
+  const completed = (f: Id) => graph.scenes.get(f)?.completedAt !== undefined;
   return (id) => {
-    const list = from.get(id);
-    if (!list) return true;
-    return list.some((f) => graph.scenes.get(f)?.completedAt !== undefined);
+    const byTrigger = from.get(id);
+    if (!byTrigger) return true;
+    for (const list of byTrigger.values()) if (!list.some(completed)) return false;
+    return true;
   };
 }
 
@@ -92,9 +124,19 @@ function triggerOf(edges: TriggerEdge[], graph: Graph, sceneId: Id): string | un
   return undefined;
 }
 
+/**
+ * Parts of daily series never come up as normal suggestions, except the next
+ * part of a series that is not done for today (blockedSeriesScenes).
+ */
 function allCandidates(input: SuggestInput): Candidate[] {
   const { graph, progress, visibility } = input;
-  const allowed = triggerAllowed(graph, input.edges);
+  const triggerOk = triggerAllowed(graph, input.edges);
+  const series = input.library.series ?? [];
+  const blocked =
+    series.length > 0
+      ? blockedSeriesScenes(series, graph.scenes, input.now ?? new Date(), input.dayStartHour)
+      : new Set<Id>();
+  const allowed = (id: Id) => !blocked.has(id) && triggerOk(id);
   const out: Candidate[] = [];
   for (const node of graph.nodes.values()) {
     const ps = progress.get(node.key)?.state ?? "locked";
@@ -465,5 +507,56 @@ export function startPerformers(input: Omit<SuggestInput, "performerId" | "max">
     }
     return compareIds(a.performerId, b.performerId);
   });
+  return out;
+}
+
+// --- daily series cards ------------------------------------------------------------------
+
+export interface DailySeriesCard {
+  series: SeriesInput;
+  status: SeriesStatus;
+  /** coins the next part's spend prompts ask for */
+  spendCost: number;
+  /** same rule as suggestions: the spend cost fits the balance */
+  affordable: boolean;
+}
+
+const CARD_ORDER: Record<SeriesStatus["state"], number> = {
+  due: 0,
+  broken: 1,
+  "not-started": 2,
+  "done-today": 3,
+  finished: 4,
+};
+
+/**
+ * One card per daily series that has a next part (everything but finished),
+ * due first, then broken, not started, done for today; then by name.
+ */
+export function dailySeriesCards(input: {
+  library: LibraryInput;
+  ledger: Ledger;
+  now?: Date;
+  dayStartHour?: number;
+}): DailySeriesCard[] {
+  const series = input.library.series ?? [];
+  if (series.length === 0) return [];
+  const scenes = new Map<Id, SceneInput>(input.library.scenes.map((s) => [s.id, s]));
+  const now = input.now ?? new Date();
+  const out: DailySeriesCard[] = [];
+  for (const s of series) {
+    const status = seriesStatus(s, scenes, now, input.dayStartHour);
+    if (status.state === "finished" || !status.nextPart) continue;
+    const scene = scenes.get(status.nextPart.sceneId);
+    if (!scene) continue;
+    const cost = spendCost(scene);
+    out.push({ series: s, status, spendCost: cost, affordable: cost <= input.ledger.balance });
+  }
+  out.sort(
+    (a, b) =>
+      CARD_ORDER[a.status.state] - CARD_ORDER[b.status.state] ||
+      a.series.name.localeCompare(b.series.name) ||
+      compareIds(a.series.groupId, b.series.groupId),
+  );
   return out;
 }

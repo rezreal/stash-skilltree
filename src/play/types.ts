@@ -217,13 +217,41 @@ export interface SuggestionResult {
   blocked?: { node: NodeKey; cost: number; balance: number };
 }
 
+// --- daily series ---------------------------------------------------------------
+
+export type SeriesState = "not-started" | "due" | "done-today" | "broken" | "finished";
+
+/** Where a daily series stands today, derived from its parts' st.completed_at. */
+export interface SeriesStatus {
+  state: SeriesState;
+  /** parts held in the current run (consecutive days for reset=start) */
+  run: number;
+  /** the part to watch next (unlocks tomorrow when done-today); none when finished */
+  nextPart?: {
+    sceneId: Id;
+    /** scene_index in the group, if stash has one */
+    index?: number;
+    /** 1-based position in watch order */
+    number: number;
+  };
+  /** due: ISO timestamp of the next day boundary, the run's deadline */
+  deadline?: string;
+  /** YYYY-MM-DD of the day the run was last extended */
+  lastDay?: string;
+}
+
 // --- player settings (plugin settings / defaults) -----------------------------
+
+/** Hour (local time) when a new day starts: completions before it count for the previous day. */
+export const DEFAULT_DAY_START_HOUR = 4;
 
 export interface PlaySettings {
   defaultNeed: number;
   /** seconds without mouse/keyboard before fallback attention counts as away */
   idleSec: number;
   dailyEarnCap?: number;
+  /** day boundary hour 0–23 for streaks, the daily cap and daily series (default 4) */
+  dayStartHour?: number;
 }
 
 export const DEFAULT_POLICY: WatchPolicy = {

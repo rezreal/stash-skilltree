@@ -3,6 +3,7 @@ export * from "./policy.ts";
 export * from "./attention.ts";
 export * from "./session.ts";
 export * from "./economy.ts";
+export * from "./series.ts";
 export * from "./suggest.ts";
 export * from "./commit.ts";
 export * from "./queries.ts";
