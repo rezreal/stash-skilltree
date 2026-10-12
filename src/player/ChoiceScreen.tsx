@@ -28,6 +28,7 @@ import { fogDepthRows } from "../ui/fogView.ts";
 import {
   KIND_LABEL,
   blockedText,
+  chronologyText,
   checkChips,
   costBadge,
   earnText,
@@ -270,6 +271,17 @@ function NextView(props: NextViewProps) {
             <LockIcon />
           </span>
           <span>{blockedText(result.blocked)}</span>
+        </div>
+      )}
+
+      {result.chronology && (
+        <div className="stp-notice" role="note">
+          <span className="stp-notice-icon">
+            <LockIcon />
+          </span>
+          <span>
+            {chronologyText(result.chronology, name(result.chronology.performerId), (id) => data.graph.scenes.get(id)?.title || undefined)}
+          </span>
         </div>
       )}
 

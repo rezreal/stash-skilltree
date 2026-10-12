@@ -5,6 +5,7 @@ import { DEFAULT_POLICY, type WatchPolicy } from "../../src/play/types.ts";
 import {
   abortReasonText,
   blockedText,
+  chronologyText,
   checkChips,
   costBadge,
   earnText,
@@ -196,4 +197,17 @@ test("seriesStateView: one line per state, countdown when due", () => {
 test("seriesSummaryLine", () => {
   assert.equal(seriesSummaryLine(daily(), { state: "done-today", run: 3, nextPart: { sceneId: "s4", number: 4 } }), "Morning: part 3 of 4 · 3-day run");
   assert.equal(seriesSummaryLine(daily(), { state: "finished", run: 4 }), "Morning: finished · all 4 parts in a 4-day run");
+});
+
+test("chronologyText names the waiting clip only when it is open", () => {
+  const titles: Record<string, string> = { a: "First clip", b: "Second" };
+  const t = (id: string) => titles[id];
+  assert.equal(
+    chronologyText({ performerId: "p", nextSceneIds: ["a"], locked: false }, "Ann", t),
+    "Ann's clips are watched in date order: “First clip” comes first.",
+  );
+  assert.match(chronologyText({ performerId: "p", nextSceneIds: ["a", "b"], locked: false }, "Ann", t), /2 earlier clips come first/);
+  const locked = chronologyText({ performerId: "p", nextSceneIds: ["a"], locked: true }, "Ann", t);
+  assert.ok(!locked.includes("First clip"));
+  assert.match(locked, /behind a level that isn't open yet/);
 });

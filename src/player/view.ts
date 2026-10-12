@@ -89,6 +89,28 @@ export function blockedText(b: { node: NodeKey; cost: number; balance: number })
   );
 }
 
+/**
+ * Why the next clip is held back by date order. The waiting clips are named
+ * by title only when they are open to play anyway; a clip behind a locked
+ * level is not named, so the fog keeps it.
+ */
+export function chronologyText(
+  w: { performerId: Id; nextSceneIds: Id[]; locked: boolean },
+  performerName: string,
+  titleOf: (id: Id) => string | undefined,
+): string {
+  if (w.locked) {
+    return (
+      `${performerName}'s clips are watched in date order, and their next one is behind a level that isn't open yet. ` +
+      "Open more of the tree or switch performer."
+    );
+  }
+  const titles = w.nextSceneIds.map(titleOf).filter((t): t is string => !!t);
+  const next =
+    titles.length === 1 ? `“${titles[0]}” comes` : titles.length > 1 ? `${titles.length} earlier clips come` : "an earlier clip comes";
+  return `${performerName}'s clips are watched in date order: ${next} first.`;
+}
+
 // --- daily series cards -------------------------------------------------------------
 
 /** "part 3 of 10" */
