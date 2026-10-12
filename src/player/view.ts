@@ -25,12 +25,14 @@ const MARKER_CHIP: Record<NonNullable<MarkerInput["check"]>, string> = {
   gaze: "look-at prompts",
   action: "webcam actions",
   spend: "spend prompt",
+  mail: "mail drafts",
 };
 
 /**
  * What a clip will check, in display order: the policy rules, then one chip
  * per kind of prompt marker it has. Prompt chips only appear when the policy
- * includes `prompts`, except spend prompts, which always apply.
+ * includes `prompts`, except spend and mail prompts, which always apply
+ * (both hold the clip until answered).
  */
 export function checkChips(policy: WatchPolicy, markers: MarkerInput[]): string[] {
   const chips: string[] = [];
@@ -42,11 +44,11 @@ export function checkChips(policy: WatchPolicy, markers: MarkerInput[]): string[
     add(policy.minMinutes ? `loop · ${policy.minMinutes} min` : "loop");
   }
   if (policy.rules.includes("track")) add("track");
-  const order: NonNullable<MarkerInput["check"]>[] = ["repeat", "gaze", "action", "spend"];
+  const order: NonNullable<MarkerInput["check"]>[] = ["repeat", "gaze", "action", "spend", "mail"];
   const present = new Set(markers.map((m) => m.check).filter((c) => c !== undefined));
   for (const check of order) {
     if (!present.has(check)) continue;
-    if (check !== "spend" && !policy.rules.includes("prompts")) continue;
+    if (check !== "spend" && check !== "mail" && !policy.rules.includes("prompts")) continue;
     add(MARKER_CHIP[check]);
   }
   return chips;
@@ -223,7 +225,7 @@ export interface PhaseView {
   hint: string;
 }
 
-export type PauseCause = "user" | "attention" | "spend" | undefined;
+export type PauseCause = "user" | "attention" | "spend" | "mail" | undefined;
 
 export function phaseView(phase: SessionPhase, policy: WatchPolicy, cause: PauseCause): PhaseView {
   if (cause === "spend") {
@@ -232,6 +234,9 @@ export function phaseView(phase: SessionPhase, policy: WatchPolicy, cause: Pause
       tone: "gold",
       hint: "The clip asks for stashcoins. Confirm by holding the button. Declining or letting the time run out fails the clip.",
     };
+  }
+  if (cause === "mail") {
+    return { label: "Mail draft", tone: "orange", hint: "The clip waits until you send the mail draft." };
   }
   switch (phase) {
     case "ready":

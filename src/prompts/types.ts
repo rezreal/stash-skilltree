@@ -7,7 +7,7 @@ import type { Id, MarkerInput } from "../core/types.ts";
 import type { ViewportPoint } from "../gaze/types.ts";
 import type { PromptResult } from "../play/types.ts";
 
-export type PromptCheck = "repeat" | "gaze" | "action" | "spend";
+export type PromptCheck = "repeat" | "gaze" | "action" | "spend" | "mail";
 
 export const GAZE_TARGETS = [
   "eyes",

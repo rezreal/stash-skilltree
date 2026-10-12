@@ -193,7 +193,7 @@ describe("parsePromptTag", () => {
   it("reports a missing or unknown check", () => {
     assert.deepEqual(parsePromptTag(tag({ "st.kind": "prompt" })), { problem: "st.check is missing" });
     assert.deepEqual(parsePromptTag(tag({ "st.kind": "prompt", "st.check": "blink" })), {
-      problem: 'st.check must be one of repeat, gaze, action, spend, got "blink"',
+      problem: 'st.check must be one of repeat, gaze, action, spend, mail, got "blink"',
     });
   });
 

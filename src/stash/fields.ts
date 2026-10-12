@@ -19,7 +19,7 @@ export type ParseResult<T> = { ok: T } | { problem: string };
 
 export const KNOWN_KINDS = ["interest", "trigger", "policy", "prompt", "auto-marker", "replay"] as const;
 
-export const PROMPT_CHECKS = ["repeat", "gaze", "action", "spend"] as const;
+export const PROMPT_CHECKS = ["repeat", "gaze", "action", "spend", "mail"] as const;
 export type PromptCheck = (typeof PROMPT_CHECKS)[number];
 
 export interface PromptTagInfo {

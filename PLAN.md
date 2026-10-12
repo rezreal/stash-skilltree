@@ -66,11 +66,15 @@ saved sessions — JSON `{"v":1,"sessions":n,"sec":{"eyes":12.3,...}}`.
 ### Markers
 
 Prompt markers: primary tag carries `st.kind=prompt` and `st.check`
-(`repeat`, `gaze`, `action`, `spend`, plus `st.target`/`st.action`). The
+(`repeat`, `gaze`, `action`, `spend`, `mail`, plus `st.target`/`st.action`). The
 marker window (`seconds`..`end_seconds`) is when compliance is checked.
 `repeat`: title = phrase; the window stays open 3 s past an explicit end
 (the marker covers the clip saying it, the viewer answers after).
 `spend`: title = amount.
+`mail`: title = the draft's body, optionally led by `To: … |` and
+`Subject: … |` (a literal `\n` is a line break). The draft opens over the clip
+at the start and plays along; the end is the latest time to send it, so from
+there the clip waits until Send. Sending passes the prompt; nothing is sent.
 
 ## Semantics
 
@@ -212,8 +216,9 @@ Watch policy = rules composed per scene from its tags:
   the condition held 1 s, then every 5 s while it lasts: track = mismatch ≥
   0.6 while playing; gaze = a gaze prompt reports "off" or the eye tracker
   sees the viewer look away (never on the fallback, never in a background
-  window). Toy Sync rate-limits nudges (cooldown, per-minute cap) and only
-  e-stim devices at their calibrated nudge level act on them.
+  window); none during a spend prompt or an open mail draft. Toy Sync
+  rate-limits nudges (cooldown, per-minute cap) and only e-stim devices at
+  their calibrated nudge level act on them.
 
 - **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
   video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the

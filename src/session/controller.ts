@@ -14,12 +14,13 @@ import type { PauseCause } from "../stashplayer/videoHandle.ts";
  * A pause the session must hear about as pauseByUser. Only cause "other"
  * (control bar, click, keys, media keys, the browser): our own pauses
  * ("plugin"), seeks and the end of the clip are not the viewer's. Nothing
- * counts once the session is over or while a spend prompt holds the video.
+ * counts once the session is over or while a spend or mail prompt holds
+ * the video (held).
  */
-export function isViewerPause(cause: PauseCause, state: Pick<SessionState, "phase">, spendOpen: boolean): boolean {
+export function isViewerPause(cause: PauseCause, state: Pick<SessionState, "phase">, held: boolean): boolean {
   if (cause !== "other") return false;
   if (state.phase === "aborted" || state.phase === "complete") return false;
-  return !spendOpen;
+  return !held;
 }
 
 /** seconds a spend prompt waits for an answer: its window, 5..60 s */
@@ -43,9 +44,9 @@ export function wantsPauseLock(policy: Pick<WatchPolicy, "allowUserPause"> | und
   return !policy.allowUserPause;
 }
 
-/** why the video is paused, for phaseView */
-export function viewPauseCause(spendOpen: boolean, pausedBy: SessionState["pausedBy"]): ViewPauseCause {
-  if (spendOpen) return "spend";
+/** why the video is paused, for phaseView; hold: the prompt holding it, if any */
+export function viewPauseCause(hold: "spend" | "mail" | undefined, pausedBy: SessionState["pausedBy"]): ViewPauseCause {
+  if (hold) return hold;
   if (pausedBy === "user") return "user";
   if (pausedBy === "inattention") return "attention";
   return undefined;
@@ -59,15 +60,18 @@ export function findTreeScene(
   return data.graph.scenes.get(sceneId) ?? data.library.scenes.find((s) => s.id === sceneId);
 }
 
-/** the player should be paused / playing because of the session's one-shot flags */
+/**
+ * The player should be paused / playing because of the session's one-shot
+ * flags. held: a spend or mail prompt holds the video, so it isn't resumed.
+ */
 export function playerRequest(
   state: Pick<SessionState, "phase" | "pauseRequested" | "resumeRequested">,
   videoPaused: boolean,
-  spendOpen: boolean,
+  held: boolean,
 ): "pause" | "play" | undefined {
   if (isTerminal(state as SessionState)) return undefined;
   if (state.pauseRequested && !videoPaused) return "pause";
-  if (state.resumeRequested && videoPaused && !spendOpen) return "play";
+  if (state.resumeRequested && videoPaused && !held) return "play";
   return undefined;
 }
 
@@ -80,12 +84,13 @@ export interface BannerNotice {
 
 /**
  * The one notice the top banner shows, most urgent first: a pause attempt
- * that was undone, the grace warning, the "press play" hint. Spend prompts
- * and overlays speak for themselves, so nothing shows while one is open.
+ * that was undone, the grace warning, the "press play" hint. Spend prompts,
+ * held mail drafts and overlays speak for themselves, so nothing shows
+ * while one is up (held).
  */
 export function bannerNotice(input: {
   phase: SessionPhase;
-  spendOpen: boolean;
+  held: boolean;
   pauseAttemptRecent: boolean;
   graceText: string;
   exposureOnly: boolean;
@@ -93,7 +98,7 @@ export function bannerNotice(input: {
   test?: boolean;
 }): BannerNotice | undefined {
   const { phase } = input;
-  if (input.spendOpen || phase === "aborted" || phase === "complete") return undefined;
+  if (input.held || phase === "aborted" || phase === "complete") return undefined;
   if (input.pauseAttemptRecent) {
     return { text: "Pausing isn’t part of the session. Stop (Esc) ends it – the clip won’t count.", tone: "warning" };
   }

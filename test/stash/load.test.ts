@@ -145,7 +145,7 @@ describe("loadLibrary", () => {
     assert.deepEqual(lib.malformed, [
       { tagId: "50", tagName: "No level", problem: "st.level is missing" },
       { tagId: "51", tagName: "Bad role", problem: 'st.trigger_role must be "installed" or "used", got "maybe"' },
-      { tagId: "52", tagName: "Bad prompt", problem: 'st.check must be one of repeat, gaze, action, spend, got "blink"' },
+      { tagId: "52", tagName: "Bad prompt", problem: 'st.check must be one of repeat, gaze, action, spend, mail, got "blink"' },
       { tagId: "53", tagName: "Typo", problem: 'unknown st.kind "intrest"' },
     ]);
   });

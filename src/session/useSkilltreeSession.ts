@@ -11,6 +11,9 @@
 // - "ended" -> the session's ended (undecided spend prompts are declined);
 //   exposure loops that stash didn't loop start over instead
 // - spend prompts pause the video until answered (or their window runs out)
+// - mail prompts open a draft at their start; the clip plays on until the
+//   marker's end, then waits (paused) until the draft is sent. Sending
+//   reports the prompt passed; a draft still unsent when the clip ends fails
 // - a complete session is committed once; stopping a loop saves its
 //   exposure (so does leaving the page with unsaved loop minutes)
 // - Esc / stop() aborts (loops: saves)
@@ -30,6 +33,7 @@ import {
 } from "../play/index.ts";
 import type { Ledger, PromptResult, SessionCommit, SessionState, SpendEvent, Streak, WatchPolicy } from "../play/types.ts";
 import { errorText } from "../player/common.tsx";
+import { mailHoldAt, mailPrompts, nextMail, type MailPrompt } from "../player/mail.ts";
 import { missedSpends, pendingSpend, spendPrompts, spentInSession, type SpendPrompt } from "../player/markers.ts";
 import type { AttentionReading } from "../player/gazeView.ts";
 import { useAttentionSource, type AttentionSource } from "../player/useAttentionSource.ts";
@@ -105,6 +109,11 @@ export interface SkilltreeSession {
   prompts: MarkerInput[];
   openSpend: OpenSpend | undefined;
   decideSpend: (prompt: SpendPrompt, accepted: boolean) => void;
+  /** the mail draft on screen */
+  openMail: MailPrompt | undefined;
+  /** the open draft is past its marker's end: the clip waits for Send */
+  mailHeld: boolean;
+  sendMail: (prompt: MailPrompt) => void;
   save: SaveState;
   /** Esc / Stop: aborts a watched clip, saves a loop */
   stop: () => void;
@@ -142,6 +151,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
   const exposureOnly = isExposureOnly(policy);
   const spends = React.useMemo(() => spendPrompts(scene.markers), [scene]);
   const prompts = React.useMemo(() => promptMarkers(scene.markers), [scene]);
+  const mails = React.useMemo(() => mailPrompts(scene.markers), [scene]);
 
   const [session, dispatch] = React.useReducer(step, undefined, () =>
     createSession({ scene, policy, nowMs: Date.now(), priorExposureSec: previousExposure(scene) }),
@@ -159,6 +169,16 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
   const [openSpend, setOpenSpend] = React.useState<OpenSpend | undefined>(undefined);
   const openSpendRef = React.useRef(openSpend);
   openSpendRef.current = openSpend;
+  const [openMail, setOpenMail] = React.useState<MailPrompt | undefined>(undefined);
+  const openMailRef = React.useRef(openMail);
+  openMailRef.current = openMail;
+  const [mailHeld, setMailHeld] = React.useState(false);
+  const mailHeldRef = React.useRef(mailHeld);
+  mailHeldRef.current = mailHeld;
+  /** mail prompts sent or failed */
+  const mailsDoneRef = React.useRef(new Set<string>());
+  /** a spend or mail prompt holds the video: it stays paused */
+  const held = React.useCallback(() => !!openSpendRef.current || mailHeldRef.current, []);
   const [save, setSave] = React.useState<SaveState>({ status: "idle" });
   const saveRef = React.useRef(save);
   saveRef.current = save;
@@ -203,13 +223,30 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
         // cleared right away, so the play event below isn't taken as playing over the prompt
         openSpendRef.current = undefined;
         setOpenSpend(undefined);
-        if (accepted) playVideo();
+        if (accepted && !mailHeldRef.current) playVideo();
       }
     },
     [handle, playVideo],
   );
 
-  // the session clock: attention, video time, spend prompts
+  const sendMail = React.useCallback(
+    (prompt: MailPrompt) => {
+      if (mailsDoneRef.current.has(prompt.marker.id)) return;
+      mailsDoneRef.current.add(prompt.marker.id);
+      dispatch({ type: "prompt", result: { markerId: prompt.marker.id, passed: true } });
+      if (openMailRef.current?.marker.id !== prompt.marker.id) return;
+      const wasHeld = mailHeldRef.current;
+      // cleared right away, so the play event below isn't taken as playing over the draft
+      openMailRef.current = undefined;
+      mailHeldRef.current = false;
+      setOpenMail(undefined);
+      setMailHeld(false);
+      if (wasHeld && !openSpendRef.current) playVideo();
+    },
+    [playVideo],
+  );
+
+  // the session clock: attention, video time, spend and mail prompts
   React.useEffect(() => {
     const id = window.setInterval(() => {
       const s = sessionRef.current;
@@ -239,16 +276,33 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
           pauseVideo();
         }
       }
+
+      let mail = openMailRef.current;
+      if (!mail) {
+        mail = nextMail(mails, mailsDoneRef.current, t);
+        if (mail) {
+          openMailRef.current = mail;
+          setOpenMail(mail);
+        }
+      }
+      if (mail && !mailHeldRef.current) {
+        const d = handle.duration();
+        if (t >= mailHoldAt(mail, Number.isFinite(d) && d > 0 ? d : scene.durationSec)) {
+          mailHeldRef.current = true;
+          setMailHeld(true);
+          pauseVideo();
+        }
+      }
     }, TICK_MS);
     return () => window.clearInterval(id);
-  }, [handle, readAttention, spends, decideSpend, pauseVideo]);
+  }, [handle, readAttention, spends, decideSpend, mails, scene, pauseVideo]);
 
   // the session asks to pause (inattention) or resume
   React.useEffect(() => {
-    const req = playerRequest(session, handle.paused(), !!openSpendRef.current);
+    const req = playerRequest(session, handle.paused(), held());
     if (req === "pause") pauseVideo();
     else if (req === "play") playVideo();
-  }, [session, handle, pauseVideo, playVideo]);
+  }, [session, handle, held, pauseVideo, playVideo]);
 
   // finished: stop the video; a completed session is committed once
   const committing = React.useRef(false);
@@ -278,6 +332,8 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     if (!isTerminal(session)) return;
     pauseVideo();
     setOpenSpend(undefined);
+    setOpenMail(undefined);
+    setMailHeld(false);
     if (session.phase === "complete" && !committing.current) {
       committing.current = true;
       void commit();
@@ -356,15 +412,15 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
   // --- player events ---
   React.useEffect(() => {
     const offPlay = handle.onEvent("play", () => {
-      if (openSpendRef.current) {
-        // played during a spend prompt: it has to be answered first
+      if (held()) {
+        // played during a spend prompt or a held mail draft: it has to be answered first
         pauseVideo();
         return;
       }
       if (!isTerminal(sessionRef.current)) dispatch({ type: "play", nowMs: Date.now() });
     });
     const offPause = handle.onPause((cause) => {
-      if (!isViewerPause(cause, sessionRef.current, !!openSpendRef.current)) return;
+      if (!isViewerPause(cause, sessionRef.current, held())) return;
       dispatch({ type: "pauseByUser", nowMs: Date.now() });
     });
     const offEnded = handle.onEvent("ended", () => {
@@ -383,6 +439,11 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
       const d = handle.duration();
       const end = Number.isFinite(d) && d > 0 ? d : handle.currentTime() || scene.durationSec;
       for (const p of spends) if (!decidedRef.current.has(p.marker.id) && p.window.start < end) decideSpend(p, false);
+      for (const p of mails) {
+        if (mailsDoneRef.current.has(p.marker.id) || p.window.start >= end) continue;
+        mailsDoneRef.current.add(p.marker.id);
+        dispatch({ type: "prompt", result: { markerId: p.marker.id, passed: false } });
+      }
       dispatch({ type: "ended", nowMs: Date.now() });
     });
     const onDuration = () => {
@@ -399,7 +460,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
       offMeta();
       offDur();
     };
-  }, [handle, exposureOnly, scene, spends, decideSpend, pauseVideo]);
+  }, [handle, exposureOnly, scene, spends, mails, decideSpend, held, pauseVideo]);
 
   const reportPrompt = React.useCallback((result: PromptResult) => dispatch({ type: "prompt", result }), []);
   const reportTrack = React.useCallback((score: number) => dispatch({ type: "track", score }), []);
@@ -420,6 +481,9 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     prompts,
     openSpend,
     decideSpend,
+    openMail,
+    mailHeld,
+    sendMail,
     save,
     stop,
     retrySave: () => void commit(save.status === "error" ? save.commit : undefined),

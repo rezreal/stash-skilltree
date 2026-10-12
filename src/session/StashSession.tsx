@@ -48,6 +48,7 @@ import { router } from "../player/api.ts";
 import { CoinIcon, PLAY_ROUTE } from "../player/common.tsx";
 import { FlashOverlay } from "../player/FlashOverlay.tsx";
 import { formatCoins, formatCountdown } from "../player/format.ts";
+import { mailHoldAt } from "../player/mail.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
 import { eyesClosedDimOpacity } from "../player/flash.ts";
@@ -94,6 +95,7 @@ import { bannerNotice, findTreeScene, ruleResults, scoreChipView, viewPauseCause
 import { CameraPip } from "./CameraPip.tsx";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
 import { GazeRegionsSummary, usePerformerRegions } from "./GazeRegionsSummary.tsx";
+import { MailDraft } from "./MailDraft.tsx";
 import { calloutAim } from "./gazeCallout.ts";
 import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog, TEST_NOT_SAVED } from "./overlays.tsx";
 import { CountsWhen, SlimTimeline, useRecentChange } from "./panels.tsx";
@@ -369,7 +371,7 @@ function SessionOverlay(props: {
     beforeEnd,
     persist: !test,
   });
-  const { session, policy, scene, openSpend, attention, exposureOnly } = s;
+  const { session, policy, scene, openSpend, openMail, attention, exposureOnly } = s;
   reportTrackRef.current = s.reportTrack;
   const finished = isTerminal(session);
   const snaps = useSnapEvents(scene.id, scene.interactive);
@@ -484,10 +486,12 @@ function SessionOverlay(props: {
 
   // nudges (Toy Sync, e-stim): the gaze isn't followed, or the track is far
   // off, for a second - then every few seconds while it lasts. Only while the
-  // clip runs or waits for the viewer's attention; never during a spend prompt.
+  // clip runs or waits for the viewer's attention; never during a spend prompt
+  // or while a mail draft is open (writing it is the task then, and a held
+  // draft pauses the clip without changing the session's phase).
   const nudgeGaze = onUnlessOff(rawSettings.nudgeGaze) && !finished;
-  const nudgeState = React.useRef({ reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, spend: !!openSpend });
-  nudgeState.current = { reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, spend: !!openSpend };
+  const nudgeState = React.useRef({ reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, answering: !!openSpend || !!openMail });
+  nudgeState.current = { reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, answering: !!openSpend || !!openMail };
   React.useEffect(() => {
     if (!nudgeGaze && !nudgeTrack) return;
     const gazeTimer = createNudgeTimer();
@@ -496,7 +500,7 @@ function SessionOverlay(props: {
       const now = performance.now();
       const st = nudgeState.current;
       const live =
-        !st.spend && (st.phase === "playing" || st.phase === "grace" || (st.phase === "paused" && st.pausedBy === "inattention"));
+        !st.answering && (st.phase === "playing" || st.phase === "grace" || (st.phase === "paused" && st.pausedBy === "inattention"));
       const gazeOff = live && gazeNotFollowed({ prompt: checksRef.current?.promptAttention(), reading: st.reading });
       if (nudgeGaze && gazeTimer.update(gazeOff, now)) sendToyNudge("gaze");
       const trackOff = live && st.phase !== "paused" && isPlaying() && (mismatchRef.current ?? 0) >= TRACK_NUDGE_MISMATCH;
@@ -505,11 +509,14 @@ function SessionOverlay(props: {
     return () => window.clearInterval(id);
   }, [nudgeGaze, nudgeTrack, isPlaying]);
 
-  const phase = phaseView(session.phase, policy, viewPauseCause(!!openSpend, session.pausedBy));
+  const hold = openSpend ? "spend" : s.mailHeld ? "mail" : undefined;
+  const phase = phaseView(session.phase, policy, viewPauseCause(hold, session.pausedBy));
   const pauseAttemptRecent = useRecentChange(session.pauseAttempts, 4000);
+  const [mailsSent, setMailsSent] = React.useState(0);
+  const mailSentRecent = useRecentChange(mailsSent, 2500);
   const notice = bannerNotice({
     phase: session.phase,
-    spendOpen: !!openSpend,
+    held: hold !== undefined,
     pauseAttemptRecent,
     graceText: texts.grace,
     exposureOnly,
@@ -658,6 +665,24 @@ function SessionOverlay(props: {
               : "The clip pauses if you stay away."
           }
         />
+      )}
+
+      {openMail && !finished && (
+        <MailDraft
+          key={openMail.marker.id}
+          prompt={openMail}
+          held={s.mailHeld}
+          holdInSec={mailHoldAt(openMail, s.durationSec) - s.videoTime}
+          onSend={() => {
+            s.sendMail(openMail);
+            setMailsSent((n) => n + 1);
+          }}
+        />
+      )}
+      {mailSentRecent && !finished && (
+        <div className="stp-sp-mail-sent" role="status">
+          Mail sent
+        </div>
       )}
 
       {openSpend && !finished && (

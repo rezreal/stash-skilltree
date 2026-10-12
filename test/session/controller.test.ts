@@ -51,10 +51,11 @@ describe("wantsPauseLock", () => {
 
 describe("viewPauseCause", () => {
   it("spend first, then who paused", () => {
-    assert.equal(viewPauseCause(true, "inattention"), "spend");
-    assert.equal(viewPauseCause(false, "user"), "user");
-    assert.equal(viewPauseCause(false, "inattention"), "attention");
-    assert.equal(viewPauseCause(false, undefined), undefined);
+    assert.equal(viewPauseCause("spend", "inattention"), "spend");
+    assert.equal(viewPauseCause("mail", "user"), "mail");
+    assert.equal(viewPauseCause(undefined, "user"), "user");
+    assert.equal(viewPauseCause(undefined, "inattention"), "attention");
+    assert.equal(viewPauseCause(undefined, undefined), undefined);
   });
 });
 
@@ -82,7 +83,7 @@ describe("playerRequest", () => {
 });
 
 describe("bannerNotice", () => {
-  const input = { phase: "playing" as const, spendOpen: false, pauseAttemptRecent: false, graceText: "Look back", exposureOnly: false };
+  const input = { phase: "playing" as const, held: false, pauseAttemptRecent: false, graceText: "Look back", exposureOnly: false };
   it("picks the most urgent notice", () => {
     assert.equal(bannerNotice(input), undefined);
     assert.deepEqual(bannerNotice({ ...input, phase: "grace" }), { text: "Look back", tone: "warning" });
@@ -95,7 +96,7 @@ describe("bannerNotice", () => {
     assert.deepEqual(bannerNotice({ ...input, phase: "grace", test: true }), { text: "Look back", tone: "warning" });
   });
   it("stays quiet during spend prompts and after the end", () => {
-    assert.equal(bannerNotice({ ...input, phase: "grace", spendOpen: true }), undefined);
+    assert.equal(bannerNotice({ ...input, phase: "grace", held: true }), undefined);
     assert.equal(bannerNotice({ ...input, phase: "complete", pauseAttemptRecent: true }), undefined);
   });
 });

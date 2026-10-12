@@ -107,6 +107,7 @@ export const PROMPT_CHECK_HELP: Readonly<Record<string, string>> = {
   gaze: "the viewer looks at a target on the person in the video, or away, for the hold time",
   action: "the viewer does something the webcam can see: nod, close the eyes, a pose",
   spend: "the clip asks for the amount in the marker's title in stashcoins; declining fails the clip",
+  mail: "a mail draft opens over the clip, prefilled from the marker's title (optional \"To: … | Subject: … |\" first); the clip waits at the marker's end until it is sent",
 };
 
 export const GAZE_TARGET_HELP: Readonly<Record<string, string>> = {

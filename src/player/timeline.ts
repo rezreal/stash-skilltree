@@ -2,6 +2,7 @@
 // Pure, tested under node --test.
 import type { Id, MarkerInput } from "../core/types.ts";
 import type { Interval, PromptResult, SpendEvent } from "../play/types.ts";
+import { DEFAULT_PROMPT_WINDOWS } from "../prompts/specs.ts";
 import { markerWindow } from "./markers.ts";
 
 export interface TimelineSegment {
@@ -92,7 +93,7 @@ export function timelineDots(
   const out: TimelineDot[] = [];
   for (const m of markers) {
     if (!m.check) continue;
-    const w = markerWindow(m);
+    const w = m.check === "mail" ? markerWindow(m, DEFAULT_PROMPT_WINDOWS.mail) : markerWindow(m);
     const left = clamp((m.seconds / durationSec) * 100, 0, 100);
     const inside = t >= w.start && t < w.end;
     if (m.check === "spend") {

@@ -43,7 +43,7 @@ export interface MarkerInput {
   seconds: number;
   endSeconds?: number;
   /** st.check of the primary tag, if it is a prompt tag */
-  check?: "repeat" | "gaze" | "action" | "spend";
+  check?: "repeat" | "gaze" | "action" | "spend" | "mail";
   target?: string;
   action?: string;
   /**

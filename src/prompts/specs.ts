@@ -9,6 +9,7 @@ export const DEFAULT_PROMPT_WINDOWS: Readonly<Record<PromptCheck, number>> = {
   gaze: 5,
   action: 5,
   spend: 10,
+  mail: 20,
 };
 
 /**
@@ -43,7 +44,7 @@ export function isPromptAction(s: string | undefined): s is PromptAction {
 
 /**
  * Specs for every marker with a valid `check`, sorted by start. Skipped:
- * markers without check, spend (unless includeSpend), gaze with a missing or
+ * markers without check, spend (unless includeSpend), mail, gaze with a missing or
  * unknown target, action with a missing or unknown action, repeat with an
  * empty phrase, non-finite times. A missing or non-positive end falls back to
  * start + default window; an explicit repeat end gets REPEAT_TAIL_SEC added.
@@ -57,6 +58,8 @@ export function promptSpecs(markers: MarkerInput[], opts?: PromptSpecOptions): P
     const check = m.check;
     if (check === undefined) continue;
     if (check === "spend" && !opts?.includeSpend) continue;
+    // the session handles mail prompts (player/mail.ts)
+    if (check === "mail") continue;
     if (!Number.isFinite(m.seconds)) continue;
     const start = Math.max(0, m.seconds);
     const explicitEnd = m.endSeconds !== undefined && Number.isFinite(m.endSeconds) && m.endSeconds > start;
