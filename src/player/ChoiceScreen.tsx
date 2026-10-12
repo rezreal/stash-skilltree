@@ -1,6 +1,8 @@
 // /skilltree/play: pick a performer, then choose the next clip from
 // one or two suggestions (continue / explore / earn). Daily series sit above
-// them as their own cards.
+// them as their own cards. The header's "Test mode" switch (per viewer,
+// remembered) replaces them with the test panel (TestPanel.tsx): any scene
+// in stash, run as a session that saves nothing.
 import type { ChangeEvent } from "react";
 import type { Id } from "../core/types.ts";
 import { parseNodeKey, topicDepth } from "../core/index.ts";
@@ -23,7 +25,8 @@ import { watchUrl } from "../session/watchUrl.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
 import { PerformerAvatar } from "./PerformerAvatar.tsx";
-import { loadCurrentPerformer, saveCurrentPerformer } from "./storage.ts";
+import { loadCurrentPerformer, loadTestMode, saveCurrentPerformer, saveTestMode } from "./storage.ts";
+import { TestPanel } from "./TestPanel.tsx";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import { fogDepthRows } from "../ui/fogView.ts";
 import {
@@ -77,6 +80,11 @@ function ChoiceView(props: ChoiceViewProps) {
     setStored(id);
     window.scrollTo?.(0, 0);
   }, []);
+  const [testMode, setTestModeState] = React.useState(() => loadTestMode());
+  const setTestMode = React.useCallback((on: boolean) => {
+    saveTestMode(on);
+    setTestModeState(on);
+  }, []);
 
   // daily series change at the day boundary: suggestions follow the day,
   // cards the clock
@@ -115,11 +123,13 @@ function ChoiceView(props: ChoiceViewProps) {
 
   return (
     <div className="skilltree-play">
-      <PlayHeader balance={data.ledger.balance} streak={data.streak} />
+      <PlayHeader balance={data.ledger.balance} streak={data.streak} testMode={testMode} onTestMode={setTestMode} />
       <RefreshLine refreshing={props.refreshing} refreshError={props.refreshError} onRetry={() => void reload()} />
       <main className="stp-main">
-        <section className="stp-primary" aria-label={performerId ? "Suggestions" : "Start"}>
-          {performerId === undefined || result === undefined ? (
+        <section className="stp-primary" aria-label={testMode ? "Test mode" : performerId ? "Suggestions" : "Start"}>
+          {testMode ? (
+            <TestPanel data={data} />
+          ) : performerId === undefined || result === undefined ? (
             <StartView data={data} baseInput={baseInput} seriesCards={seriesCards} onPick={choosePerformer} />
           ) : (
             <NextView
@@ -138,7 +148,7 @@ function ChoiceView(props: ChoiceViewProps) {
   );
 }
 
-function PlayHeader(props: { balance: number; streak: Streak }) {
+function PlayHeader(props: { balance: number; streak: Streak; testMode: boolean; onTestMode: (on: boolean) => void }) {
   const { Link } = router();
   const { streak } = props;
   return (
@@ -158,6 +168,17 @@ function PlayHeader(props: { balance: number; streak: Streak }) {
         </Link>
       </nav>
       <div className="stp-spacer" />
+      <label className={`stp-test-switch${props.testMode ? " is-on" : ""}`} title="Test mode: every scene is open, nothing is saved">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={props.testMode}
+          aria-checked={props.testMode}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => props.onTestMode(e.target.checked)}
+        />
+        <span className="stp-test-switch-track" aria-hidden="true" />
+        Test mode
+      </label>
       <GazeStatusChip />
       <div className={`stp-streak${streak.activeToday ? " is-active" : ""}`} title={streak.activeToday ? "You watched today" : "Watch a clip today to keep the streak"}>
         <span className="stp-dot" aria-hidden="true" />

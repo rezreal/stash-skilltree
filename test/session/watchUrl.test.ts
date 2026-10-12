@@ -14,3 +14,8 @@ test("watched clips go to the scene page in Skilltree mode, autoplaying", () => 
 test("exposure loops carry the loop flag", () => {
   assert.equal(watchUrl("6", scene("6", ["loop"]), tags), "/scenes/6?skilltree=loop&autoplay=true");
 });
+
+test("test mode keeps the loop flag derived from the policy", () => {
+  assert.equal(watchUrl("5", scene("5", []), tags, { test: true }), "/scenes/5?skilltree=test&autoplay=true");
+  assert.equal(watchUrl("6", scene("6", ["loop"]), tags, { test: true }), "/scenes/6?skilltree=test-loop&autoplay=true");
+});

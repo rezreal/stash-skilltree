@@ -1067,6 +1067,212 @@
 .skilltree-play .stp-calib-miss { stroke: var(--st-open); stroke-opacity: 0.6; stroke-width: 1.5; }
 .skilltree-play .stp-calib-label { fill: var(--st-muted); font-family: var(--stp-mono); font-size: 12px; }
 
+/* --- test mode ------------------------------------------------------------------------------
+   The choice screen's "Test mode" switch and panel, and the TEST marks in the session overlay.
+   Violet, so it never reads as one of the tree's own states (blue / orange / gold). */
+
+.skilltree-play {
+  --stp-test: #c4a0ff;
+  --stp-test-bg: #1f1a2b;
+  --stp-test-border: #54407a;
+}
+
+.skilltree-play .stp-test-switch {
+  align-items: center;
+  color: var(--st-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 8px;
+  position: relative;
+  user-select: none;
+}
+
+.skilltree-play .stp-test-switch input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.skilltree-play .stp-test-switch-track {
+  background: var(--stp-line);
+  border-radius: 999px;
+  display: inline-block;
+  flex: none;
+  height: 18px;
+  position: relative;
+  transition: background 0.15s;
+  width: 32px;
+}
+
+.skilltree-play .stp-test-switch-track::after {
+  background: var(--st-text);
+  border-radius: 50%;
+  content: "";
+  height: 14px;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: transform 0.15s;
+  width: 14px;
+}
+
+.skilltree-play .stp-test-switch.is-on { color: var(--stp-test); }
+.skilltree-play .stp-test-switch.is-on .stp-test-switch-track { background: var(--stp-test-border); }
+.skilltree-play .stp-test-switch.is-on .stp-test-switch-track::after { background: var(--stp-test); transform: translateX(14px); }
+.skilltree-play .stp-test-switch input:focus-visible + .stp-test-switch-track { outline: 2px solid var(--stp-test); outline-offset: 2px; }
+
+.skilltree-play .stp-test-tag,
+.skilltree-play .stp-test-badge {
+  background: var(--stp-test-bg);
+  border: 1px solid var(--stp-test-border);
+  border-radius: 4px;
+  color: var(--stp-test);
+  font-family: var(--stp-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.skilltree-play .stp-test-badge { align-self: flex-start; font-size: 12px; letter-spacing: 0.02em; padding: 3px 8px; }
+
+.skilltree-play .stp-test { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.skilltree-play .stp-test-banner {
+  align-items: baseline;
+  background: var(--stp-test-bg);
+  border: 1px solid var(--stp-test-border);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  line-height: 1.5;
+  padding: 14px 16px;
+}
+
+.skilltree-play .stp-test-banner .stp-strong { color: var(--stp-test); }
+
+.skilltree-play .stp-test-filters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.skilltree-play .stp-test-filters .stp-search { max-width: none; }
+.skilltree-play .stp-test-tags { display: flex; flex-direction: column; gap: 8px; min-width: 0; position: relative; }
+.skilltree-play .stp-test-checks { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 18px; min-height: 44px; }
+
+.skilltree-play .stp-test-check {
+  align-items: center;
+  color: var(--stp-soft);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  gap: 8px;
+  margin: 0;
+}
+
+.skilltree-play .stp-test-check input { accent-color: var(--stp-test); height: 16px; width: 16px; }
+
+.skilltree-play .stp-test-hits {
+  background: var(--stp-card-2);
+  border: 1px solid var(--st-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.skilltree-play .stp-test-hits > span { padding: 6px 8px; }
+
+.skilltree-play .stp-test-hit {
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--st-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.skilltree-play .stp-test-hit:hover,
+.skilltree-play .stp-test-hit:focus-visible { background: var(--stp-thumb); outline: none; }
+
+.skilltree-play .stp-test-selected { align-items: center; border-color: var(--stp-test-border); color: var(--st-text); display: inline-flex; gap: 4px; }
+
+.skilltree-play .stp-test-remove {
+  background: transparent;
+  border: 0;
+  color: var(--st-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.skilltree-play .stp-test-remove:hover { color: var(--st-text); }
+
+.skilltree-play .stp-test-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  transition: opacity 0.15s;
+}
+
+.skilltree-play .stp-test-results.is-stale { opacity: 0.55; }
+
+.skilltree-play .stp-test-row {
+  align-items: center;
+  background: var(--stp-card);
+  border: 1px solid var(--st-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding-right: 14px;
+}
+
+.skilltree-play .stp-test-thumb {
+  align-self: stretch;
+  aspect-ratio: 16 / 9;
+  background: var(--stp-thumb);
+  position: relative;
+}
+
+.skilltree-play .stp-test-thumb img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.skilltree-play .stp-test-thumb .stp-duration { bottom: 6px; right: 6px; }
+.skilltree-play .stp-test-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 0; }
+.skilltree-play .stp-test-title { font-weight: 600; overflow-wrap: anywhere; }
+.skilltree-play .stp-test-chip.is-blue { border-color: #2f4f78; color: var(--st-complete); }
+.skilltree-play .stp-test-chip.is-orange { border-color: #6b4a24; color: var(--st-open); }
+.skilltree-play .stp-test-chip.is-muted { color: var(--st-muted); }
+.skilltree-play .stp-test-go { background: var(--stp-test); border-color: var(--stp-test); color: #17121f; }
+.skilltree-play .stp-test-go:hover { background: #d6bcff; color: #17121f; }
+
+.skilltree-play .stp-test-pager { align-items: center; display: flex; gap: 12px; justify-content: center; }
+
+.skilltree-play .stp-test-rules { width: 100%; }
+
+@media (max-width: 575px) {
+  .skilltree-play .stp-test-row { grid-template-columns: 112px minmax(0, 1fr); padding-right: 0; }
+  .skilltree-play .stp-test-go { grid-column: 1 / -1; margin: 0 12px 12px; }
+}
+
 /* --- narrow screens ------------------------------------------------------------------------ */
 
 @media (max-width: 767px) {

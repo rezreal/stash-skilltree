@@ -7,13 +7,15 @@ import {
   isViewerPause,
   loopWorthSaving,
   playerRequest,
+  ruleResults,
   scoreChipView,
   spendDeadlineMs,
   spendWindowSec,
   viewPauseCause,
   wantsPauseLock,
 } from "../../src/session/controller.ts";
-import { DEFAULT_POLICY } from "../../src/play/types.ts";
+import { DEFAULT_POLICY, type RuleName } from "../../src/play/types.ts";
+import { createSession } from "../../src/play/session.ts";
 
 describe("isViewerPause", () => {
   it("only cause other, while the session runs and no spend prompt holds the video", () => {
@@ -88,6 +90,10 @@ describe("bannerNotice", () => {
     assert.equal(bannerNotice({ ...input, phase: "ready" })?.tone, "info");
     assert.match(bannerNotice({ ...input, phase: "ready", exposureOnly: true })?.text ?? "", /loop/);
   });
+  it("test mode says nothing is saved", () => {
+    assert.match(bannerNotice({ ...input, phase: "ready", test: true })?.text ?? "", /Test mode.*nothing is saved/);
+    assert.deepEqual(bannerNotice({ ...input, phase: "grace", test: true }), { text: "Look back", tone: "warning" });
+  });
   it("stays quiet during spend prompts and after the end", () => {
     assert.equal(bannerNotice({ ...input, phase: "grace", spendOpen: true }), undefined);
     assert.equal(bannerNotice({ ...input, phase: "complete", pauseAttemptRecent: true }), undefined);
@@ -115,5 +121,40 @@ describe("loopWorthSaving", () => {
     assert.equal(loopWorthSaving({ phase: "playing", exposureSec: 0.5 }, true), false);
     assert.equal(loopWorthSaving({ phase: "playing", exposureSec: 30 }, false), false);
     assert.equal(loopWorthSaving({ phase: "complete", exposureSec: 30 }, true), false);
+  });
+});
+
+describe("ruleResults", () => {
+  const base = createSession({ scene: scene("1", [], { durationSec: 100 }), policy: DEFAULT_POLICY, nowMs: 0 });
+  it("each rule of the policy with the session's thresholds", () => {
+    const policy = { ...DEFAULT_POLICY, rules: ["attention", "prompts", "track"] as RuleName[], trackMin: 0.7 };
+    const state = {
+      ...base,
+      policy,
+      attendedFraction: 0.95,
+      prompts: [
+        { markerId: "a", passed: true },
+        { markerId: "b", passed: false },
+      ],
+    };
+    const r = ruleResults(state, 3);
+    assert.deepEqual(
+      r.map((x) => [x.rule, x.passed]),
+      [
+        ["attention", true],
+        ["prompts", false],
+        ["track", undefined],
+      ],
+    );
+    assert.equal(r[0].value, "95% / 90%");
+    assert.equal(r[1].value, "1 of 2 passed (3 markers) / 75%");
+    assert.equal(r[2].value, "not scored");
+    assert.equal(ruleResults({ ...state, track: 0.8 }, 3)[2].passed, true);
+    assert.equal(ruleResults({ ...state, attendedFraction: 0.5 }, 3)[0].passed, false);
+  });
+  it("exposure counts stored plus session minutes against the target", () => {
+    const policy = { ...DEFAULT_POLICY, rules: ["exposure"] as RuleName[], minMinutes: 10 };
+    const r = ruleResults({ ...base, policy, priorExposureSec: 300, exposureSec: 330 }, 0);
+    assert.deepEqual(r, [{ rule: "exposure", label: "Exposure", value: "10 / 10 min", passed: true }]);
   });
 });

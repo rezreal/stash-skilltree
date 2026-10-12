@@ -18,12 +18,12 @@ export const FIND_ST_TAGS = /* GraphQL */ `
   }
 `;
 
-/** Scenes having any of the given tags, one page at a time. */
-export const FIND_SKILL_SCENES = /* GraphQL */ `
-  query SkilltreeScenes($filter: FindFilterType, $scene_filter: SceneFilterType) {
-    findScenes(filter: $filter, scene_filter: $scene_filter) {
-      count
-      scenes {
+/**
+ * The scene fields everything that maps scenes (load.ts mapScene) reads:
+ * the library loader, the test search and the on-demand load of one scene
+ * share them, so a scene looks the same whichever way it was loaded.
+ */
+export const SCENE_FIELDS = /* GraphQL */ `
         id
         title
         date
@@ -50,8 +50,22 @@ export const FIND_SKILL_SCENES = /* GraphQL */ `
             custom_fields
           }
         }
-      }
+`;
+
+/** Scenes having any of the given tags, one page at a time. */
+export const FIND_SKILL_SCENES = /* GraphQL */ `
+  query SkilltreeScenes($filter: FindFilterType, $scene_filter: SceneFilterType) {
+    findScenes(filter: $filter, scene_filter: $scene_filter) {
+      count
+      scenes {${SCENE_FIELDS}      }
     }
+  }
+`;
+
+/** One scene by id (test mode loads scenes outside the library on demand). */
+export const FIND_SCENE = /* GraphQL */ `
+  query SkilltreeScene($id: ID!) {
+    findScene(id: $id) {${SCENE_FIELDS}    }
   }
 `;
 
@@ -206,6 +220,10 @@ export interface RawScene {
 
 export interface FindSkillScenesResult {
   findScenes: { count: number; scenes: RawScene[] };
+}
+
+export interface FindSceneResult {
+  findScene: RawScene | null;
 }
 
 export interface RawSetupTag extends RawTag {

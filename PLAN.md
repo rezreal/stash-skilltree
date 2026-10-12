@@ -215,6 +215,23 @@ Start: pick a performer → each step suggests 1–2 scenes (continue / explore 
 earn) from open nodes, plus a switch-performer row ranked by topic overlap →
 player with live checks → completion summary (coins, nodes out of the fog).
 
+## Test mode
+
+A per-viewer switch in the choice screen header (localStorage) replaces the
+suggestions with a test panel: search ANY stash scene (tags, all must match;
+has funscript = `interactive`; has prompt markers = `markers_filter.tags` on
+the `st.kind=prompt` tags; title contains), 25 per page, newest first.
+"Test" opens the scene page with `?skilltree=test` (`test-loop` for exposure
+loops: permitLoop is decided from the URL before the policy is loaded). A
+scene outside the library is loaded on demand with the library's fields and
+mapping, so its policy comes from its tags as usual. The session runs every
+check (camera gate, presence, prompts, track, flashes, pause/speed locks)
+but gets `persist: false`: it has no SessionWriter (`src/session/writes.ts`),
+so nothing is committed or stored and nothing is paid; the summary previews
+the would-be commit and the rule results ("Test mode – not saved"), the top
+bar shows TEST. Stash's own player still records its play count / resume
+time as for any play.
+
 ## Repo layout
 
 ```

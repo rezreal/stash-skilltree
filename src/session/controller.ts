@@ -3,7 +3,7 @@
 // lock applies, how long a spend prompt stays open, what the compact banner
 // and the score chip say. Tested under node --test.
 import type { Id, SceneInput } from "../core/types.ts";
-import { isTerminal } from "../play/session.ts";
+import { exposureTarget, exposureTotal, isTerminal } from "../play/session.ts";
 import type { SessionPhase, SessionState, WatchPolicy } from "../play/types.ts";
 import type { SpendPrompt } from "../player/markers.ts";
 import type { PauseCause as ViewPauseCause } from "../player/view.ts";
@@ -89,6 +89,8 @@ export function bannerNotice(input: {
   pauseAttemptRecent: boolean;
   graceText: string;
   exposureOnly: boolean;
+  /** test mode: the hint says nothing is saved at all */
+  test?: boolean;
 }): BannerNotice | undefined {
   const { phase } = input;
   if (input.spendOpen || phase === "aborted" || phase === "complete") return undefined;
@@ -96,6 +98,9 @@ export function bannerNotice(input: {
     return { text: "Pausing isn’t part of the session. Stop (Esc) ends it – the clip won’t count.", tone: "warning" };
   }
   if (phase === "grace") return { text: input.graceText, tone: "warning" };
+  if (phase === "ready" && input.test) {
+    return { text: "Test mode – press play. Every check runs; nothing is saved.", tone: "info" };
+  }
   if (phase === "ready") {
     return {
       text: input.exposureOnly
@@ -147,4 +152,59 @@ export function scoreChipView(
 /** the loop's minutes are worth saving on the way out (stop, leaving the page) */
 export function loopWorthSaving(state: Pick<SessionState, "phase" | "exposureSec">, saveIdle: boolean): boolean {
   return saveIdle && state.exposureSec >= 1 && state.phase !== "aborted" && state.phase !== "complete";
+}
+
+export interface RuleResult {
+  rule: "attention" | "prompts" | "track" | "exposure";
+  label: string;
+  /** e.g. "93% / 90%" */
+  value: string;
+  /** undefined: not scored (no prompt results, no track readings) */
+  passed: boolean | undefined;
+}
+
+/**
+ * Each rule of the policy with its result, the same thresholds as the
+ * session's evaluateRules; for test mode's summary (what decided the clip).
+ */
+export function ruleResults(state: SessionState, promptCount: number): RuleResult[] {
+  const p = state.policy;
+  const out: RuleResult[] = [];
+  if (p.rules.includes("attention")) {
+    out.push({
+      rule: "attention",
+      label: "Attention",
+      value: `${formatPercent(state.attendedFraction)} / ${formatPercent(p.attentionMin)}`,
+      passed: state.attendedFraction >= p.attentionMin,
+    });
+  }
+  if (p.rules.includes("prompts")) {
+    const passed = state.prompts.filter((r) => r.passed).length;
+    const answered = state.prompts.length;
+    out.push({
+      rule: "prompts",
+      label: "Prompts",
+      value: answered > 0 ? `${passed} of ${answered} passed${promptCount > answered ? ` (${promptCount} markers)` : ""} / ${formatPercent(p.promptsMin)}` : "no results",
+      passed: answered > 0 ? passed / answered >= p.promptsMin : undefined,
+    });
+  }
+  if (p.rules.includes("track")) {
+    out.push({
+      rule: "track",
+      label: "Track",
+      value: state.track !== undefined ? `${formatPercent(state.track)} / ${formatPercent(p.trackMin)}` : "not scored",
+      passed: state.track !== undefined ? state.track >= p.trackMin : undefined,
+    });
+  }
+  if (p.rules.includes("exposure")) {
+    const total = exposureTotal(state);
+    const target = exposureTarget(state);
+    out.push({
+      rule: "exposure",
+      label: "Exposure",
+      value: `${Math.floor(total / 60)} / ${Math.ceil(target / 60)} min`,
+      passed: total >= target,
+    });
+  }
+  return out;
 }

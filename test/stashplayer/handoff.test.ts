@@ -21,12 +21,30 @@ test("skilltreeSceneUrl uses stash's own t and autoplay parameters", () => {
 });
 
 test("parseSkilltreeMode round-trips", () => {
-  assert.deepEqual(parseSkilltreeMode(loc(skilltreeSceneUrl("42"))), { sceneId: "42", startAt: 0, loop: false });
+  assert.deepEqual(parseSkilltreeMode(loc(skilltreeSceneUrl("42"))), { sceneId: "42", startAt: 0, loop: false, test: false });
   assert.deepEqual(parseSkilltreeMode(loc(skilltreeSceneUrl("42", { startAt: 30, loop: true, autoplay: true }))), {
     sceneId: "42",
     startAt: 30,
     loop: true,
+    test: false,
   });
+});
+
+test("test mode: skilltree=test, test-loop for exposure loops", () => {
+  assert.equal(skilltreeSceneUrl("42", { test: true, autoplay: true }), "/scenes/42?skilltree=test&autoplay=true");
+  assert.equal(skilltreeSceneUrl("42", { test: true, loop: true }), "/scenes/42?skilltree=test-loop");
+  assert.equal(skilltreeSceneUrl("42", { test: false, loop: true }), "/scenes/42?skilltree=loop");
+  assert.deepEqual(parseSkilltreeMode(loc(skilltreeSceneUrl("42", { test: true, startAt: 5 }))), {
+    sceneId: "42",
+    startAt: 5,
+    loop: false,
+    test: true,
+  });
+  assert.deepEqual(parseSkilltreeMode(loc("/scenes/7?skilltree=test-loop")), { sceneId: "7", startAt: 0, loop: true, test: true });
+  // the normal markers are never test mode
+  assert.equal(parseSkilltreeMode(loc("/scenes/7?skilltree=1"))?.test, false);
+  assert.equal(parseSkilltreeMode(loc("/scenes/7?skilltree=loop"))?.test, false);
+  assert.equal(parseSkilltreeMode(loc("/scenes/7?skilltree=loop"))?.loop, true);
 });
 
 test("parseSkilltreeMode accepts a base path prefix and a trailing slash", () => {

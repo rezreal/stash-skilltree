@@ -6,6 +6,8 @@
 // overlay: Hold-to-send uses Enter rather than Space (Space inside stash's
 // .VideoPlayer is taken by its play/pause handler before React sees it).
 // PlayerScreen.tsx is going away; these are the copies to keep.
+// Test mode (`test`): the summary is a preview of the would-be commit with
+// the rule results and a clear "not saved" note; nothing was written.
 import type { ReactNode } from "react";
 import { seriesForScene, seriesStatus } from "../play/index.ts";
 import type { AbortReason, SessionState } from "../play/types.ts";
@@ -25,7 +27,30 @@ import type { PauseText } from "../player/gazeView.ts";
 import { HoldButton } from "../player/HoldButton.tsx";
 import type { PlayData } from "../player/usePlayData.ts";
 import { abortReasonText, baseLabel, fogLabel, newlyCompleted, newlyVisible, seriesSummaryLine } from "../player/view.ts";
+import type { RuleResult } from "./controller.ts";
 import type { OpenSpend, SaveState, StartSnapshot } from "./useSkilltreeSession.ts";
+
+export const TEST_NOT_SAVED = "Test mode – not saved";
+
+/** test mode: each rule of the policy and how it went */
+export function RuleResults(props: { results: RuleResult[] }) {
+  if (props.results.length === 0) return null;
+  return (
+    <div className="stp-breakdown stp-test-rules" aria-label="Rule results">
+      {props.results.map((r) => (
+        <div key={r.rule} className="stp-row">
+          <span className="stp-soft">{r.label}</span>
+          <span className="stp-mono">
+            {r.value}{" "}
+            <span className={r.passed === undefined ? "stp-muted" : r.passed ? "stp-blue" : "stp-orange"}>
+              {r.passed === undefined ? "· not scored" : r.passed ? "· passed" : "· failed"}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function PauseIcon() {
   return (
@@ -100,12 +125,14 @@ export function SpendDialog(props: { open: OpenSpend; balance: number; onAccept:
   );
 }
 
-export function AbortedOverlay(props: { reason: AbortReason | undefined; onRetry: () => void }) {
+export function AbortedOverlay(props: { reason: AbortReason | undefined; onRetry: () => void; testResults?: RuleResult[] }) {
   const { Link } = router();
   return (
     <div className="stp-overlay stp-sp-active" role="alertdialog" aria-label="Aborted">
+      {props.testResults && <span className="stp-test-badge">{TEST_NOT_SAVED}</span>}
       <div className="stp-overlay-title">This attempt doesn’t count</div>
       <div className="stp-soft">{abortReasonText(props.reason)}</div>
+      {props.testResults && <RuleResults results={props.testResults} />}
       <div className="stp-small stp-muted">Nothing was saved.</div>
       <div className="stp-overlay-actions">
         <Link to={PLAY_ROUTE} className="stp-btn stp-btn-orange">
@@ -135,17 +162,23 @@ export function CompleteSummary(props: {
   save: SaveState;
   promptCount: number;
   onRetrySave: () => void;
+  /** test mode: rule results; the summary is a preview, nothing was saved */
+  testResults?: RuleResult[];
 }) {
   const { start, data, session, save } = props;
   const { Link } = router();
-  const commit = save.status === "saved" || save.status === "error" ? save.commit : undefined;
+  const test = props.testResults !== undefined;
+  const commit = save.status === "saved" || save.status === "error" || save.status === "preview" ? save.commit : undefined;
   const saved = save.status === "saved";
 
   const completed = saved ? newlyCompleted(start.progress, data.progress) : [];
   const revealed = saved ? newlyVisible(start.visibility, data.visibility) : [];
   const nodes = data.graph.sceneNodes.get(start.scene.id) ?? [];
-  const title =
-    completed.length > 0
+  const title = test
+    ? nodes.length > 0
+      ? `Would count toward ${nodes.map(nodeLabel).join(", ")}`
+      : "All rules met"
+    : completed.length > 0
       ? `${completed.map(nodeLabel).join(", ")} complete`
       : nodes.length > 0
         ? `Counts toward ${nodes.map(nodeLabel).join(", ")}`
@@ -172,11 +205,17 @@ export function CompleteSummary(props: {
     <div className="stp-overlay is-dark stp-sp-active">
       <div className="stp-summary" role="dialog" aria-labelledby="stp-sp-summary-title">
         <div className="stp-col">
-          <span className="stp-eyebrow">Clip counted</span>
+          {test ? <span className="stp-test-badge">{TEST_NOT_SAVED}</span> : <span className="stp-eyebrow">Clip counted</span>}
           <span id="stp-sp-summary-title" className="stp-summary-title">
             {title}
           </span>
+          {test && (
+            <span className="stp-small stp-soft">
+              This is what the clip would have earned. No coins, completions or exposure were written.
+            </span>
+          )}
         </div>
+        {props.testResults && <RuleResults results={props.testResults} />}
         {save.status === "saving" && <Saving>Saving…</Saving>}
         {save.status === "error" && (
           <div role="alert" className="stp-col">
@@ -215,19 +254,19 @@ export function CompleteSummary(props: {
               </div>
             )}
             <div className="stp-row stp-row-sep">
-              <span className="stp-soft">Earned</span>
+              <span className="stp-soft">{test ? "Would earn" : "Earned"}</span>
               <span className="stp-mono stp-blue">{formatSignedCoins(commit.earnedNow)}</span>
             </div>
             {commit.spentNow > 0 && (
               <div className="stp-row">
-                <span className="stp-soft">Spent in this clip</span>
+                <span className="stp-soft">{test ? "Would spend in this clip" : "Spent in this clip"}</span>
                 <span className="stp-mono stp-orange">{formatSignedCoins(-commit.spentNow)}</span>
               </div>
             )}
             <div className="stp-row stp-strong">
-              <span>Balance</span>
+              <span>{test ? "Balance (unchanged)" : "Balance"}</span>
               <span className="stp-mono stp-gold-text">
-                {formatCoins(before)} → {formatCoins(after)}
+                {test ? `${formatCoins(before)} · would be ${formatCoins(after)}` : `${formatCoins(before)} → ${formatCoins(after)}`}
               </span>
             </div>
           </div>
@@ -273,17 +312,21 @@ export function LoopSaved(props: {
             </button>
           </div>
         )}
-        {save.status === "saved" && (
+        {(save.status === "saved" || save.status === "preview") && (
           <>
             <div className="stp-col">
-              <span className="stp-eyebrow">Loop saved</span>
+              {save.status === "preview" ? (
+                <span className="stp-test-badge">{TEST_NOT_SAVED}</span>
+              ) : (
+                <span className="stp-eyebrow">Loop saved</span>
+              )}
               <span id="stp-sp-loop-title" className="stp-summary-title">
-                {formatMinutes(save.exposureSec ?? 0)} added
+                {formatMinutes(save.exposureSec ?? 0)} {save.status === "preview" ? "would be added" : "added"}
               </span>
             </div>
             <div className="stp-breakdown">
               <div className="stp-row">
-                <span className="stp-soft">Total exposure</span>
+                <span className="stp-soft">{save.status === "preview" ? "Total exposure (not stored)" : "Total exposure"}</span>
                 <span className="stp-mono">
                   {formatMinutes(props.previousSec + (save.exposureSec ?? 0))}
                   {props.minMinutes ? ` / ${props.minMinutes} min` : ""}
@@ -296,7 +339,7 @@ export function LoopSaved(props: {
           <Link to={PLAY_ROUTE} className="stp-btn stp-btn-orange">
             Choose next
           </Link>
-          {save.status === "saved" && (
+          {(save.status === "saved" || save.status === "preview") && (
             <button type="button" className="stp-btn stp-btn-outline" onClick={props.onAgain}>
               Play again
             </button>

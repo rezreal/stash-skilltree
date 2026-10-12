@@ -4,6 +4,7 @@
 const PERFORMER_KEY = "skilltree.play.performer";
 export const CALIBRATION_KEY = "skilltree.calibration";
 const SHOW_GAZE_KEY = "skilltree.play.showGaze";
+const TEST_MODE_KEY = "skilltree.play.testMode";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -74,5 +75,23 @@ export function saveShowGaze(on: boolean, store: StorageLike | undefined = stora
     else store?.removeItem(SHOW_GAZE_KEY);
   } catch {
     // not remembered
+  }
+}
+
+/** the choice screen's "Test mode" toggle; off by default */
+export function loadTestMode(store: StorageLike | undefined = storage()): boolean {
+  try {
+    return store?.getItem(TEST_MODE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveTestMode(on: boolean, store: StorageLike | undefined = storage()): void {
+  try {
+    if (on) store?.setItem(TEST_MODE_KEY, "1");
+    else store?.removeItem(TEST_MODE_KEY);
+  } catch {
+    // not remembered; the toggle still holds for this page view
   }
 }

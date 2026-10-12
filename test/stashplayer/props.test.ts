@@ -36,7 +36,7 @@ test("modeForScene only matches the scene being played", () => {
 test("skilltreePlayerProps starts at 0 instead of the resume time and disables queue/skip callbacks", () => {
   const scene = { id: "5", resume_time: 321, title: "x" };
   const props = baseProps(scene);
-  const out = skilltreePlayerProps(props, { sceneId: "5", startAt: 0, loop: false }, new WeakMap());
+  const out = skilltreePlayerProps(props, { sceneId: "5", startAt: 0, loop: false, test: false }, new WeakMap());
   assert.equal(out.scene.resume_time, 0);
   assert.equal(out.scene.title, "x");
   assert.equal(scene.resume_time, 321, "stash's object is untouched");
@@ -52,7 +52,7 @@ test("skilltreePlayerProps starts at 0 instead of the resume time and disables q
 test("the scene copy and the callbacks keep their identity across renders", () => {
   const scene = { id: "5", resume_time: 10 };
   const cache = new WeakMap<object, StashScene>();
-  const mode = { sceneId: "5", startAt: 0, loop: false };
+  const mode = { sceneId: "5", startAt: 0, loop: false, test: false };
   const a = skilltreePlayerProps(baseProps(scene), mode, cache);
   const b = skilltreePlayerProps(baseProps(scene), mode, cache);
   assert.equal(a.scene, b.scene);
@@ -62,12 +62,12 @@ test("the scene copy and the callbacks keep their identity across renders", () =
 
 test("no copy when there is no resume time", () => {
   const scene = { id: "5", resume_time: null };
-  const out = skilltreePlayerProps(baseProps(scene), { sceneId: "5", startAt: 0, loop: false }, new WeakMap());
+  const out = skilltreePlayerProps(baseProps(scene), { sceneId: "5", startAt: 0, loop: false, test: false }, new WeakMap());
   assert.equal(out.scene, scene);
 });
 
 test("startAt and loops pass through", () => {
-  const out = skilltreePlayerProps(baseProps({ id: "5" }), { sceneId: "5", startAt: 42, loop: true }, new WeakMap());
+  const out = skilltreePlayerProps(baseProps({ id: "5" }), { sceneId: "5", startAt: 42, loop: true, test: false }, new WeakMap());
   assert.equal(out.initialTimestamp, 42);
   assert.equal(out.permitLoop, true);
 });

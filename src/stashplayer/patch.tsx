@@ -79,8 +79,10 @@ export interface StashPlayerContext {
   sceneId: string;
   /** seconds the clip starts at (0 unless the handoff URL said otherwise) */
   startAt: number;
-  /** an exposure loop (skilltree=loop) */
+  /** an exposure loop (skilltree=loop / test-loop) */
   loop: boolean;
+  /** test mode (skilltree=test / test-loop): the session runs but saves nothing */
+  test: boolean;
   handle: VideoHandle;
   /** stash's scene data as ScenePlayer got it (resume_time already 0) */
   scene: StashScene;
@@ -135,8 +137,8 @@ function SkilltreeSlot(props: {
   React.useEffect(() => () => handle.dispose(), [handle]);
 
   const ctx = React.useMemo<StashPlayerContext>(
-    () => ({ sceneId: mode.sceneId, startAt: mode.startAt, loop: mode.loop, handle, scene }),
-    [mode.sceneId, mode.startAt, mode.loop, handle, scene],
+    () => ({ sceneId: mode.sceneId, startAt: mode.startAt, loop: mode.loop, test: mode.test, handle, scene }),
+    [mode.sceneId, mode.startAt, mode.loop, mode.test, handle, scene],
   );
 
   const lock = typeof options.lockPause === "function" ? options.lockPause(ctx) : (options.lockPause ?? !mode.loop);

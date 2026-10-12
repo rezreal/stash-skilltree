@@ -4,6 +4,13 @@
 //   cached play data, so coming from the choice screen doesn't reload) and
 //   holds playback while the library loads; clips outside the tree get a
 //   clear message and no session.
+// - Test mode (skilltree=test / test-loop, ctx.test): any scene runs a
+//   session. One outside the cached library is loaded on demand
+//   (loadSceneById: the library's fields and mapping, so its policy comes
+//   from its tags and the loaded policy tags as usual). Everything runs -
+//   camera gate, presence, prompt checks, track guide, snap flashes, pause
+//   and speed locks - but the session gets persist: false, so it has no
+//   writer (./writes.ts) and its end is a preview. The top bar shows TEST.
 // - SessionOverlay: one session (useSkilltreeSession) with a compact top
 //   banner (state, notices, coins, score chip -> sensors panel, Stop), the
 //   overlays, a slim timeline above the control bar, the gaze dot, snap
@@ -45,6 +52,8 @@ import { lockUserPause } from "../stashplayer/pauseLock.ts";
 import { lockPlaybackRate } from "../stashplayer/rateLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import { usePluginSettings } from "../ui/pluginApi.ts";
+import { loadSceneById } from "../stash/testSearch.ts";
+import type { StashClient } from "../stash/client.ts";
 import {
   attentionTexts,
   needsCameraGate,
@@ -54,10 +63,10 @@ import {
   TRACK_REPORT_MS,
   trackScoreToReport,
 } from "./checksWiring.ts";
-import { bannerNotice, findTreeScene, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
+import { bannerNotice, findTreeScene, ruleResults, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
 import { calloutAim } from "./gazeCallout.ts";
-import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog } from "./overlays.tsx";
+import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog, TEST_NOT_SAVED } from "./overlays.tsx";
 import { CountsWhen, SlimTimeline, useRecentChange } from "./panels.tsx";
 import { useSkilltreeSession } from "./useSkilltreeSession.ts";
 
@@ -76,8 +85,41 @@ function Notice(props: { tone?: "warning" | "error"; children?: ReactNode; inter
   );
 }
 
+type OnDemandScene =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; scene: SceneInput }
+  | { status: "missing" }
+  | { status: "error"; error: string };
+
+/** test mode: a scene outside the library, loaded from stash when `sceneId` is set */
+function useOnDemandScene(client: StashClient | undefined, sceneId: string | undefined): { state: OnDemandScene; retry: () => void } {
+  const [state, setState] = React.useState<OnDemandScene>({ status: "idle" });
+  const [attempt, setAttempt] = React.useState(0);
+  React.useEffect(() => {
+    if (!client || sceneId === undefined) {
+      setState({ status: "idle" });
+      return;
+    }
+    let live = true;
+    setState({ status: "loading" });
+    loadSceneById(client, sceneId).then(
+      (scene) => {
+        if (live) setState(scene ? { status: "ready", scene } : { status: "missing" });
+      },
+      (err: unknown) => {
+        if (live) setState({ status: "error", error: err instanceof Error ? err.message : String(err) });
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, sceneId, attempt]);
+  return { state, retry: React.useCallback(() => setAttempt((n) => n + 1), []) };
+}
+
 export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
-  const { handle, sceneId } = props.ctx;
+  const { handle, sceneId, test } = props.ctx;
   const { state, reload } = usePlayData();
   const [attempt, setAttempt] = React.useState(0);
   const [dismissed, setDismissed] = React.useState(false);
@@ -85,9 +127,16 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
   // held until a person is in view of the running camera
   const webcamRequired = checksSettings(usePluginSettings()).webcamRequired;
   const [gatePassed, setGatePassed] = React.useState(false);
-  const scene = state.status === "ready" ? findTreeScene(state.data, sceneId) : undefined;
+  const treeScene = state.status === "ready" ? findTreeScene(state.data, sceneId) : undefined;
+  // test mode: any scene; one outside the library is loaded on demand
+  const onDemand = useOnDemandScene(
+    state.status === "ready" ? state.data.client : undefined,
+    test && state.status === "ready" && !treeScene ? sceneId : undefined,
+  );
+  const scene = treeScene ?? (onDemand.state.status === "ready" ? onDemand.state.scene : undefined);
   const gate = !!scene && needsCameraGate(webcamRequired, gatePassed);
-  const waiting = state.status === "loading" || gate;
+  const sceneLoading = test && !scene && (onDemand.state.status === "loading" || onDemand.state.status === "idle");
+  const waiting = state.status === "loading" || sceneLoading || gate;
 
   // the session can't watch yet: hold playback until the library (and the gate) are there
   React.useEffect(() => {
@@ -139,6 +188,35 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
       </Root>
     );
   }
+  if (!scene && test) {
+    if (onDemand.state.status === "error" || onDemand.state.status === "missing") {
+      return (
+        <Root>
+          <Notice tone="error" interactive>
+            <span role="alert">
+              <span className="stp-test-tag">TEST</span>{" "}
+              {onDemand.state.status === "error"
+                ? `Skilltree could not load the scene: ${onDemand.state.error}`
+                : "Stash has no scene with this id."}
+            </span>
+            {onDemand.state.status === "error" && (
+              <button type="button" className="stp-btn stp-btn-outline stp-btn-sm" onClick={onDemand.retry}>
+                Retry
+              </button>
+            )}
+          </Notice>
+        </Root>
+      );
+    }
+    return (
+      <Root>
+        <Notice>
+          <span className="spinner-border spinner-border-sm mr-2" aria-hidden="true" />
+          <span className="stp-test-tag">TEST</span> Skilltree: loading the scene…
+        </Notice>
+      </Root>
+    );
+  }
   if (!scene) {
     if (dismissed) return null;
     return (
@@ -164,6 +242,7 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
         data={state.data}
         reload={reload}
         onRetry={retry}
+        test={test}
       />
     </Root>
   );
@@ -192,8 +271,10 @@ function SessionOverlay(props: {
   data: PlayData;
   reload: () => Promise<void>;
   onRetry: () => void;
+  /** test mode: the session runs without a writer (persist: false) */
+  test: boolean;
 }) {
-  const { handle, data } = props;
+  const { handle, data, test } = props;
   const settings = checksSettings(usePluginSettings());
   const required = settings.webcamRequired;
   const permission = useCameraPermission();
@@ -228,7 +309,15 @@ function SessionOverlay(props: {
     flushTrack();
   }, [flushTrack]);
 
-  const s = useSkilltreeSession({ scene: props.scene, handle, data, reload: props.reload, adjustAttention, beforeEnd });
+  const s = useSkilltreeSession({
+    scene: props.scene,
+    handle,
+    data,
+    reload: props.reload,
+    adjustAttention,
+    beforeEnd,
+    persist: !test,
+  });
   const { session, policy, scene, openSpend, attention, exposureOnly } = s;
   reportTrackRef.current = s.reportTrack;
   const finished = isTerminal(session);
@@ -291,6 +380,7 @@ function SessionOverlay(props: {
     pauseAttemptRecent,
     graceText: texts.grace,
     exposureOnly,
+    test,
   });
   const chip = scoreChipView(session, policy, attendingNow);
 
@@ -310,7 +400,9 @@ function SessionOverlay(props: {
   const promptBanner: ReactNode = checks.specs.length > 0 ? <PromptBanner checks={checks} /> : null;
   const sensorRows: ReactNode = <ChecksSensorRows viewer={viewer} status={checks.status} />;
 
-  const stopLabel = exposureOnly ? "Stop & save" : "Stop";
+  const stopLabel = exposureOnly && s.persists ? "Stop & save" : "Stop";
+  // test mode: what decided the clip, for the summary and the aborted overlay
+  const testResults = !s.persists && finished ? ruleResults(session, s.prompts.length) : undefined;
   const loopSaveShown = exposureOnly && s.save.status !== "idle" && session.phase !== "complete";
 
   return (
@@ -321,6 +413,11 @@ function SessionOverlay(props: {
 
       <div className={`stp-sp-top${notice?.tone === "warning" ? " is-alert" : ""}`}>
         <div className="stp-sp-bar">
+          {!s.persists && (
+            <span className="stp-test-tag" title={`${TEST_NOT_SAVED}: every check runs, nothing is written`}>
+              TEST
+            </span>
+          )}
           <span className={`stp-sp-state stp-tone-${phase.tone}`} title={phase.hint}>
             <span className="stp-sp-state-dot" aria-hidden="true" />
             {phase.label}
@@ -408,7 +505,9 @@ function SessionOverlay(props: {
         />
       )}
 
-      {session.phase === "aborted" && <AbortedOverlay reason={session.abortReason} onRetry={props.onRetry} />}
+      {session.phase === "aborted" && (
+        <AbortedOverlay reason={session.abortReason} onRetry={props.onRetry} testResults={testResults} />
+      )}
 
       {session.phase === "complete" && (
         <CompleteSummary
@@ -418,6 +517,7 @@ function SessionOverlay(props: {
           save={s.save}
           promptCount={s.prompts.length}
           onRetrySave={s.retrySave}
+          testResults={testResults}
         />
       )}
 

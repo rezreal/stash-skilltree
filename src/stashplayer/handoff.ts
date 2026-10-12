@@ -15,6 +15,11 @@
 // Our marker is `skilltree=1` (or `skilltree=loop` for exposure loops, which
 // must keep looping). No queue parameters are added, so stash has no "next"
 // scene to advance to.
+//
+// Test mode (the choice screen's "Test mode" toggle) is `skilltree=test`, or
+// `skilltree=test-loop` for an exposure loop: the loop flag has to be in the
+// URL because ScenePlayer's permitLoop is decided from it before the clip's
+// policy is loaded. A test session runs every check but writes nothing.
 
 export const SKILLTREE_PARAM = "skilltree";
 
@@ -25,6 +30,8 @@ export interface SkilltreeUrlOptions {
   autoplay?: boolean;
   /** an exposure loop: let stash's player loop the clip */
   loop?: boolean;
+  /** test mode: the full session, nothing is saved */
+  test?: boolean;
 }
 
 export interface SkilltreeMode {
@@ -32,11 +39,19 @@ export interface SkilltreeMode {
   /** seconds, >= 0 */
   startAt: number;
   loop: boolean;
+  /** test mode (skilltree=test / test-loop): run everything, save nothing */
+  test: boolean;
+}
+
+/** the marker's value for the options: 1, loop, test, test-loop */
+export function skilltreeFlag(opts: Pick<SkilltreeUrlOptions, "loop" | "test">): string {
+  if (opts.test) return opts.loop ? "test-loop" : "test";
+  return opts.loop ? "loop" : "1";
 }
 
 /** in-app path (for history.push / <Link>); react-router adds stash's base path */
 export function skilltreeSceneUrl(sceneId: string, opts: SkilltreeUrlOptions = {}): string {
-  const params = [`${SKILLTREE_PARAM}=${opts.loop ? "loop" : "1"}`];
+  const params = [`${SKILLTREE_PARAM}=${skilltreeFlag(opts)}`];
   const startAt = normalizeStart(opts.startAt);
   if (startAt > 0) params.push(`t=${roundTime(startAt)}`);
   if (opts.autoplay) params.push("autoplay=true");
@@ -68,7 +83,8 @@ export function parseSkilltreeMode(location: { pathname: string; search: string 
 
   // same reading as stash's SceneLoader: Number(t), invalid -> 0
   const startAt = normalizeStart(Number(params.get("t") ?? ""));
-  return { sceneId, startAt, loop: flag === "loop" };
+  const test = flag === "test" || flag === "test-loop";
+  return { sceneId, startAt, loop: flag === "loop" || flag === "test-loop", test };
 }
 
 function normalizeStart(t: number | undefined): number {

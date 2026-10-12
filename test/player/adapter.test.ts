@@ -6,9 +6,11 @@ import {
   loadCalibrationText,
   loadCurrentPerformer,
   loadShowGaze,
+  loadTestMode,
   saveCalibrationText,
   saveCurrentPerformer,
   saveShowGaze,
+  saveTestMode,
 } from "../../src/player/storage.ts";
 
 function fakeEnv() {
@@ -122,6 +124,14 @@ test("calibration text and the show-gaze toggle are stored per viewer, blocked s
   saveShowGaze(false, store);
   assert.equal(loadShowGaze(store), false);
 
+  assert.equal(loadTestMode(store), false);
+  saveTestMode(true, store);
+  assert.equal(loadTestMode(store), true);
+  assert.equal(data.get("skilltree.play.testMode"), "1");
+  saveTestMode(false, store);
+  assert.equal(loadTestMode(store), false);
+  assert.equal(data.has("skilltree.play.testMode"), false);
+
   const broken = {
     getItem: (): string | null => {
       throw new Error("blocked");
@@ -138,4 +148,7 @@ test("calibration text and the show-gaze toggle are stored per viewer, blocked s
   assert.equal(saveCalibrationText("x", undefined), false);
   assert.equal(loadShowGaze(broken), false);
   assert.doesNotThrow(() => saveShowGaze(true, broken));
+  assert.equal(loadTestMode(broken), false);
+  assert.equal(loadTestMode(undefined), false);
+  assert.doesNotThrow(() => saveTestMode(true, broken));
 });

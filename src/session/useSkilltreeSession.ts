@@ -15,16 +15,17 @@
 //   exposure (so does leaving the page with unsaved loop minutes)
 // - Esc / stop() aborts (loops: saves)
 // Nothing is written for any other ending: the session is a transaction.
+// Every write goes through the SessionWriter of ./writes.ts; with persist:
+// false (test mode) there is none, so a complete session ends in a preview
+// of its commit and a loop's minutes are counted but not stored.
 import type { Graph, NodeKey, Progress, SceneInput, Visibility } from "../core/types.ts";
 import {
   buildCommit,
-  commitSession,
   createSession,
   exposureTarget,
   exposureTotal,
   isTerminal,
   policyForScene,
-  saveExposure,
   step,
 } from "../play/index.ts";
 import type { Ledger, PromptResult, SessionCommit, SessionState, SpendEvent, Streak, WatchPolicy } from "../play/types.ts";
@@ -37,6 +38,9 @@ import { isExposureOnly, previousExposure, promptMarkers } from "../player/view.
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import type { MarkerInput } from "../core/types.ts";
 import { isViewerPause, loopWorthSaving, playerRequest, spendDeadlineMs } from "./controller.ts";
+import { finishComplete, sessionWriter, storeExposure, type SaveState } from "./writes.ts";
+
+export type { SaveState } from "./writes.ts";
 
 export const TICK_MS = 250;
 
@@ -51,12 +55,6 @@ export interface StartSnapshot {
   graph: Graph;
 }
 
-export type SaveState =
-  | { status: "idle" }
-  | { status: "saving" }
-  | { status: "saved"; commit?: SessionCommit; exposureSec?: number }
-  | { status: "error"; error: string; commit?: SessionCommit };
-
 export interface OpenSpend {
   prompt: SpendPrompt;
   deadlineMs: number;
@@ -70,6 +68,12 @@ export interface SkilltreeSessionInput {
   reload: () => Promise<void>;
   /** defaults to the scene's policy from its tags */
   policy?: WatchPolicy;
+  /**
+   * false: test mode. The session runs as usual but has no writer
+   * (writes.ts): nothing is committed or stored, the end shows a preview.
+   * Default true.
+   */
+  persist?: boolean;
   /**
    * The one place each tick's attention passes through, e.g. the checks
    * module's combineAttention(base, presence, required). Default: the
@@ -88,6 +92,8 @@ export interface SkilltreeSession {
   scene: SceneInput;
   policy: WatchPolicy;
   exposureOnly: boolean;
+  /** false in test mode: this session writes nothing */
+  persists: boolean;
   session: SessionState;
   /** balance minus what this session spent so far */
   balance: number;
@@ -117,6 +123,8 @@ export interface SkilltreeSession {
 
 export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSession {
   const { handle, data, reload } = input;
+  // decided once: a session never switches between saving and not saving
+  const [writer] = React.useState(() => sessionWriter(data.client, input.persist !== false));
 
   const [start] = React.useState<StartSnapshot>(() => ({
     scene: input.scene,
@@ -244,10 +252,11 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
   const commit = React.useCallback(
     async (prepared?: SessionCommit) => {
       setSave({ status: "saving" });
-      let c: SessionCommit | undefined = prepared;
-      try {
-        c =
-          c ??
+      const result = await finishComplete({
+        writer,
+        prepared,
+        reload,
+        build: () =>
           buildCommit(
             sessionRef.current,
             scene,
@@ -256,16 +265,11 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
             start.ledger,
             new Date().toISOString(),
             data.dailyEarnCap !== undefined ? { dailyCap: data.dailyEarnCap, dayStartHour: data.dayStartHour } : undefined,
-          );
-        await commitSession(data.client, c);
-      } catch (err) {
-        setSave({ status: "error", error: errorText(err), commit: c });
-        return;
-      }
-      await reload();
-      setSave({ status: "saved", commit: c });
+          ),
+      });
+      setSave(result);
     },
-    [data.client, data.dailyEarnCap, data.dayStartHour, scene, policy, start, reload],
+    [writer, data.dailyEarnCap, data.dayStartHour, scene, policy, start, reload],
   );
   React.useEffect(() => {
     if (!isTerminal(session)) return;
@@ -286,8 +290,9 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     const s = sessionRef.current;
     const exposureSec = s.exposureSec;
     setSave({ status: "saving" });
+    let stored: "stored" | "skipped";
     try {
-      await saveExposure(data.client, scene.id, exposureTotal(s));
+      stored = await storeExposure(writer, scene.id, exposureTotal(s));
     } catch (err) {
       setSave({ status: "error", error: errorText(err) });
       return "failed";
@@ -296,10 +301,14 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
       dispatch({ type: "ended", nowMs: Date.now() });
       return "completed";
     }
+    if (stored === "skipped") {
+      setSave({ status: "preview", exposureSec });
+      return "saved";
+    }
     await reload();
     setSave({ status: "saved", exposureSec });
     return "saved";
-  }, [data.client, scene, pauseVideo, reload]);
+  }, [writer, scene, pauseVideo, reload]);
 
   const stop = React.useCallback(() => {
     const s = sessionRef.current;
@@ -326,21 +335,19 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
 
   // leaving the page with unsaved loop minutes saves them (best effort); a
   // watched clip left mid-way simply didn't happen
-  const clientRef = React.useRef(data.client);
-  clientRef.current = data.client;
   const reloadRef = React.useRef(reload);
   reloadRef.current = reload;
   React.useEffect(
     () => () => {
       const s = sessionRef.current;
-      if (!exposureOnly || !loopWorthSaving(s, saveRef.current.status === "idle")) return;
+      if (!writer || !exposureOnly || !loopWorthSaving(s, saveRef.current.status === "idle")) return;
       // the shared play data cache is refreshed even after unmount, so the
       // next session starts from the stored total
-      void saveExposure(clientRef.current, s.sceneId, exposureTotal(s))
+      void storeExposure(writer, s.sceneId, exposureTotal(s))
         .then(() => reloadRef.current())
         .catch(() => undefined);
     },
-    [exposureOnly],
+    [writer, exposureOnly],
   );
 
   // --- player events ---
@@ -409,6 +416,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     scene,
     policy,
     exposureOnly,
+    persists: writer !== undefined,
     session,
     balance,
     attention,
