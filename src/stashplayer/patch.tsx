@@ -47,7 +47,9 @@
 // inside ScenePlayer's render, so they must not call hooks. We use both:
 // - before: in Skilltree mode, rewrite props (props.ts): resume_time 0,
 //   inert onComplete/onNext/onPrevious, no looping (except loops).
-// - after: append our slot as a sibling: <>{result}<SkilltreeSlot/></>.
+// - after: append our slot as a sibling: <>{result}<SkilltreeSlot/></>; when
+//   another plugin (Lovense Sync) already returned such a fragment, its
+//   children are flattened into ours (appendSlot.ts).
 //   React unwraps a top-level unkeyed fragment, so stash's <div
 //   class="VideoPlayer"> keeps its fiber (and the imperatively created
 //   video.js player) whether or not the slot is there. `instead` would also
@@ -69,6 +71,7 @@
 //   source reload, so no start at 0); "Watch" always comes from our route.
 import type { ReactNode } from "react";
 import { interactivePlayer, playerRoot, stashPlayerApi } from "./api.ts";
+import { appendSlot, type ReactLike } from "./appendSlot.ts";
 import type { SkilltreeMode } from "./handoff.ts";
 import { OverlayHost } from "./OverlayHost.tsx";
 import { lockUserPause } from "./pauseLock.ts";
@@ -117,12 +120,13 @@ export function registerStashPlayerPatch(
     const result = args[args.length - 1] as ReactNode;
     const mode = modeForScene(props?.scene, window.location);
     if (!mode) return result;
-    return (
-      <>
-        {result}
-        <SkilltreeSlot key={`skilltree:${mode.sceneId}`} mode={mode} scene={props.scene} render={render} options={options} />
-      </>
-    );
+    // flattens another plugin's fragment (Lovense Sync) instead of nesting it,
+    // so stash's player element keeps its place when our mode turns on or off
+    return appendSlot(
+      result,
+      <SkilltreeSlot key={`skilltree:${mode.sceneId}`} mode={mode} scene={props.scene} render={render} options={options} />,
+      React as unknown as ReactLike,
+    ) as ReactNode;
   });
 }
 
