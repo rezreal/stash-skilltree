@@ -2028,3 +2028,4 @@
 }
 .skilltree-play .stp-region-bar > span { background: var(--st-complete); display: block; height: 100%; }
 .skilltree-play .stp-region-pct { text-align: right; }
+.skilltree-play .stp-performer-gaze { line-height: 1.35; }

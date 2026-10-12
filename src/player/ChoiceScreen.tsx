@@ -7,7 +7,15 @@ import type { ChangeEvent } from "react";
 import type { Id } from "../core/types.ts";
 import { parseNodeKey, topicDepth } from "../core/index.ts";
 import { stashUrl } from "../stash/client.ts";
-import { dailySeriesCards, localDayOf, payForNode, policyForScene, startPerformers, suggest } from "../play/index.ts";
+import {
+  dailySeriesCards,
+  localDayOf,
+  parseStoredRegions,
+  payForNode,
+  policyForScene,
+  startPerformers,
+  suggest,
+} from "../play/index.ts";
 import type { DailySeriesCard } from "../play/index.ts";
 import type { Streak, Suggestion, SuggestionResult } from "../play/types.ts";
 import { router } from "./api.ts";
@@ -25,6 +33,7 @@ import { watchUrl } from "../session/watchUrl.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
 import { SensorStatusChip } from "./SensorStatusChip.tsx";
+import { performerGazeSummary } from "./gazeRegionsView.ts";
 import { PerformerAvatar } from "./PerformerAvatar.tsx";
 import { loadCurrentPerformer, loadTestMode, saveCurrentPerformer, saveTestMode } from "./storage.ts";
 import { TestPanel } from "./TestPanel.tsx";
@@ -209,6 +218,7 @@ function StartView(props: {
   const q = query.trim().toLowerCase();
   const name = (id: Id) => data.graph.performers.get(id)?.name ?? `Performer ${id}`;
   const shown = starts.filter((s) => q === "" || name(s.performerId).toLowerCase().includes(q));
+  const gaze = (id: Id) => performerGazeSummary(parseStoredRegions(data.graph.performers.get(id)?.customFields));
 
   return (
     <>
@@ -257,6 +267,7 @@ function StartView(props: {
                     {plural(s.entryScenes, "entry scene")}
                     {s.firstDate ? ` · from ${s.firstDate}` : ""}
                   </span>
+                  <PerformerGaze summary={gaze(s.performerId)} />
                 </button>
               ))}
             </div>
@@ -264,6 +275,16 @@ function StartView(props: {
         </>
       )}
     </>
+  );
+}
+
+/** where the viewer looked in this performer's saved sessions (st.gaze_regions) */
+function PerformerGaze(props: { summary: { text: string; title: string } | undefined }) {
+  if (!props.summary) return null;
+  return (
+    <span className="stp-small stp-soft stp-performer-gaze" title={props.summary.title}>
+      {props.summary.text}
+    </span>
   );
 }
 

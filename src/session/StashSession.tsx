@@ -381,6 +381,7 @@ function SessionOverlay(props: {
     ended: s.save.status === "saved" || s.save.status === "preview",
     seconds: regions.seconds,
     save: s.saveGazeRegions,
+    reload: props.reload,
     performerIds: scene.performerIds,
   });
   const regionsSummary: ReactNode = <GazeRegionsSummary state={performerRegions} performers={data.graph.performers} />;

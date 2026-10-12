@@ -192,7 +192,10 @@ export async function loadLibrary(client: StashClient, opts: LoadOptions = {}): 
         seenScenes.add(raw.id);
         library.scenes.push(mapScene(raw));
         for (const p of raw.performers ?? []) {
-          if (!performers.has(p.id)) performers.set(p.id, { id: p.id, name: p.name });
+          if (performers.has(p.id)) continue;
+          const performer: PerformerInput = { id: p.id, name: p.name };
+          if (p.custom_fields && Object.keys(p.custom_fields).length > 0) performer.customFields = p.custom_fields;
+          performers.set(p.id, performer);
         }
       }
       const fetched = Math.min((page - 1) * pageSize + scenes.length, count);

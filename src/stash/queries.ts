@@ -35,6 +35,7 @@ export const SCENE_FIELDS = /* GraphQL */ `
         performers {
           id
           name
+          custom_fields
         }
         tags {
           id
@@ -213,7 +214,7 @@ export interface RawScene {
   interactive: boolean;
   custom_fields: CustomFields | null;
   files: { duration: number }[];
-  performers: { id: string; name: string }[];
+  performers: { id: string; name: string; custom_fields?: CustomFields | null }[];
   tags: { id: string }[];
   scene_markers: RawMarker[];
 }

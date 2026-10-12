@@ -69,6 +69,8 @@ export interface SceneInput {
 export interface PerformerInput {
   id: Id;
   name: string;
+  /** the performer's custom fields (st.gaze_regions, see play/gazeRegions.ts); absent when empty */
+  customFields?: Record<string, unknown>;
 }
 
 export type SeriesReset = "start" | "step_back";

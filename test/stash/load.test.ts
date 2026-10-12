@@ -196,8 +196,8 @@ describe("loadLibrary", () => {
         interactive: true,
         files: [{ duration: 612.5 }, { duration: 1 }],
         performers: [
-          { id: "p1", name: "P One" },
-          { id: "p2", name: "P Two" },
+          { id: "p1", name: "P One", custom_fields: { "st.gaze_regions": '{"v":1,"sessions":1,"sec":{"eyes":4}}' } },
+          { id: "p2", name: "P Two", custom_fields: {} },
         ],
         custom_fields: { "st.completed_at": "2026-10-01T10:00:00Z", "st.completions": "2", "st.earned": 30, "st.spent": "5" },
         scene_markers: [
@@ -257,8 +257,9 @@ describe("loadLibrary", () => {
       spent: 0,
       markers: [],
     });
+    // custom fields only when there are any
     assert.deepEqual(lib.performers, [
-      { id: "p1", name: "P One" },
+      { id: "p1", name: "P One", customFields: { "st.gaze_regions": '{"v":1,"sessions":1,"sec":{"eyes":4}}' } },
       { id: "p2", name: "P Two" },
     ]);
   });

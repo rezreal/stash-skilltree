@@ -177,7 +177,9 @@ Watch policy = rules composed per scene from its tags:
   Counted only while the clip plays in front. The summary shows the
   session's shares; once the session is saved (complete, or a loop's
   minutes; ≥ 5 s counted) they are added to every performer of the clip
-  (`st.gaze_regions`). Setting `gazeRegions` (default on).
+  (`st.gaze_regions`); the start screen's performer cards show the top
+  three ("You looked at eyes 30%, face 22%, chest 12%", every region in
+  the tooltip). Setting `gazeRegions` (default on).
 
 - **Presence** — during a session the webcam runs continuously and the
   viewer must be in front of it (face or body found). Attention = present

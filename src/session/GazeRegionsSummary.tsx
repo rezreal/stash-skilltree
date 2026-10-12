@@ -5,7 +5,7 @@
 import type { Id, PerformerInput } from "../core/types.ts";
 import { worthSaving, type SavedRegions, type StoredRegions } from "../play/gazeRegions.ts";
 import type { RegionSeconds } from "../prompts/regionHeatmap.ts";
-import { countedText, performerRegionsLine, regionBars } from "./gazeRegionsView.ts";
+import { countedText, performerRegionsLine, regionBars } from "../player/gazeRegionsView.ts";
 
 export type PerformerRegionsState =
   | { status: "idle" }
@@ -24,6 +24,8 @@ export function usePerformerRegions(input: {
   seconds: () => RegionSeconds;
   save: ((performerIds: readonly Id[], sec: RegionSeconds) => Promise<SavedRegions>) | undefined;
   performerIds: readonly Id[];
+  /** refreshes the play data, so the start screen shows the new totals */
+  reload: () => Promise<void>;
 }): PerformerRegionsState {
   const [state, setState] = React.useState<PerformerRegionsState>({ status: "idle" });
   const done = React.useRef(false);
@@ -32,7 +34,7 @@ export function usePerformerRegions(input: {
   React.useEffect(() => {
     if (!input.ended || done.current) return;
     done.current = true;
-    const { seconds, save, performerIds } = inputRef.current;
+    const { seconds, save, performerIds, reload } = inputRef.current;
     const session = seconds();
     if (!save || !worthSaving(session) || performerIds.length === 0) {
       setState({ status: "kept", session, test: !save });
@@ -40,7 +42,10 @@ export function usePerformerRegions(input: {
     }
     setState({ status: "saving", session });
     // saveGazeRegions never rejects: performers that fail are listed
-    void save(performerIds, session).then((r) => setState({ status: "saved", session, totals: r.totals, failed: r.failed }));
+    void save(performerIds, session).then((r) => {
+      setState({ status: "saved", session, totals: r.totals, failed: r.failed });
+      if (r.totals.size > 0) void reload();
+    });
   }, [input.ended]);
   return state;
 }

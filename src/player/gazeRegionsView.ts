@@ -1,4 +1,5 @@
-// Words and bars for the gaze region heatmap in the session summary. Pure.
+// Words and bars for the gaze region heatmap: the session summary and the
+// performer cards of the start screen. Pure.
 import { formatPercent } from "../player/format.ts";
 import { REGION_LABELS, regionShares, totalOf, type RegionSeconds } from "../prompts/regionHeatmap.ts";
 import type { StoredRegions } from "../play/gazeRegions.ts";
@@ -21,13 +22,34 @@ export function regionBars(sec: RegionSeconds, max = 6): RegionBar[] {
   return [...top, bar("Other", rest)];
 }
 
+/** "eyes 30%, face 22%, chest 12%" (empty without time) */
+export function topRegionsText(sec: RegionSeconds, top = 3): string {
+  return regionShares(sec)
+    .slice(0, top)
+    .map((s) => `${REGION_LABELS[s.region].toLowerCase()} ${formatPercent(s.share)}`)
+    .join(", ");
+}
+
+const clipsText = (n: number): string => `${n} ${n === 1 ? "clip" : "clips"}`;
+
 /** "Ada · 5 clips · eyes 30%, face 22%, chest 12%" */
 export function performerRegionsLine(name: string, stored: StoredRegions, top = 3): string {
-  const clips = `${stored.sessions} ${stored.sessions === 1 ? "clip" : "clips"}`;
-  const shares = regionShares(stored.sec)
-    .slice(0, top)
-    .map((s) => `${REGION_LABELS[s.region].toLowerCase()} ${formatPercent(s.share)}`);
-  return [name, clips, shares.join(", ")].filter((s) => s !== "").join(" · ");
+  return [name, clipsText(stored.sessions), topRegionsText(stored.sec, top)].filter((s) => s !== "").join(" · ");
+}
+
+/**
+ * A performer card's line on the start screen: "You looked at eyes 30%,
+ * face 22%, chest 12%", every region in the tooltip; undefined before a
+ * saved session counted gaze.
+ */
+export function performerGazeSummary(stored: StoredRegions): { text: string; title: string } | undefined {
+  const top = topRegionsText(stored.sec);
+  if (top === "") return undefined;
+  const all = regionShares(stored.sec).map((s) => `${REGION_LABELS[s.region]} ${formatPercent(s.share)}`);
+  return {
+    text: `You looked at ${top}`,
+    title: [`Where you looked, ${clipsText(stored.sessions)} (${countedText(stored.sec)}):`, ...all].join("\n"),
+  };
 }
 
 /** "2 min 10 s of gaze counted" */
