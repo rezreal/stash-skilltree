@@ -247,3 +247,12 @@ describe("trackScoreToReport", () => {
     assert.equal(trackScoreToReport(track(true, 0.75), 0.8), 0.75);
   });
 });
+
+it("a window in the background fails attention, except during eyes closed", () => {
+  const bg = { attending: false, source: "gaze" as const, trackerDown: false, background: true };
+  assert.equal(sessionAttending(bg, undefined, { required: false }), false);
+  const gazePrompt = { attending: true, reason: "on", spec: { target: "eyes" as const } };
+  assert.equal(sessionAttending(bg, undefined, { required: false, prompt: gazePrompt }), false);
+  const closed = { attending: true, reason: "on", spec: { target: "eyes_closed" as const } };
+  assert.equal(sessionAttending(bg, undefined, { required: false, prompt: closed }), true);
+});

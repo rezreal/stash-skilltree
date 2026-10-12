@@ -156,3 +156,18 @@ test("attentionSourceLabel", () => {
   assert.equal(attentionSourceLabel(INITIAL_READING), "Attention: fallback (focus + activity)");
   assert.equal(attentionSourceLabel({ ...INITIAL_READING, trackerDown: true }), "Attention: fallback · tracker not connected");
 });
+
+test("with gaze, a hidden or unfocused window doesn't count unless fullscreen", () => {
+  const gaze = { attending: true, reason: "inside" as const, insideShare: 1 };
+  const base = { selected: true, connection: "connected" as const, gaze, fallback: true };
+  const front = chooseAttention({ ...base, page: { visible: true, focused: true, fullscreen: false } });
+  assert.equal(front.attending, true);
+  assert.equal(front.background, undefined);
+  const behind = chooseAttention({ ...base, page: { visible: true, focused: false, fullscreen: false } });
+  assert.equal(behind.attending, false);
+  assert.equal(behind.background, true);
+  assert.match(pauseReasonText(behind).title, /background/);
+  assert.match(graceText(behind), /background/);
+  assert.equal(chooseAttention({ ...base, page: { visible: false, focused: true, fullscreen: true } }).attending, false, "hidden tab");
+  assert.equal(chooseAttention({ ...base, page: { visible: true, focused: false, fullscreen: true } }).attending, true, "fullscreen");
+});

@@ -62,7 +62,13 @@ export function useAttentionSource(getTarget: () => Element | null, idleSec: num
           verdict = classifier.attending({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, performance.now());
         }
       }
-      const next = chooseAttention({ selected: selectedRef.current, connection: status?.connection, gaze: verdict, fallback });
+      const next = chooseAttention({
+        selected: selectedRef.current,
+        connection: status?.connection,
+        gaze: verdict,
+        fallback,
+        ...(signals ? { page: { visible: signals.visible, focused: signals.focused, fullscreen: signals.fullscreen } } : {}),
+      });
       if (!sameReading(next, last.current)) setReading(next);
       last.current = next;
       return next;

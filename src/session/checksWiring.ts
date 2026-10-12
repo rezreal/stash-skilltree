@@ -60,6 +60,8 @@ export function sessionAttending(
   presence: PresenceLike | undefined,
   opts: { required: boolean; prompt?: PromptAttentionLike | undefined },
 ): boolean {
+  // a hidden or covered window never counts - except with the eyes closed
+  if (reading.background && opts.prompt?.spec.target !== "eyes_closed") return false;
   if (opts.prompt) {
     return combineAttention({ attending: opts.prompt.attending, reason: opts.prompt.reason }, presence, opts.required).attending;
   }
@@ -111,6 +113,9 @@ export function attentionTexts(
   if (p) {
     const grace = presence ? capitalize(presenceReasonText(presence.reason)) : "Camera off";
     return { pause: p, grace, back: BACK, byPresence: true };
+  }
+  if (reading.background && prompt?.spec.target !== "eyes_closed") {
+    return { pause: pauseReasonText(reading), grace: graceText(reading), back: "Bring the window to the front", byPresence: false };
   }
   if (prompt) {
     const t = promptAttentionText(prompt.spec);

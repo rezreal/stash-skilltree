@@ -43,6 +43,8 @@ export interface AttentionReading {
   insideShare?: number;
   /** a tracker is chosen in the settings but not connected: the fallback stands in */
   trackerDown: boolean;
+  /** with gaze: the browser window is hidden or not in front (and not fullscreen) */
+  background?: boolean;
 }
 
 export const INITIAL_READING: AttentionReading = { attending: true, source: "fallback", trackerDown: false };
@@ -55,6 +57,8 @@ export interface AttentionChoiceInput {
   gaze?: GazeAttentionResult;
   /** fallbackAttending() for this tick */
   fallback: boolean;
+  /** the page's state; with gaze it must be visible and focused (or fullscreen) */
+  page?: { visible: boolean; focused: boolean; fullscreen: boolean };
 }
 
 /**
@@ -64,20 +68,32 @@ export interface AttentionChoiceInput {
  */
 export function chooseAttention(input: AttentionChoiceInput): AttentionReading {
   if (input.connection === "connected" && input.gaze) {
-    return {
-      attending: input.gaze.attending,
+    // looking at where the video would be doesn't count when another window
+    // or tab covers it: the page must be in front, or the video fullscreen
+    const page = input.page;
+    const background = !!page && (!page.visible || (!page.focused && !page.fullscreen));
+    const r: AttentionReading = {
+      attending: input.gaze.attending && !background,
       source: "gaze",
       reason: input.gaze.reason,
       insideShare: input.gaze.insideShare,
       trackerDown: false,
     };
+    if (background) r.background = true;
+    return r;
   }
   return { attending: input.fallback, source: "fallback", trackerDown: input.selected };
 }
 
 /** the fields the screens show; a reading only re-renders when one changes */
 export function sameReading(a: AttentionReading, b: AttentionReading): boolean {
-  return a.attending === b.attending && a.source === b.source && a.reason === b.reason && a.trackerDown === b.trackerDown;
+  return (
+    a.attending === b.attending &&
+    a.source === b.source &&
+    a.reason === b.reason &&
+    a.trackerDown === b.trackerDown &&
+    !!a.background === !!b.background
+  );
 }
 
 // --- pause and grace texts ----------------------------------------------------------
@@ -89,6 +105,12 @@ export interface PauseText {
 
 /** The inattention overlay: why playback paused. */
 export function pauseReasonText(r: AttentionReading): PauseText {
+  if (r.background) {
+    return {
+      title: "Paused: window in the background",
+      hint: "Bring the browser window back to the front, or watch fullscreen, to continue.",
+    };
+  }
   if (r.source === "gaze") {
     switch (r.reason) {
       case "no-gaze":
@@ -111,6 +133,7 @@ export function pauseReasonText(r: AttentionReading): PauseText {
 
 /** The banner during the grace period. */
 export function graceText(r: AttentionReading): string {
+  if (r.background) return "Browser window in the background";
   if (r.source === "gaze" && (r.reason === "no-gaze" || r.reason === "blink")) return "Eyes not tracked";
   if (r.source === "gaze" && r.reason === "stale") return "Eye tracker stalled";
   return "Look back at the video";
