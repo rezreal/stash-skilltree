@@ -400,4 +400,22 @@ describe("suggestions and daily series", () => {
     );
     assert.deepEqual(dailySeriesCards({ library: library(), ledger: computeLedger(library()), now: NOW }), []);
   });
+
+  it("dailySeriesCards: hides series whose next part the tree does not reach", () => {
+    const lib = library({
+      interestTags: [interest("t0", "topic", 0), interest("t1", "topic", 1)],
+      scenes: [scene("open1", ["t0"]), scene("locked1", ["t1"]), scene("free1", [])],
+      series: [
+        { groupId: "o", name: "Open", mode: "daily", reset: "start", parts: [{ sceneId: "open1" }] },
+        { groupId: "l", name: "Locked", mode: "daily", reset: "start", parts: [{ sceneId: "locked1" }] },
+        { groupId: "f", name: "Free", mode: "daily", reset: "start", parts: [{ sceneId: "free1" }] },
+      ],
+    });
+    const graph = buildGraph(lib);
+    const reach = { graph, progress: computeProgress(graph), edges: triggerEdges(lib) };
+    const ledger = computeLedger(lib);
+    const ids = (r?: typeof reach) => dailySeriesCards({ library: lib, ledger, now: NOW, reach: r }).map((c) => c.series.groupId);
+    assert.deepEqual(ids(), ["f", "l", "o"]);
+    assert.deepEqual(ids(reach), ["f", "o"]);
+  });
 });

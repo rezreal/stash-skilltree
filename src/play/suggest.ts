@@ -530,14 +530,29 @@ const CARD_ORDER: Record<SeriesStatus["state"], number> = {
 };
 
 /**
+ * A series part is reachable when the tree lets it be played: it counts for
+ * no node at all (a series outside the tree), or for at least one node that
+ * is open or complete, and every trigger it uses has been installed.
+ */
+export function seriesPartReachable(graph: Graph, progress: Progress, edges: TriggerEdge[], sceneId: Id): boolean {
+  if (!triggerAllowed(graph, edges)(sceneId)) return false;
+  const nodes = graph.sceneNodes.get(sceneId) ?? [];
+  if (nodes.length === 0) return true;
+  return nodes.some((k) => progress.get(k)?.state !== "locked");
+}
+
+/**
  * One card per daily series that has a next part (everything but finished),
- * due first, then broken, not started, done for today; then by name.
+ * due first, then broken, not started, done for today; then by name. Given
+ * the graph, series whose next part the tree does not reach yet are left
+ * out, like any other clip behind the fog.
  */
 export function dailySeriesCards(input: {
   library: LibraryInput;
   ledger: Ledger;
   now?: Date;
   dayStartHour?: number;
+  reach?: { graph: Graph; progress: Progress; edges: TriggerEdge[] };
 }): DailySeriesCard[] {
   const series = input.library.series ?? [];
   if (series.length === 0) return [];
@@ -549,6 +564,8 @@ export function dailySeriesCards(input: {
     if (status.state === "finished" || !status.nextPart) continue;
     const scene = scenes.get(status.nextPart.sceneId);
     if (!scene) continue;
+    const reach = input.reach;
+    if (reach && !seriesPartReachable(reach.graph, reach.progress, reach.edges, scene.id)) continue;
     const cost = spendCost(scene);
     out.push({ series: s, status, spendCost: cost, affordable: cost <= input.ledger.balance });
   }

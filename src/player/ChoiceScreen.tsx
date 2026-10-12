@@ -99,8 +99,15 @@ function ChoiceView(props: ChoiceViewProps) {
     [baseInput, performerId],
   );
   const seriesCards = React.useMemo(
-    () => dailySeriesCards({ library: data.library, ledger: data.ledger, now: new Date(now), dayStartHour: data.dayStartHour }),
-    [data, now],
+    () =>
+      dailySeriesCards({
+        library: data.library,
+        ledger: data.ledger,
+        now: new Date(now),
+        dayStartHour: data.dayStartHour,
+        reach: { graph: baseInput.graph, progress: baseInput.progress, edges: baseInput.edges },
+      }),
+    [data, now, baseInput],
   );
 
   return (
