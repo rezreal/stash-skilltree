@@ -119,6 +119,24 @@ Watch policy = rules composed per scene from its tags:
 - Streaks reward (more lookahead, bonus multiplier); optional reversible
   "rust" per topic, off by default. No progress loss.
 
+## Daily series
+
+Stash groups keep their scenes in order (`scene_index`) and carry custom
+fields, so a series is configured on its group:
+
+- `st.series = daily`: parts are watched in order, at most one per day.
+- `st.reset = start` (default) or `step_back`: what happens when a day is
+  missed after the series was started.
+- The position is derived, never stored: the current run is the longest
+  prefix of parts 1, 2, 3 ... completed on consecutive days, ending today or
+  yesterday. Rewatching part 1 after a miss overwrites its date, which breaks
+  the old chain, so the run restarts naturally.
+- A plugin setting sets when the day ends (e.g. 04:00) so late sessions
+  count for the right day.
+- The choice screen shows an active series as its own card (part, run
+  length, time left today); later parts are not suggested early.
+- Falling back only moves the series position. Levels and coins earned stay.
+
 ## Flow
 
 Start: pick a performer → each step suggests 1–2 scenes (continue / explore /
