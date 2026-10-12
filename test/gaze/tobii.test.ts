@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   createTobiiSource,
+  PRESENCE_HOLD_MS,
   loadDeviceCalibration,
   MSG_IN_USE,
   MSG_NEEDS_CLICK,
@@ -171,8 +172,12 @@ describe("createTobiiSource", () => {
     assert.equal(samples.at(-1)!.valid, true);
     fake.emit(gaze(0, 0, 4, 4));
     assert.equal(samples.at(-1)!.valid, false);
-    assert.equal(statuses.at(-1)!.present, false);
+    // eyes just lost: closed eyes, still present
+    assert.equal(statuses.at(-1)!.present, true);
     assert.equal(statuses.at(-1)!.tracking, false);
+    clock.t = 100 + PRESENCE_HOLD_MS + 1;
+    fake.emit(gaze(0, 0, 4, 4));
+    assert.equal(statuses.at(-1)!.present, false, "gone after the hold");
     fake.emit({ validity_L: 0, validity_R: 0 }); // eyes but no gaze point
     assert.equal(samples.at(-1)!.valid, false);
     assert.ok(Number.isNaN(samples.at(-1)!.x));

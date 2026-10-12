@@ -179,6 +179,9 @@ async function defaultSdk(): Promise<TobiiSdk> {
   return import("../../vendor/tobiifree/sdk/src/index.ts");
 }
 
+/** how long presence outlasts the last detected eye (closed eyes, blinks) */
+export const PRESENCE_HOLD_MS = 4000;
+
 export function createTobiiSource(opts: TobiiSourceOptions = {}): GazeSource {
   const now = opts.now ?? defaultNow;
   const screenSize = opts.screenSize ?? defaultScreenSize;
@@ -197,6 +200,7 @@ export function createTobiiSource(opts: TobiiSourceOptions = {}): GazeSource {
   /** bumped by disconnect so a connect in flight knows it was cancelled */
   let generation = 0;
   let lastStatusEmit = -Infinity;
+  let lastEyeSeen = -Infinity;
 
   function setStatus(next: GazeStatus): void {
     st = next;
@@ -242,7 +246,12 @@ export function createTobiiSource(opts: TobiiSourceOptions = {}): GazeSource {
     rate.add(t);
     samples.emit({ t, x, y, valid });
 
-    const present = eyeL || eyeR;
+    // The tracker loses both eyes when they close, so "no eyes" alone would
+    // read as the viewer leaving. Presence holds for a few seconds after the
+    // last detected eye: closed eyes are "present without gaze", and only a
+    // longer absence turns into "not present".
+    if (eyeL || eyeR) lastEyeSeen = t;
+    const present = eyeL || eyeR || t - lastEyeSeen <= PRESENCE_HOLD_MS;
     if (st.present !== present || st.tracking !== valid || t - lastStatusEmit >= 1000) {
       setStatus({ ...st, present, tracking: valid, screen: { x: 0, y: 0, width: size.width, height: size.height } });
     }
