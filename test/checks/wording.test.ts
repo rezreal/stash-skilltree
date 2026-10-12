@@ -115,6 +115,15 @@ describe("long gaze windows on the banner", () => {
     assert.equal(none.shareText, "on target – · need 75%");
   });
 
+  it("long body-pose windows show the share too", () => {
+    const seiza = spec({ check: "action", start: 0, end: 300, action: "kneel_sit" });
+    const v = bannerView({ progress: [{ spec: seiza, phase: "active", progress: 1, replays: 0, share: 0.9 }], videoTime: 100, nowMs: 0 })!;
+    assert.equal(v.instruction, "Kneel and sit on your heels");
+    assert.equal(v.shareText, "in pose 90% · need 75%");
+    assert.equal(progressLabel({ check: "action", holdSec: 2, action: "kneel_sit", start: 0, end: 10 }), "hold");
+    assert.equal(progressLabel({ check: "action", holdSec: 2, action: "nod", start: 0, end: 300 }), "hold");
+  });
+
   it("short windows keep the hold label and no share line", () => {
     const v = bannerView({ progress: [{ spec: shortEc, phase: "active", progress: 0.5, replays: 0 }], videoTime: 12, nowMs: 0 })!;
     assert.equal(v.progressLabel, "hold 1.5 s");

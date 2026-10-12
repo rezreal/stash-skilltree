@@ -90,6 +90,54 @@ describe("classifyPosture", () => {
     assert.equal(classifyPosture("kneel", pose({ ...heels, leftAnkle: undefined, rightAnkle: undefined })), "unknown");
   });
 
+  it("kneel_sit: on the heels with an upright back; not a tall kneel, cross-legged or bowing forward", () => {
+    const front = {
+      leftShoulder: [0.42, 0.4],
+      rightShoulder: [0.58, 0.4],
+      leftHip: [0.45, 0.68],
+      rightHip: [0.55, 0.68],
+      leftKnee: [0.42, 0.8],
+      rightKnee: [0.58, 0.8],
+      leftAnkle: [0.44, 0.77],
+      rightAnkle: [0.56, 0.77],
+    } as const;
+    assert.equal(classifyPosture("kneel_sit", pose(front)), "in");
+    assert.equal(classifyPosture("kneel", pose(front)), "in"); // sitting on the heels is a kneel too
+    // from the side, facing right: thighs forward, shins folded back under the hips
+    const side = {
+      leftShoulder: [0.5, 0.35],
+      leftHip: [0.5, 0.6],
+      leftKnee: [0.65, 0.68],
+      leftAnkle: [0.48, 0.7],
+    } as const;
+    assert.equal(classifyPosture("kneel_sit", pose(side)), "in");
+    const tall = {
+      leftShoulder: [0.5, 0.3],
+      rightShoulder: [0.51, 0.3],
+      leftHip: [0.5, 0.55],
+      rightHip: [0.51, 0.55],
+      leftKnee: [0.5, 0.8],
+      rightKnee: [0.51, 0.8],
+      leftAnkle: [0.32, 0.82],
+      rightAnkle: [0.33, 0.82],
+    } as const;
+    assert.equal(classifyPosture("kneel_sit", pose(tall)), "out");
+    const crossLegged = {
+      ...front,
+      leftHip: [0.45, 0.7],
+      rightHip: [0.55, 0.7],
+      leftKnee: [0.3, 0.68],
+      rightKnee: [0.7, 0.68],
+      leftAnkle: [0.47, 0.72],
+      rightAnkle: [0.53, 0.72],
+    } as const;
+    assert.equal(classifyPosture("kneel_sit", pose(crossLegged)), "out");
+    const bowing = { ...side, leftShoulder: [0.7, 0.55] } as const;
+    assert.equal(classifyPosture("kneel_sit", pose(bowing)), "out");
+    assert.equal(classifyPosture("kneel_sit", pose(STANDING)), "out");
+    assert.equal(classifyPosture("kneel_sit", pose({ ...front, leftAnkle: undefined, rightAnkle: undefined })), "unknown");
+  });
+
   it("lie_down: shoulder-hip line near horizontal", () => {
     const lying = { leftShoulder: [0.2, 0.6], rightShoulder: [0.21, 0.63], leftHip: [0.5, 0.62], rightHip: [0.5, 0.66] } as const;
     assert.equal(classifyPosture("lie_down", pose(lying)), "in");

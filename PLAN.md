@@ -134,8 +134,9 @@ Watch policy = rules composed per scene from its tags:
   in a background tab. Stopping a loop saves its minutes.
 - `prompts` — markers: repeat-after-me (local STT, fuzzy match), webcam
   actions and body poses (MediaPipe: nod, shake, eyes closed/open, hand
-  raised, still, arms up, hands on head, hands together, kneel, stand, lie
-  down), gaze targets on the person in the video (MediaPipe
+  raised, still, arms up, hands on head, hands together, kneel, kneel
+  sitting on the heels, stand, lie down; pose windows over 10 s are scored
+  by the share of time in the pose), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
   prompts (hold-to-confirm or voice; declining fails the clip).
   **Gaze prompts replace the attention target** while their window is

@@ -43,6 +43,7 @@ export const PROMPT_ACTIONS = [
   "hands_on_head",
   "hands_together",
   "kneel",
+  "kneel_sit",
   "stand",
   "lie_down",
 ] as const;
@@ -121,6 +122,7 @@ export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
   hands_on_head: "both hands on the head",
   hands_together: "hands together in front of the chest",
   kneel: "kneel (the camera must see the legs)",
+  kneel_sit: "kneel sitting back on the heels, back upright, as in meditation (the camera must see the legs; best from the side)",
   stand: "stand upright (the camera must see the legs)",
   lie_down: "lie down",
 };

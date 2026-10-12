@@ -38,7 +38,8 @@ GAZE_TARGETS = [
     "feet_floor", "screen_center", "off_screen", "eyes_closed",
 ]
 ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still",
-           "arms_up", "hands_on_head", "hands_together", "kneel", "stand", "lie_down"]
+           "arms_up", "hands_on_head", "hands_together", "kneel",
+           "kneel_sit", "stand", "lie_down"]
 TYPES = ["repeat", "gaze", "action", "spend"]
 
 # Seconds after the instruction ends during which the plugin checks compliance.
@@ -63,7 +64,8 @@ computer can verify, of these four types:
   your eyes ... open them and look at my hands").
 - action: the viewer is told to do a visible body action. "action" is one of:
   nod, shake_head, eyes_closed, eyes_open, hand_raised, still (stay completely
-  still), arms_up, hands_on_head, hands_together, kneel, stand, lie_down.
+  still), arms_up, hands_on_head, hands_together, kneel, kneel_sit (kneel
+  sitting back on the heels, as in meditation), stand, lie_down.
 - spend: the viewer is told to send/give/pay an amount of money, coins or
   tribute. "amount" = the number as an integer.
 

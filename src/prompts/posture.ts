@@ -38,6 +38,14 @@ export const POSTURE = {
   kneelKneeAnkleMaxTorso: 0.35,
   /** kneel: a shin shorter than this on screen points at the camera; its knee angle is not trusted */
   kneelShortShinTorso: 0.35,
+  /** kneel_sit (sitting on the heels): hip-to-ankle vertical distance below this share of the torso length
+   * (on the heels ~0.2-0.4, tall kneel ~1.0) */
+  kneelSitHipAnkleMaxTorso: 0.6,
+  /** kneel_sit: hips at least this far (torso lengths) above the knees (rules out sitting cross-legged,
+   * where the hips are at or below knee height) */
+  kneelSitHipAboveKneeTorso: 0.12,
+  /** kneel_sit: shoulder-hip line within this of vertical, degrees (an upright back) */
+  kneelSitTorsoMaxTiltDeg: 30,
   /** stand: knee and hip angles above this, degrees */
   standJointMinDeg: 160,
   /** stand: shoulder-hip line within this of vertical, degrees */
@@ -46,7 +54,7 @@ export const POSTURE = {
   lieMaxTiltDeg: 30,
 } as const;
 
-export const POSE_ACTIONS = ["arms_up", "hands_on_head", "hands_together", "kneel", "stand", "lie_down"] as const;
+export const POSE_ACTIONS = ["arms_up", "hands_on_head", "hands_together", "kneel", "kneel_sit", "stand", "lie_down"] as const;
 export type PoseAction = (typeof POSE_ACTIONS)[number];
 
 export function isPoseAction(a: PromptAction | undefined): a is PoseAction {
@@ -142,6 +150,7 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
     }
 
     case "kneel":
+    case "kneel_sit":
     case "stand": {
       const sides = [
         [POSE.leftShoulder, POSE.leftHip, POSE.leftKnee, POSE.leftAnkle],
@@ -156,15 +165,22 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
         const knee = at(k);
         const ankle = at(a);
         if (!hip || !knee || !ankle) continue;
-        if (action === "kneel") {
+        if (action === "kneel" || action === "kneel_sit") {
           if (!sm || !hm) continue;
           const torso = dist(sm, hm);
           if (torso <= 0) continue;
           complete++;
-          const hipsLow = Math.abs(ankle.y - hip.y) < POSTURE.kneelHipAnkleMaxTorso * torso;
           const kneeLow = Math.abs(knee.y - ankle.y) < POSTURE.kneelKneeAnkleMaxTorso * torso;
           const bent = dist(knee, ankle) < POSTURE.kneelShortShinTorso * torso || angle(hip, knee, ankle) < POSTURE.kneelKneeMaxDeg;
-          if (!(hipsLow && kneeLow && bent)) all = false;
+          if (action === "kneel") {
+            const hipsLow = Math.abs(ankle.y - hip.y) < POSTURE.kneelHipAnkleMaxTorso * torso;
+            if (!(hipsLow && kneeLow && bent)) all = false;
+          } else {
+            // on the heels: hips down near the ankles but still above the knees
+            const onHeels = Math.abs(ankle.y - hip.y) < POSTURE.kneelSitHipAnkleMaxTorso * torso;
+            const aboveKnee = knee.y - hip.y >= POSTURE.kneelSitHipAboveKneeTorso * torso;
+            if (!(onHeels && aboveKnee && kneeLow && bent)) all = false;
+          }
         } else {
           const shoulder = at(s);
           if (!shoulder) continue;
@@ -175,9 +191,10 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
         }
       }
       if (complete === 0) return "unknown";
-      if (action === "stand") {
+      if (action === "stand" || action === "kneel_sit") {
         if (!sm || !hm) return "unknown";
-        if (90 - tiltFromHorizontal(sm, hm) > POSTURE.standTorsoMaxTiltDeg) all = false;
+        const maxTilt = action === "stand" ? POSTURE.standTorsoMaxTiltDeg : POSTURE.kneelSitTorsoMaxTiltDeg;
+        if (90 - tiltFromHorizontal(sm, hm) > maxTilt) all = false;
       }
       return yes(all);
     }

@@ -40,6 +40,7 @@ export const PROMPT_ACTIONS = [
   "hands_on_head",
   "hands_together",
   "kneel",
+  "kneel_sit",
   "stand",
   "lie_down",
 ] as const;

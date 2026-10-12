@@ -41,7 +41,7 @@
 // counts as no evidence.
 
 import { ACTION_THRESHOLDS } from "./actionCheck.ts";
-import { createHoldTracker, createShareTracker } from "./hold.ts";
+import { createHoldTracker, createShareTracker, isSustained, sharePercentText, SUSTAINED_MIN_SHARE } from "./hold.ts";
 import type { HoldState, HoldTracker, ShareTracker } from "./hold.ts";
 import { pointInRegion } from "./regions.ts";
 import type { ViewportPoint } from "../gaze/types.ts";
@@ -50,10 +50,7 @@ import type { CheckResult, PromptSpec, Region, ViewerFrame } from "./types.ts";
 /** exits shorter than this don't break the hold (blinks, saccades, jitter) */
 export const GAZE_EXIT_TOLERANCE_MS = 300;
 
-/** windows longer than this (seconds) are scored by share, not by a continuous hold */
-export const LONG_WINDOW_SEC = 10;
-/** long windows pass when at least this share of the evidence time was on target */
-export const SUSTAINED_MIN_SHARE = 0.75;
+export { isSustained, LONG_WINDOW_SEC, SUSTAINED_MIN_SHARE } from "./hold.ts";
 /** a region target's last sample describes the moment for this long, ms */
 export const GAZE_STALE_MS = 400;
 
@@ -62,16 +59,9 @@ export type GazeMoment = "on" | "off" | "unknown";
 
 const MOMENT: Readonly<Record<HoldState, GazeMoment>> = { in: "on", out: "off", unknown: "unknown" };
 
-/** The window is long: scored by share (sustained), not by the hold rule. */
-export function isSustained(spec: Pick<PromptSpec, "start" | "end">): boolean {
-  return spec.end - spec.start > LONG_WINDOW_SEC;
-}
-
 /** "eyes closed 82% · need 75%" / "on target 40% · need 75%" (share floored, so a shown 75% passes) */
 export function shareText(target: PromptSpec["target"], share: number | undefined): string {
-  const label = target === "eyes_closed" ? "eyes closed" : "on target";
-  const pct = share === undefined || !Number.isFinite(share) ? "–" : `${Math.floor(Math.min(1, Math.max(0, share)) * 100)}%`;
-  return `${label} ${pct} · need ${Math.round(SUSTAINED_MIN_SHARE * 100)}%`;
+  return `${target === "eyes_closed" ? "eyes closed" : "on target"} ${sharePercentText(share)}`;
 }
 
 export const EYES_CLOSED_GAZE = {

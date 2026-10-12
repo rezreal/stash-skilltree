@@ -80,7 +80,24 @@ export function createHoldTracker(opts: HoldTrackerOptions): HoldTracker {
   };
 }
 
-// --- share accounting (long gaze windows) ------------------------------------------
+// --- share accounting (long gaze and pose windows) -----------------------------------
+
+/** windows longer than this (seconds) are scored by share, not by a continuous hold */
+export const LONG_WINDOW_SEC = 10;
+/** long windows pass when at least this share of the evidence time was on target */
+export const SUSTAINED_MIN_SHARE = 0.75;
+
+/** The window is long: scored by share (sustained), not by the hold rule. */
+export function isSustained(spec: { start: number; end: number }): boolean {
+  return spec.end - spec.start > LONG_WINDOW_SEC;
+}
+
+/** "82% · need 75%" (floored, so a shown 75% passes) */
+export function sharePercentText(share: number | undefined): string {
+  const pct = share === undefined || !Number.isFinite(share) ? "–" : `${Math.floor(Math.min(1, Math.max(0, share)) * 100)}%`;
+  return `${pct} · need ${Math.round(SUSTAINED_MIN_SHARE * 100)}%`;
+}
+
 // The same sample-and-hold intervals as the hold tracker, summed by state
 // instead of chained into runs: "in" adds to onMs, "out" to offMs, "unknown"
 // to neither (time without evidence neither counts nor is required).

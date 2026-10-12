@@ -11,8 +11,12 @@
 // lie_down; see posture.ts) hold for min(holdSec, poseMaxSec) and are gated
 // on the viewer pose, not the face (a face is often hidden when lying down);
 // time where the needed landmarks are missing is neither pass nor fail.
+// In windows longer than LONG_WINDOW_SEC a body pose is scored by share, like
+// a long gaze window: passed iff at least SUSTAINED_MIN_SHARE of the evidence
+// time was in the pose and at least the hold time of it (meditation-style
+// "stay kneeling for the whole part").
 
-import { createHoldTracker } from "./hold.ts";
+import { createHoldTracker, createShareTracker, isSustained, sharePercentText, SUSTAINED_MIN_SHARE } from "./hold.ts";
 import { classifyPosture, isPoseAction } from "./posture.ts";
 import type { HoldState } from "./hold.ts";
 import type { CheckResult, PromptSpec, ViewerFrame } from "./types.ts";
@@ -219,8 +223,10 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
       }
   }
   const faceGated = !isPoseAction(action);
+  const sustained = isPoseAction(action) && isSustained(spec);
 
   const hold = createHoldTracker({ needMs: Math.max(0.1, needSec) * 1000, toleranceMs: tolerance, maxDtMs: 250 });
+  const share = createShareTracker({ maxDtMs: 250 });
   return {
     spec,
     push(f) {
@@ -231,9 +237,22 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
         } else hold.push(f.t, "unknown");
         return;
       }
-      hold.push(f.t, classify(f));
+      const state = classify(f);
+      hold.push(f.t, state);
+      share.push(f.t, state);
     },
     result() {
+      if (sustained) {
+        const sh = share.share;
+        const passed = sh !== undefined && sh >= SUSTAINED_MIN_SHARE && share.onMs >= hold.needMs;
+        const r: CheckResult = {
+          passed,
+          progress: passed ? 1 : Math.min(1, (sh ?? 0) / SUSTAINED_MIN_SHARE, share.onMs / hold.needMs),
+          detail: `${label} ${sharePercentText(sh)}`,
+        };
+        if (sh !== undefined) r.share = sh;
+        return r;
+      }
       const passed = hold.passed;
       return {
         passed,
@@ -243,6 +262,7 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
     },
     reset() {
       hold.reset();
+      share.reset();
     },
   };
 }

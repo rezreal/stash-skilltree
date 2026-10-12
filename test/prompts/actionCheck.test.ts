@@ -135,6 +135,42 @@ describe("body-pose actions", () => {
     assert.equal(c.result().passed, true);
   });
 
+  const STANDING_POSE = pose({
+    leftShoulder: [0.45, 0.25],
+    leftHip: [0.47, 0.5],
+    leftKnee: [0.47, 0.7],
+    leftAnkle: [0.47, 0.9],
+  });
+  const SEIZA = pose({ leftShoulder: [0.5, 0.35], leftHip: [0.5, 0.6], leftKnee: [0.65, 0.68], leftAnkle: [0.48, 0.7] });
+
+  it("long pose windows are scored by share: the pose must be kept, not just reached", () => {
+    const long = (): ActionCheck => createActionCheck(spec({ check: "action", action: "kneel_sit", start: 10, end: 40 }));
+    const kept = long();
+    feed(kept, 0, 20000, () => ({ facePresent: false, pose: SEIZA }));
+    feed(kept, 20000, 24000, () => ({ pose: STANDING_POSE }));
+    assert.equal(kept.result().passed, true);
+    assert.ok(kept.result().share! > 0.8);
+    assert.match(kept.result().detail!, /^kneel sit 8\d% · need 75%$/);
+
+    const left = long();
+    feed(left, 0, 5000, () => ({ pose: SEIZA }));
+    feed(left, 5000, 20000, () => ({ pose: STANDING_POSE }));
+    assert.equal(left.result().passed, false); // held 5 s, but only a quarter of the time
+    assert.ok(left.result().progress < 0.5);
+
+    // time without the legs in view neither counts nor is required
+    const hidden = long();
+    feed(hidden, 0, 3000, () => ({ pose: SEIZA }));
+    feed(hidden, 3000, 20000, () => ({ pose: pose({ nose: [0.5, 0.3] }) }));
+    assert.equal(hidden.result().passed, true);
+
+    // a short window keeps the hold rule
+    const short = check("kneel_sit");
+    feed(short, 0, 1600, () => ({ pose: SEIZA }));
+    feed(short, 1600, 5000, () => ({ pose: STANDING_POSE }));
+    assert.equal(short.result().passed, true);
+  });
+
   it("missing landmarks or no person are neither pass nor fail", () => {
     const c = check("arms_up", 1);
     feed(c, 0, 600, () => ({ pose: UP }));

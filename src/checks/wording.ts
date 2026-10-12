@@ -1,6 +1,8 @@
 // What the prompt banner says. Pure.
 
 import { eyesClosedHoldSec, isSustained, shareText, type GazeMoment } from "../prompts/gazeCheck.ts";
+import { sharePercentText } from "../prompts/hold.ts";
+import { isPoseAction } from "../prompts/posture.ts";
 import type { GazeTarget, PromptAction, PromptPhase, PromptProgress, PromptSpec } from "../prompts/types.ts";
 
 const TARGET_WORDS: Readonly<Record<GazeTarget, string>> = {
@@ -30,6 +32,7 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   hands_on_head: "Hands on your head",
   hands_together: "Hands together",
   kneel: "Kneel",
+  kneel_sit: "Kneel and sit on your heels",
   stand: "Stand up",
   lie_down: "Lie down",
 };
@@ -67,24 +70,36 @@ export function promptInstruction(spec: Pick<PromptSpec, "check" | "title" | "ta
   }
 }
 
-type LabelSpec = Pick<PromptSpec, "check" | "holdSec"> & { target?: GazeTarget | undefined; start?: number; end?: number };
+type LabelSpec = Pick<PromptSpec, "check" | "holdSec"> & {
+  target?: GazeTarget | undefined;
+  action?: PromptAction | undefined;
+  start?: number;
+  end?: number;
+};
 
-/** A gaze window longer than LONG_WINDOW_SEC: scored by share, not by the hold. */
-export function sustainedGaze(spec: LabelSpec): boolean {
-  return spec.check === "gaze" && spec.start !== undefined && spec.end !== undefined && isSustained({ start: spec.start, end: spec.end });
+/**
+ * A gaze or body-pose window longer than LONG_WINDOW_SEC: scored by share,
+ * not by the hold.
+ */
+export function sustainedWindow(spec: LabelSpec): boolean {
+  if (spec.check !== "gaze" && !(spec.check === "action" && isPoseAction(spec.action))) return false;
+  return spec.start !== undefined && spec.end !== undefined && isSustained({ start: spec.start, end: spec.end });
 }
 
 /**
- * The label of the progress bar: what is measured. Long gaze windows show
- * the share ("eyes closed 82% · need 75%"), short ones the hold ("hold 2 s").
+ * The label of the progress bar: what is measured. Long gaze and pose windows
+ * show the share ("eyes closed 82% · need 75%", "in pose 90% · need 75%"),
+ * short ones the hold ("hold 2 s").
  */
 export function progressLabel(spec: LabelSpec, share?: number): string {
   switch (spec.check) {
     case "repeat":
       return "match";
     case "gaze":
-      if (sustainedGaze(spec)) return shareText(spec.target, share);
+      if (sustainedWindow(spec)) return shareText(spec.target, share);
       return `hold ${formatSec(spec.target === "eyes_closed" ? eyesClosedHoldSec(spec.holdSec) : spec.holdSec)}`;
+    case "action":
+      return sustainedWindow(spec) ? `in pose ${sharePercentText(share)}` : "hold";
     default:
       return "hold";
   }
@@ -150,7 +165,7 @@ export interface BannerView {
   /** 0..1 */
   progress: number;
   progressLabel: string;
-  /** long gaze windows: the share line, shown instead of the seconds left ("eyes closed 82% · need 75%") */
+  /** long gaze and pose windows: the share line, shown instead of the seconds left ("eyes closed 82% · need 75%") */
   shareText?: string;
   /** why this prompt can't be checked right now (it is then not counted) */
   note?: string;
@@ -199,7 +214,7 @@ export function bannerView(input: {
       progress: clamp01(pick.progress),
       progressLabel: progressLabel(spec, pick.share),
     };
-    if (sustainedGaze(spec)) view.shareText = view.progressLabel;
+    if (sustainedWindow(spec)) view.shareText = view.progressLabel;
     if (pick.phase === "replaying") view.status = "Replaying: try again";
     else if (pick.replays > 0) view.status = "Second try";
     const note = input.uncheckable?.(spec);
@@ -220,7 +235,7 @@ export function bannerView(input: {
       progress: last.passed ? 1 : clamp01(p?.progress ?? 0),
       progressLabel: progressLabel(last.spec, p?.share),
     };
-    if (sustainedGaze(last.spec)) view.shareText = view.progressLabel;
+    if (sustainedWindow(last.spec)) view.shareText = view.progressLabel;
     return view;
   }
   return undefined;
