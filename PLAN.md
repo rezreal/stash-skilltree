@@ -165,7 +165,9 @@ Watch policy = rules composed per scene from its tags:
   unit being the region's size capped at 100 px so large regions keep blur
   on screen; 16 Gaussian taps per pixel from the mip level matching their
   spacing. The blur builds up (smoothstep) over the first 8 s of the window
-  and eases out at the end or when the region is lost for 1.5 s. The canvas
+  and eases out at the end or when the region is lost for 1.5 s. It
+  breathes every 6 s: up to 35 % softer while reaching 40 % further out,
+  then strong and close again (none with prefers-reduced-motion). The canvas
   takes over the video's CSS filter (stash's Filters panel); a video stash
   rotates or scales is not blurred (src/player/focusBlur.ts,
   focusShader.ts, FocusBlur.tsx). A backdrop-filter version showed no blur

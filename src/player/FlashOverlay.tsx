@@ -34,7 +34,7 @@ function reactDom(): ReactDomLike | undefined {
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
-function useReducedMotion(): boolean {
+export function useReducedMotion(): boolean {
   const query = () => (typeof window.matchMedia === "function" ? window.matchMedia(REDUCED_MOTION) : undefined);
   const [reduced, setReduced] = React.useState(() => query()?.matches ?? false);
   React.useEffect(() => {

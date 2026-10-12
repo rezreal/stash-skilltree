@@ -1,8 +1,9 @@
 // The focus blur of gaze prompts (focusBlur.ts): a WebGL canvas over the
 // video that redraws each frame through the blur shader (focusShader.ts), the
 // target region (eyes, face, hands, ...) sharp and the picture around it more
-// blurred the further away and the longer the prompt runs. While the blur is
-// off the canvas is hidden and the video shows as usual.
+// blurred the further away and the longer the prompt runs, breathing slowly
+// (focusPulse; still with prefers-reduced-motion). While the blur is off the
+// canvas is hidden and the video shows as usual.
 //
 // Rendered inside the session overlay root (over the video, under the bar,
 // the prompt banner and the gaze dot), like the eyes-closed dim. The video's
@@ -12,11 +13,14 @@
 // rAF-driven while a prompt runs or the blur eases out; idle otherwise.
 import type { PromptSpec, Region } from "../prompts/types.ts";
 import { videoContentRect } from "../prompts/regions.ts";
+import { useReducedMotion } from "./FlashOverlay.tsx";
 import {
   FOCUS_FADE_OUT_MS,
   FOCUS_LOST_MS,
+  FOCUS_REACH,
   focusCanvasSize,
   focusEllipse,
+  focusPulse,
   focusRamp,
   ringUnit,
   smoothEllipse,
@@ -72,6 +76,9 @@ export function FocusBlur(props: FocusBlurProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const getters = React.useRef(props);
   getters.current = props;
+  const reduced = useReducedMotion();
+  const reducedRef = React.useRef(reduced);
+  reducedRef.current = reduced;
   const loop = React.useRef<LoopState>({ raf: 0, seenMs: -Infinity, level: 0, failed: false, noted: false });
   const active = props.spec !== undefined && strength > 0;
 
@@ -128,13 +135,15 @@ export function FocusBlur(props: FocusBlurProps) {
         });
         const k = size.scale;
         const e = st.ellipse;
+        const pulse = focusPulse(now - (st.startedMs ?? now), reducedRef.current);
         shown = st.renderer.draw(video, {
           width: size.width,
           height: size.height,
           content: { x: c.left * k, y: c.top * k, w: c.width * k, h: c.height * k },
           ellipse: { cx: e.cx * k, cy: e.cy * k, rx: e.rx * k, ry: e.ry * k },
           unit: ringUnit(e) * k,
-          sigma: px * st.level * k,
+          sigma: px * st.level * pulse.blur * k,
+          reach: FOCUS_REACH * pulse.reach,
         });
         if (!shown) throw new Error("the video frame can't be drawn (cross-origin video or lost context)");
         const filter = getComputedStyle(video).filter;

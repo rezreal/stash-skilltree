@@ -8,6 +8,10 @@ import {
   FOCUS_CANVAS_MAX_PX,
   FOCUS_REACH,
   focusCanvasSize,
+  FOCUS_PULSE_BLUR,
+  FOCUS_PULSE_REACH,
+  FOCUS_PULSE_SEC,
+  focusPulse,
   focusEllipse,
   focusRamp,
   ringUnit,
@@ -113,4 +117,25 @@ test("focusCanvasSize: device pixels, capped for huge screens", () => {
   assert.equal(big.width, FOCUS_CANVAS_MAX_PX);
   assert.equal(big.height, 1440);
   assert.equal(focusCanvasSize(800, 600, 0).scale, 1);
+});
+
+test("focusPulse: strong and close at the start, soft and far half a breath in, back after a full one", () => {
+  const ms = FOCUS_PULSE_SEC * 1000;
+  assert.deepEqual(focusPulse(0), { reach: 1, blur: 1 });
+  const half = focusPulse(ms / 2);
+  assert.ok(Math.abs(half.reach - (1 + FOCUS_PULSE_REACH)) < 1e-9);
+  assert.ok(Math.abs(half.blur - (1 - FOCUS_PULSE_BLUR)) < 1e-9);
+  const quarter = focusPulse(ms / 4);
+  assert.ok(Math.abs(quarter.reach - (1 + FOCUS_PULSE_REACH / 2)) < 1e-9);
+  const full = focusPulse(ms);
+  assert.ok(Math.abs(full.reach - 1) < 1e-9 && Math.abs(full.blur - 1) < 1e-9);
+  assert.deepEqual(focusPulse(ms / 2, true), { reach: 1, blur: 1 });
+  assert.deepEqual(focusPulse(NaN), { reach: 1, blur: 1 });
+});
+
+test("blurAt: a wider reach softens the same spot", () => {
+  const e = { cx: 0, cy: 0, rx: 40, ry: 40 };
+  const near = blurAt(e, 40, 12, 140, 0);
+  const wide = blurAt(e, 40, 12, 140, 0, FOCUS_REACH * (1 + FOCUS_PULSE_REACH));
+  assert.ok(wide < near);
 });

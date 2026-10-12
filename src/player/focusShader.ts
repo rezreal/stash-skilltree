@@ -10,7 +10,6 @@
 // return false; the caller then gives up.
 
 import type { FocusEllipse } from "./focusBlur.ts";
-import { FOCUS_REACH } from "./focusBlur.ts";
 
 const VERTEX = `#version 300 es
 void main() {
@@ -29,11 +28,11 @@ uniform vec4 u_content;  // video content rect: x, y, w, h (canvas px, top-left 
 uniform vec4 u_ellipse;  // cx, cy, rx, ry (canvas px)
 uniform float u_unit;    // ring unit (canvas px)
 uniform float u_sigma;   // blur sigma at full reach (canvas px)
+uniform float u_reach;   // ring units past the edge where the blur is full
 uniform vec2 u_texSize;  // video px
 out vec4 outColor;
 
 const int TAPS = ${TAPS};
-const float REACH = ${FOCUS_REACH.toFixed(3)};
 const float GOLDEN = 2.39996323;
 
 void main() {
@@ -47,7 +46,7 @@ void main() {
   vec2 d = p - u_ellipse.xy;
   float q = length(d / max(u_ellipse.zw, vec2(1.0)));
   float past = q > 1.0 ? length(d) * (1.0 - 1.0 / q) : 0.0;
-  float sigma = u_sigma * clamp(past / max(u_unit * REACH, 1.0), 0.0, 1.0);
+  float sigma = u_sigma * clamp(past / max(u_unit * u_reach, 1.0), 0.0, 1.0);
   if (sigma < 0.35) {
     outColor = vec4(textureLod(u_tex, uv, 0.0).rgb, 1.0);
     return;
@@ -80,6 +79,8 @@ export interface FocusFrame {
   unit: number;
   /** blur sigma at full reach, canvas px */
   sigma: number;
+  /** ring units past the edge where the blur is full (FOCUS_REACH, widened by the breath) */
+  reach: number;
 }
 
 export interface FocusRenderer {
@@ -132,6 +133,7 @@ export function createFocusRenderer(canvas: HTMLCanvasElement): FocusRenderer | 
     ellipse: gl.getUniformLocation(prog, "u_ellipse"),
     unit: gl.getUniformLocation(prog, "u_unit"),
     sigma: gl.getUniformLocation(prog, "u_sigma"),
+    reach: gl.getUniformLocation(prog, "u_reach"),
     texSize: gl.getUniformLocation(prog, "u_texSize"),
   };
 
@@ -159,6 +161,7 @@ export function createFocusRenderer(canvas: HTMLCanvasElement): FocusRenderer | 
       gl.uniform4f(u.ellipse, f.ellipse.cx, f.ellipse.cy, f.ellipse.rx, f.ellipse.ry);
       gl.uniform1f(u.unit, f.unit);
       gl.uniform1f(u.sigma, f.sigma);
+      gl.uniform1f(u.reach, f.reach);
       gl.uniform2f(u.texSize, video.videoWidth, video.videoHeight);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);

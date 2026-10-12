@@ -7,7 +7,9 @@
 //
 // The blur grows from 0 at the region's edge to full strength FOCUS_REACH
 // ring units out; the unit is the region's size, capped so a large region
-// (chest, legs) still leaves blur on screen.
+// (chest, legs) still leaves blur on screen. It breathes slowly
+// (focusPulse): softer and reaching further out, then strong and close
+// again, every FOCUS_PULSE_SEC.
 
 import type { PromptSpec, Region } from "../prompts/types.ts";
 
@@ -24,6 +26,12 @@ export const FOCUS_LOST_MS = 1500;
 export const FOCUS_RING_UNIT_MAX_PX = 100;
 /** the blur is full this many ring units out from the region's edge */
 export const FOCUS_REACH = 3.2;
+/** one slow breath of the blur, seconds */
+export const FOCUS_PULSE_SEC = 6;
+/** at the soft end of a breath the blur reaches this much further out (share of FOCUS_REACH) */
+export const FOCUS_PULSE_REACH = 0.4;
+/** at the soft end of a breath the blur is this much weaker (share) */
+export const FOCUS_PULSE_BLUR = 0.35;
 /** the canvas is drawn at the device pixel ratio, but never wider or taller than this (device px) */
 export const FOCUS_CANVAS_MAX_PX = 2560;
 
@@ -108,6 +116,18 @@ export function smoothEllipse(prev: FocusEllipse | undefined, next: FocusEllipse
   return { cx: ease(prev.cx, next.cx), cy: ease(prev.cy, next.cy), rx: ease(prev.rx, next.rx), ry: ease(prev.ry, next.ry) };
 }
 
+/**
+ * The breath at `elapsedMs` since the prompt's blur started: factors on the
+ * reach and on the blur. It starts at the strong, close end (1, 1) and eases
+ * (cosine) to the soft, far end (1 + FOCUS_PULSE_REACH, 1 - FOCUS_PULSE_BLUR)
+ * and back every FOCUS_PULSE_SEC. `still` (prefers-reduced-motion): no breath.
+ */
+export function focusPulse(elapsedMs: number, still = false): { reach: number; blur: number } {
+  if (still || !Number.isFinite(elapsedMs)) return { reach: 1, blur: 1 };
+  const s = (1 - Math.cos((2 * Math.PI * elapsedMs) / (FOCUS_PULSE_SEC * 1000))) / 2;
+  return { reach: 1 + FOCUS_PULSE_REACH * s, blur: 1 - FOCUS_PULSE_BLUR * s };
+}
+
 /** The ring unit of an ellipse: its geometric mean radius, capped. */
 export function ringUnit(e: FocusEllipse): number {
   return Math.min(Math.sqrt(Math.max(0, e.rx) * Math.max(0, e.ry)), FOCUS_RING_UNIT_MAX_PX);
@@ -116,15 +136,16 @@ export function ringUnit(e: FocusEllipse): number {
 /**
  * Blur sigma at point (x, y) for full-reach blur `sigma` (same units as the
  * ellipse): 0 inside the ellipse, growing linearly with the distance past its
- * edge (measured along the ray from its centre) to `sigma` at FOCUS_REACH
- * units. The fragment shader computes the same per pixel.
+ * edge (measured along the ray from its centre) to `sigma` at `reach` units
+ * (default FOCUS_REACH; the breath widens it). The fragment shader computes
+ * the same per pixel.
  */
-export function blurAt(e: FocusEllipse, unit: number, sigma: number, x: number, y: number): number {
+export function blurAt(e: FocusEllipse, unit: number, sigma: number, x: number, y: number, reach = FOCUS_REACH): number {
   const dx = x - e.cx;
   const dy = y - e.cy;
   const q = Math.hypot(dx / Math.max(e.rx, 1), dy / Math.max(e.ry, 1));
   const past = q > 1 ? Math.hypot(dx, dy) * (1 - 1 / q) : 0;
-  return sigma * Math.min(1, Math.max(0, past / Math.max(unit * FOCUS_REACH, 1)));
+  return sigma * Math.min(1, Math.max(0, past / Math.max(unit * reach, 1)));
 }
 
 /** Canvas backing size for a CSS box: the device pixel ratio, capped at FOCUS_CANVAS_MAX_PX. */
