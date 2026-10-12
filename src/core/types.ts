@@ -90,6 +90,8 @@ export interface GraphNode {
   /** explicit part only, for display */
   explicitRequires: Requirement;
   need: number;
+  /** st.need as written on the tag(s) (max), before defaulting and capping */
+  rawNeed?: number;
   sceneIds: Id[];
   paid: number;
   /** every scene of this node has a spend prompt */
