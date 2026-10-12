@@ -11,6 +11,13 @@ export const DEFAULT_PROMPT_WINDOWS: Readonly<Record<PromptCheck, number>> = {
   spend: 10,
 };
 
+/**
+ * Seconds a repeat window stays open past an explicit marker end. The marker
+ * covers the clip saying the phrase; the viewer repeats it afterwards, and
+ * the recognizer's final result only arrives once they stop speaking.
+ */
+export const REPEAT_TAIL_SEC = 3;
+
 export const DEFAULT_HOLD_SEC = 2;
 /** holdSec is never more than this share of the window */
 export const MAX_HOLD_SHARE = 0.7;
@@ -22,6 +29,8 @@ export interface PromptSpecOptions {
   windows?: Partial<Record<PromptCheck, number>>;
   /** default hold time (seconds) */
   holdSec?: number;
+  /** override REPEAT_TAIL_SEC */
+  repeatTailSec?: number;
 }
 
 export function isGazeTarget(s: string | undefined): s is GazeTarget {
@@ -37,11 +46,12 @@ export function isPromptAction(s: string | undefined): s is PromptAction {
  * markers without check, spend (unless includeSpend), gaze with a missing or
  * unknown target, action with a missing or unknown action, repeat with an
  * empty phrase, non-finite times. A missing or non-positive end falls back to
- * start + default window.
+ * start + default window; an explicit repeat end gets REPEAT_TAIL_SEC added.
  */
 export function promptSpecs(markers: MarkerInput[], opts?: PromptSpecOptions): PromptSpec[] {
   const windows = { ...DEFAULT_PROMPT_WINDOWS, ...opts?.windows };
   const defaultHold = opts?.holdSec ?? DEFAULT_HOLD_SEC;
+  const repeatTail = Math.max(0, opts?.repeatTailSec ?? REPEAT_TAIL_SEC);
   const out: PromptSpec[] = [];
   for (const m of markers) {
     const check = m.check;
@@ -49,10 +59,8 @@ export function promptSpecs(markers: MarkerInput[], opts?: PromptSpecOptions): P
     if (check === "spend" && !opts?.includeSpend) continue;
     if (!Number.isFinite(m.seconds)) continue;
     const start = Math.max(0, m.seconds);
-    const end =
-      m.endSeconds !== undefined && Number.isFinite(m.endSeconds) && m.endSeconds > start
-        ? m.endSeconds
-        : start + windows[check];
+    const explicitEnd = m.endSeconds !== undefined && Number.isFinite(m.endSeconds) && m.endSeconds > start;
+    const end = explicitEnd ? m.endSeconds! + (check === "repeat" ? repeatTail : 0) : start + windows[check];
     const spec: PromptSpec = {
       markerId: m.id,
       check,

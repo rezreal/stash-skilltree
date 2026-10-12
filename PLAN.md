@@ -68,7 +68,9 @@ saved sessions — JSON `{"v":1,"sessions":n,"sec":{"eyes":12.3,...}}`.
 Prompt markers: primary tag carries `st.kind=prompt` and `st.check`
 (`repeat`, `gaze`, `action`, `spend`, plus `st.target`/`st.action`). The
 marker window (`seconds`..`end_seconds`) is when compliance is checked.
-`repeat`: title = phrase. `spend`: title = amount.
+`repeat`: title = phrase; the window stays open 3 s past an explicit end
+(the marker covers the clip saying it, the viewer answers after).
+`spend`: title = amount.
 
 ## Semantics
 

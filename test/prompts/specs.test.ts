@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { activeAt, promptSpecs } from "../../src/prompts/specs.ts";
+import { REPEAT_TAIL_SEC, activeAt, promptSpecs } from "../../src/prompts/specs.ts";
 import type { MarkerInput } from "../../src/prompts/types.ts";
 
 const m = (over: Partial<MarkerInput>): MarkerInput => ({ id: "x", title: "", seconds: 10, ...over });
@@ -19,6 +19,16 @@ describe("promptSpecs", () => {
     );
     assert.equal(specs[1]!.target, "eyes");
     assert.equal(specs[2]!.action, "nod");
+  });
+
+  it("keeps a repeat window open REPEAT_TAIL_SEC past an explicit end, for the answer", () => {
+    const markers = [
+      m({ id: "r", check: "repeat", title: "I obey", seconds: 10, endSeconds: 12.5 }),
+      m({ id: "g", check: "gaze", target: "eyes", seconds: 10, endSeconds: 12.5 }),
+    ];
+    const byId = (specs: ReturnType<typeof promptSpecs>) => Object.fromEntries(specs.map((s) => [s.markerId, s.end]));
+    assert.deepEqual(byId(promptSpecs(markers)), { r: 12.5 + REPEAT_TAIL_SEC, g: 12.5 });
+    assert.deepEqual(byId(promptSpecs(markers, { repeatTailSec: 0 })), { r: 12.5, g: 12.5 });
   });
 
   it("skips spend unless asked, unknown targets/actions, empty phrases and plain markers", () => {
