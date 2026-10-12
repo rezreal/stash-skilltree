@@ -1,5 +1,10 @@
 // Trigger pairs: a scene tagged "installed" must come before scenes of the
 // same performer tagged "used" with the same trigger.
+//
+// Sub-triggers are written "Family : Variant" (e.g. "Slave Mode : Cushion").
+// Using a variant also uses its family, so it needs the family installed too.
+// A family part made only of symbols ("⋇ : Snaps", "♬ : Chimes") is a
+// category, not a trigger, and imposes nothing.
 
 import type { Id, LibraryInput, SceneInput } from "./types.ts";
 import { normalizeTopic } from "./requirements.ts";
@@ -14,6 +19,23 @@ export interface TriggerEdge {
 /** Same normalization as topics: trimmed, lowercase, whitespace collapsed. */
 export function normalizeTrigger(name: string): string {
   return normalizeTopic(name);
+}
+
+const SUB_SEPARATOR = /\s+:\s+/;
+
+/**
+ * The families a trigger belongs to, outermost first, excluding the trigger
+ * itself: "slave mode : cushion" -> ["slave mode"]. Symbol-only parts are
+ * categories and are skipped.
+ */
+export function triggerFamilies(trigger: string): string[] {
+  const parts = normalizeTrigger(trigger).split(SUB_SEPARATOR);
+  const out: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const family = parts.slice(0, i).join(" : ");
+    if (/[\p{L}\p{N}]/u.test(family)) out.push(family);
+  }
+  return out;
 }
 
 export interface TriggerScenes {
@@ -48,11 +70,15 @@ export function triggerScenes(input: LibraryInput): Map<string, TriggerScenes> {
     for (const tagId of scene.tagIds) {
       const r = tagRole.get(tagId);
       if (!r) continue;
-      const k = `${r.trigger}\u0000${r.role}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      const e = entry(r.trigger);
-      (r.role === "installed" ? e.installed : e.used).push(scene);
+      // installing a variant does not install its family; using it uses both
+      const triggers = r.role === "used" ? [r.trigger, ...triggerFamilies(r.trigger)] : [r.trigger];
+      for (const t of triggers) {
+        const k = `${t}\u0000${r.role}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const e = entry(t);
+        (r.role === "installed" ? e.installed : e.used).push(scene);
+      }
     }
   }
   return new Map([...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
