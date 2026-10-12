@@ -3,6 +3,7 @@
 // rule's row), the slim
 // timeline above stash's control bar and useRecentChange.
 import type { SceneInput } from "../core/types.ts";
+import { reachableFraction } from "../play/session.ts";
 import type { SessionState, WatchPolicy } from "../play/types.ts";
 import { formatDuration, formatPercent } from "../player/format.ts";
 import { timelineDots, timelineSegments } from "../player/timeline.ts";
@@ -19,6 +20,7 @@ export function CountsWhen(props: { session: SessionState; policy: WatchPolicy; 
   const answered = session.prompts.length;
   const need = promptsNeeded(policy, props.prompts);
   const exposureMin = (props.previousExposureSec + session.exposureSec) / 60;
+  const reachable = reachableFraction(session);
 
   return (
     <div className="stp-panel">
@@ -32,6 +34,12 @@ export function CountsWhen(props: { session: SessionState; policy: WatchPolicy; 
             </span>
           </div>
           {bar(policy.attentionMin > 0 ? session.attendedFraction / policy.attentionMin : 1)}
+          <div className="stp-row stp-small">
+            <span className="stp-muted">Still reachable</span>
+            <span className={`stp-mono ${reachable < policy.attentionMin ? "stp-orange" : "stp-muted"}`}>
+              {reachable < policy.attentionMin ? "out of reach, " : ""}max {formatPercent(reachable)}
+            </span>
+          </div>
         </div>
       )}
       {policy.rules.includes("prompts") && props.prompts > 0 && (

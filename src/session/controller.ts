@@ -3,7 +3,7 @@
 // lock applies, how long a spend prompt stays open, what the compact banner
 // and the score chip say. Tested under node --test.
 import type { Id, SceneInput } from "../core/types.ts";
-import { exposureTarget, exposureTotal, isTerminal } from "../play/session.ts";
+import { exposureTarget, exposureTotal, isTerminal, reachableFraction } from "../play/session.ts";
 import type { SessionPhase, SessionState, WatchPolicy } from "../play/types.ts";
 import type { SpendPrompt } from "../player/markers.ts";
 import type { PauseCause as ViewPauseCause } from "../player/view.ts";
@@ -126,16 +126,22 @@ export interface ScoreChipView {
  * attention is with the video right now.
  */
 export function scoreChipView(
-  state: Pick<SessionState, "attendedFraction" | "exposureSec" | "priorExposureSec" | "phase">,
+  state: SessionState,
   policy: Pick<WatchPolicy, "rules" | "attentionMin" | "minMinutes">,
   attending: boolean,
 ): ScoreChipView {
   if (policy.rules.includes("attention")) {
+    // the share still reachable, not the share so far: it shows right away
+    // whether the rest of the clip can still make the threshold
+    const reachable = reachableFraction(state);
+    const lost = reachable < policy.attentionMin;
     const below = state.phase !== "ready" && !attending;
     return {
-      value: formatPercent(state.attendedFraction),
-      label: `attended, needs ${formatPercent(policy.attentionMin)}`,
-      tone: below ? "orange" : "blue",
+      value: `max ${formatPercent(reachable)}`,
+      label: lost
+        ? `attended at most, below the ${formatPercent(policy.attentionMin)} needed`
+        : `attended at most, needs ${formatPercent(policy.attentionMin)}`,
+      tone: lost || below ? "orange" : "blue",
     };
   }
   if (policy.rules.includes("exposure")) {

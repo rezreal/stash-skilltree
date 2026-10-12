@@ -101,11 +101,29 @@ describe("bannerNotice", () => {
 });
 
 describe("scoreChipView", () => {
-  const state = { attendedFraction: 0.934, exposureSec: 90, priorExposureSec: 600, phase: "playing" as const };
-  it("shows the attended share for attention clips", () => {
-    assert.deepEqual(scoreChipView(state, DEFAULT_POLICY, true), { value: "93%", label: "attended, needs 90%", tone: "blue" });
+  const base = createSession({ scene: scene("1", [], { durationSec: 100 }), policy: DEFAULT_POLICY, nowMs: 0 });
+  // at 50 s with 4 s missed: 46 attended, 50 still ahead
+  const state = {
+    ...base,
+    phase: "playing" as const,
+    exposureSec: 90,
+    priorExposureSec: 600,
+    lastVideoTime: 50,
+    attended: [{ start: 4, end: 50 }],
+    attendedFraction: 0.46,
+  };
+  it("shows the attended share still reachable for attention clips", () => {
+    assert.deepEqual(scoreChipView(state, DEFAULT_POLICY, true), { value: "max 96%", label: "attended at most, needs 90%", tone: "blue" });
     assert.equal(scoreChipView(state, DEFAULT_POLICY, false).tone, "orange");
     assert.equal(scoreChipView({ ...state, phase: "ready" }, DEFAULT_POLICY, false).tone, "blue");
+  });
+  it("turns orange once the threshold is out of reach", () => {
+    const lost = { ...state, attended: [{ start: 12, end: 50 }] };
+    assert.deepEqual(scoreChipView(lost, DEFAULT_POLICY, true), {
+      value: "max 88%",
+      label: "attended at most, below the 90% needed",
+      tone: "orange",
+    });
   });
   it("shows exposure minutes for loops", () => {
     const loop = { ...DEFAULT_POLICY, rules: ["exposure" as const], minMinutes: 30 };

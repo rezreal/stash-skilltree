@@ -89,6 +89,22 @@ function fraction(attended: Interval[], duration: number): number {
   return Math.min(1, intervalsLength(attended) / duration);
 }
 
+/**
+ * The best attended share still reachable: what is attended plus every
+ * not yet attended second from the current video time to the end. Ranked
+ * play can't seek, so missed time before now stays missed (a prompt
+ * replay may win some back, so this is a floor of what's possible).
+ * Without a known duration the end is now, i.e. the share so far.
+ */
+export function reachableFraction(state: SessionState): number {
+  const duration = effectiveDuration(state);
+  if (!(duration > 0)) return state.phase === "ready" ? 1 : 0;
+  const from = Math.min(duration, Math.max(0, state.lastVideoTime ?? 0));
+  let ahead = duration - from;
+  for (const iv of state.attended) ahead -= Math.max(0, Math.min(iv.end, duration) - Math.max(iv.start, from));
+  return Math.min(1, (intervalsLength(state.attended) + ahead) / duration);
+}
+
 // --- exposure -------------------------------------------------------------------
 
 /** Exposure needed: st.min_minutes, else one full play of the clip. */

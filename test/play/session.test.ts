@@ -7,6 +7,7 @@ import {
   createSession,
   exposureTotal,
   qualityScores,
+  reachableFraction,
   sessionQuality,
   step,
 } from "../../src/play/session.ts";
@@ -102,6 +103,24 @@ describe("session", () => {
     s = step(s, { type: "ended", nowMs: s.lastNowMs });
     assert.equal(s.phase, "aborted");
     assert.equal(s.abortReason, "attention-below-threshold");
+  });
+
+  it("reachableFraction: attended plus what is left of the clip", () => {
+    let s = start(100);
+    assert.equal(reachableFraction(s), 1);
+    // miss 0..1.5 (grace keeps playing), attend to 20
+    s = play(s, { from: 0, seconds: 20, attending: (t) => t > 1.5 });
+    assert.ok(Math.abs(reachableFraction(s) - 0.985) < 1e-9);
+    // seek forward over 20..50, attend 50..60, then back to 30: 30..50 is still ahead
+    s = step(s, { type: "tick", nowMs: s.lastNowMs + TICK_MS, videoTime: 50, attending: true, playing: true });
+    s = play(s, { from: 50, seconds: 10 });
+    assert.ok(Math.abs(reachableFraction(s) - (18.5 + 10 + 40) / 100) < 1e-9);
+    s = step(s, { type: "tick", nowMs: s.lastNowMs + TICK_MS, videoTime: 30, attending: true, playing: true });
+    assert.ok(Math.abs(reachableFraction(s) - (18.5 + 10 + 60) / 100) < 1e-9);
+    // unknown duration: the share so far
+    let u = start(0);
+    u = play(u, { from: 0, seconds: 10, attending: (t) => t > 1 });
+    assert.ok(Math.abs(reachableFraction(u) - 0.9) < 1e-9);
   });
 
   it("grace -> pause -> resume", () => {
