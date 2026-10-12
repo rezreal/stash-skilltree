@@ -34,7 +34,7 @@ import urllib.request
 # Must match what the plugin can verify.
 
 GAZE_TARGETS = [
-    "eyes", "face", "mouth", "hands", "chest", "torso", "hips", "legs",
+    "eyes", "face", "mouth", "hands", "chest", "torso", "hips", "groin", "legs",
     "feet_floor", "screen_center", "off_screen",
 ]
 ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still"]
@@ -55,7 +55,7 @@ computer can verify, of these four types:
   "say ..."). "phrase" = the exact words the viewer must say, copied verbatim
   from the transcript.
 - gaze: the viewer is told where to look. "target" is one of:
-  eyes, face, mouth, hands, chest, torso, hips, legs, feet_floor (floor in front
+  eyes, face, mouth, hands, chest, torso, hips, groin, legs, feet_floor (floor in front
   of the speaker's feet), screen_center, off_screen (look away / down / close to
   nothing on screen).
 - action: the viewer is told to do a visible body action. "action" is one of:

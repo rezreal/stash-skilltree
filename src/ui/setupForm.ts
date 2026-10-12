@@ -25,6 +25,7 @@ export const GAZE_TARGETS = [
   "chest",
   "torso",
   "hips",
+  "groin",
   "legs",
   "feet_floor",
   "screen_center",

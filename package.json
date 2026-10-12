@@ -17,5 +17,9 @@
     "@types/w3c-web-usb": "^1.0.14",
     "esbuild": "^0.28.2",
     "typescript": "~5.9.0"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0",
+    "vosk-browser": "^0.0.8"
   }
 }
