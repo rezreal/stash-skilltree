@@ -11,10 +11,14 @@ export interface NodePanelProps {
   /** visibility in fog mode, undefined in author view */
   fog?: Visibility;
   performerId?: Id;
+  /** tag id -> name, for the edit buttons */
+  tagNames?: ReadonlyMap<Id, string>;
+  /** author view: open a tag in Setup */
+  onEditTag?: (tagId: Id) => void;
 }
 
 export function NodePanel(props: NodePanelProps) {
-  const { graph, progress, selected, fog, performerId } = props;
+  const { graph, progress, selected, fog, performerId, tagNames, onEditTag } = props;
   const node = selected ? graph.nodes.get(selected) : undefined;
 
   if (!node || fog === "hidden") {
@@ -68,6 +72,29 @@ export function NodePanel(props: NodePanelProps) {
           </>
         )}
       </dl>
+
+      {onEditTag && node.tagIds.length > 0 && (
+        <>
+          <h4 className="skilltree-panel-subtitle">Edit tags</h4>
+          <ul className="skilltree-node-tags">
+            {node.tagIds.map((id) => {
+              const name = tagNames?.get(id) ?? `Tag ${id}`;
+              return (
+                <li key={id}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onEditTag(id)}
+                    aria-label={`Edit tag ${name}`}
+                  >
+                    {name}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
 
       <h4 className="skilltree-panel-subtitle">
         Scenes{" "}

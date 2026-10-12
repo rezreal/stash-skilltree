@@ -22,3 +22,5 @@ export type {
 } from "./fields.ts";
 export { classifyTags, loadLibrary, mapScene, DEFAULT_PAGE_SIZE } from "./load.ts";
 export type { LoadOptions } from "./load.ts";
+export { isEmptyChange, loadAllTags, mapSetupTag, tagFieldsInput, updateTagFields, updateTagsFields } from "./tags.ts";
+export type { FieldChange, FieldValue, SetupTag, TagFieldsChange } from "./tags.ts";

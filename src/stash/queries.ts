@@ -55,6 +55,35 @@ export const FIND_SKILL_SCENES = /* GraphQL */ `
   }
 `;
 
+/** Every tag, for the setup panel (tag list, search, scene counts). */
+export const FIND_ALL_TAGS = /* GraphQL */ `
+  query SkilltreeAllTags($filter: FindFilterType) {
+    findTags(filter: $filter) {
+      count
+      tags {
+        id
+        name
+        aliases
+        scene_count
+        custom_fields
+      }
+    }
+  }
+`;
+
+/**
+ * Writes custom fields of one tag. CustomFieldsInput.partial only touches the
+ * keys it names; remove deletes keys. Stash rejects a key in both.
+ */
+export const TAG_UPDATE_FIELDS = /* GraphQL */ `
+  mutation SkilltreeTagFields($input: TagUpdateInput!) {
+    tagUpdate(input: $input) {
+      id
+      custom_fields
+    }
+  }
+`;
+
 export function stTagsVariables(): Record<string, unknown> {
   return {
     filter: { per_page: -1, sort: "id", direction: "ASC" },
@@ -67,6 +96,10 @@ export function skillScenesVariables(tagIds: string[], page: number, perPage: nu
     filter: { page, per_page: perPage, sort: "id", direction: "ASC" },
     scene_filter: { tags: { value: tagIds, modifier: "INCLUDES", depth: 0 } },
   };
+}
+
+export function allTagsVariables(): Record<string, unknown> {
+  return { filter: { per_page: -1, sort: "name", direction: "ASC" } };
 }
 
 // --- response shapes -------------------------------------------------------
@@ -103,4 +136,17 @@ export interface RawScene {
 
 export interface FindSkillScenesResult {
   findScenes: { count: number; scenes: RawScene[] };
+}
+
+export interface RawSetupTag extends RawTag {
+  aliases: string[] | null;
+  scene_count: number | null;
+}
+
+export interface FindAllTagsResult {
+  findTags: { count: number; tags: RawSetupTag[] };
+}
+
+export interface TagUpdateFieldsResult {
+  tagUpdate: { id: string; custom_fields: CustomFields | null } | null;
 }

@@ -1,5 +1,6 @@
-// The /plugin/skilltree page: loads the library once, derives graph,
-// progress, fog, layout and lint, and lays out tree, panels and table.
+// The /plugin/skilltree page: loads the library, derives graph, progress,
+// fog, layout and lint, and lays out tree, panels and table. In author view
+// a Setup section configures the tags the tree is built from.
 import type { ChangeEvent } from "react";
 import type { Id, LibraryInput, NodeKey } from "../core/types.ts";
 import {
@@ -17,11 +18,15 @@ import { RadialTree } from "./RadialTree.tsx";
 import { NodePanel } from "./NodePanel.tsx";
 import { LintPanel } from "./LintPanel.tsx";
 import { TopicTable } from "./TopicTable.tsx";
+import { SetupView, type SetupFocus } from "./SetupView.tsx";
 
 type LoadState =
   | { status: "loading"; message: string }
   | { status: "error"; error: string }
-  | { status: "ready"; library: LibraryInput };
+  /** a reload keeps the previous library on screen until the new one is in */
+  | { status: "ready"; library: LibraryInput; refreshing?: string; refreshError?: string };
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 function useLibrary(): { state: LoadState; reload: () => void } {
   const [attempt, setAttempt] = React.useState(0);
@@ -29,17 +34,24 @@ function useLibrary(): { state: LoadState; reload: () => void } {
 
   React.useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading", message: "Loading library…" });
+    const progress = (message: string) =>
+      setState((prev) => (prev.status === "ready" ? { status: "ready", library: prev.library, refreshing: message } : { status: "loading", message }));
+    progress("Loading library…");
     loadLibrary(createClient(), {
       onProgress: (message) => {
-        if (!cancelled) setState({ status: "loading", message });
+        if (!cancelled) progress(message);
       },
     }).then(
       (library) => {
         if (!cancelled) setState({ status: "ready", library });
       },
       (err: unknown) => {
-        if (!cancelled) setState({ status: "error", error: err instanceof Error ? err.message : String(err) });
+        if (cancelled) return;
+        setState((prev) =>
+          prev.status === "ready"
+            ? { status: "ready", library: prev.library, refreshError: errorText(err) }
+            : { status: "error", error: errorText(err) },
+        );
       },
     );
     return () => {
@@ -47,7 +59,8 @@ function useLibrary(): { state: LoadState; reload: () => void } {
     };
   }, [attempt]);
 
-  return { state, reload: () => setAttempt((n) => n + 1) };
+  const reload = React.useCallback(() => setAttempt((n) => n + 1), []);
+  return { state, reload };
 }
 
 export function SkilltreePage() {
@@ -73,14 +86,37 @@ export function SkilltreePage() {
       </div>
     );
   }
-  return <SkilltreeView library={state.library} defaultNeed={defaultNeed} />;
+  return (
+    <SkilltreeView
+      library={state.library}
+      defaultNeed={defaultNeed}
+      refreshing={state.refreshing}
+      refreshError={state.refreshError}
+      onReload={reload}
+    />
+  );
 }
 
-function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
-  const { library, defaultNeed } = props;
+interface SkilltreeViewProps {
+  library: LibraryInput;
+  defaultNeed?: number;
+  /** progress message while the library reloads */
+  refreshing?: string;
+  refreshError?: string;
+  onReload: () => void;
+}
+
+type Section = "tree" | "setup";
+
+function SkilltreeView(props: SkilltreeViewProps) {
+  const { library, defaultNeed, refreshing, refreshError, onReload } = props;
   const [authorView, setAuthorView] = React.useState(true);
   const [performerId, setPerformerId] = React.useState<Id | undefined>(undefined);
   const [selected, setSelected] = React.useState<NodeKey | undefined>(undefined);
+  const [section, setSection] = React.useState<Section>("tree");
+  // Setup stays mounted once opened, so switching sections keeps its state.
+  const [setupOpened, setSetupOpened] = React.useState(false);
+  const [setupFocus, setSetupFocus] = React.useState<SetupFocus | undefined>(undefined);
 
   const graph = React.useMemo(() => buildGraph(library, { defaultNeed }), [library, defaultNeed]);
   const progress = React.useMemo(() => computeProgress(graph, { performerId }), [graph, performerId]);
@@ -89,6 +125,7 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
   const issues = React.useMemo(() => lintGraph(graph, library), [graph, library]);
   const performers = React.useMemo(() => performerOptions(graph), [graph]);
   const depthOf = React.useCallback((topic: string) => topicDepth(graph, progress, topic), [graph, progress]);
+  const tagNames = React.useMemo(() => libraryTagNames(library), [library]);
 
   const counts = countBySeverity(issues);
   let complete = 0;
@@ -96,6 +133,12 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
 
   const fog = authorView ? undefined : (selected ? visibility.get(selected) : undefined);
   const onPerformer = (e: ChangeEvent<HTMLSelectElement>) => setPerformerId(e.target.value || undefined);
+  const showSetup = authorView && section === "setup";
+  const openSetup = (tagId?: Id) => {
+    setSection("setup");
+    setSetupOpened(true);
+    if (tagId !== undefined) setSetupFocus((prev) => ({ tagId, seq: (prev?.seq ?? 0) + 1 }));
+  };
 
   return (
     <div className="skilltree">
@@ -113,6 +156,21 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
           )}
         </ul>
         <div className="skilltree-controls">
+          {authorView && (
+            <div className="btn-group btn-group-sm skilltree-sections" role="group" aria-label="Section">
+              {(["tree", "setup"] as Section[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`btn ${section === s ? "btn-primary" : "btn-secondary"}`}
+                  aria-pressed={section === s}
+                  onClick={() => (s === "setup" ? openSetup() : setSection(s))}
+                >
+                  {s === "tree" ? "Tree" : "Setup"}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="custom-control custom-switch">
             <input
               type="checkbox"
@@ -141,11 +199,35 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
         </div>
       </header>
 
-      {graph.nodes.size === 0 ? (
-        <p className="skilltree-empty text-muted">
-          No interest tags yet. Give tags the custom fields <code>st.kind=interest</code>, <code>st.topic</code> and{" "}
-          <code>st.level</code> to grow the tree.
+      {refreshing !== undefined && (
+        <p className="skilltree-refreshing text-muted" role="status">
+          <span className="spinner-border spinner-border-sm mr-2" aria-hidden="true" />
+          Reloading library: {refreshing}
         </p>
+      )}
+      {refreshError !== undefined && (
+        <div className="skilltree-refreshing" role="alert">
+          <span className="text-danger">Could not reload the library: {refreshError}</span>{" "}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onReload}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {setupOpened && <SetupView hidden={!showSetup} focus={setupFocus} onLibraryChanged={onReload} />}
+
+      {showSetup ? null : graph.nodes.size === 0 ? (
+        <div className="skilltree-empty text-muted">
+          <p>
+            No interest tags yet. Give tags the custom fields <code>st.kind=interest</code>, <code>st.topic</code> and{" "}
+            <code>st.level</code> to grow the tree.
+          </p>
+          {authorView && (
+            <button type="button" className="btn btn-primary" onClick={() => openSetup()}>
+              Set up tags
+            </button>
+          )}
+        </div>
       ) : (
         <>
           <div className="skilltree-main">
@@ -162,8 +244,16 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
               <Legend authorView={authorView} />
             </div>
             <aside className="skilltree-side">
-              <NodePanel graph={graph} progress={progress} selected={selected} fog={fog} performerId={performerId} />
-              {authorView && <LintPanel issues={issues} onSelect={setSelected} />}
+              <NodePanel
+                graph={graph}
+                progress={progress}
+                selected={selected}
+                fog={fog}
+                performerId={performerId}
+                tagNames={tagNames}
+                onEditTag={authorView ? openSetup : undefined}
+              />
+              {authorView && <LintPanel issues={issues} onSelect={setSelected} tagNames={tagNames} onEditTag={openSetup} />}
             </aside>
           </div>
           {authorView && (
@@ -173,6 +263,15 @@ function SkilltreeView(props: { library: LibraryInput; defaultNeed?: number }) {
       )}
     </div>
   );
+}
+
+/** names of every st.* tag the library knows, for edit buttons */
+function libraryTagNames(library: LibraryInput): Map<Id, string> {
+  const names = new Map<Id, string>();
+  for (const t of library.interestTags) names.set(t.id, t.name);
+  for (const t of library.triggerTags) names.set(t.id, t.name);
+  for (const m of library.malformed) names.set(m.tagId, m.tagName);
+  return names;
 }
 
 function Legend(props: { authorView: boolean }) {
