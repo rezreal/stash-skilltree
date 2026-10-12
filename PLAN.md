@@ -151,6 +151,10 @@ Watch policy = rules composed per scene from its tags:
   (`SUSTAINED_MIN_SHARE`) of the evidence time was on target (and at least
   `holdSec` of it); time without evidence neither counts nor is required.
   The banner shows that share ("eyes closed 82% · need 75%").
+  While an eyes_closed prompt runs the video dims a little (setting
+  `eyesClosedDim`, default 30 %, capped at 60 % so the screen still lights
+  the face for the webcam; 0.9 s fade in and out): the cue to close them and
+  what a peek sees. The bar and the prompt banner stay bright.
 - `track` — funscript + BLE distance sensor. Sections: stroke (range +
   turning-point timing), hold (time inside band; flat with depth), ramp
   (sample-wise with lag compensation), idle (flat near 0, not scored, used

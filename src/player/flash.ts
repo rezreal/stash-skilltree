@@ -39,3 +39,18 @@ export function snapFlashIntensity(setting: unknown): number {
   const pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : DEFAULT_SNAP_FLASH;
   return pct / 100;
 }
+
+export const DEFAULT_EYES_CLOSED_DIM = 30;
+/** the dim never goes darker than this: the screen stays visible (and lights the face for the webcam) */
+export const MAX_EYES_CLOSED_DIM = 60;
+
+/**
+ * Opacity (0..1) of the black layer over the video while an "eyes closed"
+ * prompt runs, for the eyesClosedDim setting in percent: unset or invalid ->
+ * 30 %, clamped to 0..60, 0 = off.
+ */
+export function eyesClosedDimOpacity(setting: unknown): number {
+  const n = typeof setting === "number" ? setting : typeof setting === "string" && setting.trim() !== "" ? Number(setting) : NaN;
+  const pct = Number.isFinite(n) ? Math.min(MAX_EYES_CLOSED_DIM, Math.max(0, n)) : DEFAULT_EYES_CLOSED_DIM;
+  return pct / 100;
+}

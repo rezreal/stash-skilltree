@@ -46,6 +46,7 @@ import { FlashOverlay } from "../player/FlashOverlay.tsx";
 import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
+import { eyesClosedDimOpacity } from "../player/flash.ts";
 import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
 import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
@@ -285,7 +286,8 @@ function SessionOverlay(props: {
   test: boolean;
 }) {
   const { handle, data, test } = props;
-  const settings = checksSettings(usePluginSettings());
+  const rawSettings = usePluginSettings();
+  const settings = checksSettings(rawSettings);
   const required = settings.webcamRequired;
   const permission = useCameraPermission();
 
@@ -410,6 +412,8 @@ function SessionOverlay(props: {
   const presence = viewer.present();
   // the leading gaze prompt replaces the gaze-on-video target while active
   const prompt = checks.promptAttention();
+  const dimOpacity = eyesClosedDimOpacity(rawSettings.eyesClosedDim);
+  const dimOn = !finished && dimOpacity > 0 && prompt?.spec.target === "eyes_closed";
   const texts = attentionTexts(attention.reading, presence, required, prompt);
   const attendingNow = sessionAttending(attention.reading, presence, { required, prompt });
 
@@ -449,6 +453,12 @@ function SessionOverlay(props: {
 
   return (
     <>
+      {/* a light dim while an "eyes closed" prompt runs: the cue to close them, and what a peek sees */}
+      <div
+        className={`stp-sp-dim${dimOn ? " is-on" : ""}`}
+        style={dimOn ? { opacity: dimOpacity } : undefined}
+        aria-hidden="true"
+      />
       <GazeDot getContainer={getContainer} />
       <FlashOverlay getContainer={getContainer} getVideoTime={getVideoTime} events={snaps} intensity={flashIntensity} />
       {!finished && track && <TrackGuide getContainer={getContainer} getVideoTime={getVideoTime} track={track} />}

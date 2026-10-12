@@ -40,6 +40,15 @@ settings:
       mouse (the pointer stands in for gaze, for testing). Calibrate at
       /skilltree/calibrate.
     type: STRING
+  eyesClosedDim:
+    displayName: Dim while eyes are closed (%)
+    description: >-
+      While a marker asks you to close your eyes, the video dims a little
+      (fading in and out over about a second): the cue to close them, and
+      what you see if you peek. Default 30; 0 turns it off; never darker
+      than 60 so the screen stays visible and still lights your face for
+      the webcam.
+    type: NUMBER
   snapFlash:
     displayName: Snap flash brightness (%)
     description: >-

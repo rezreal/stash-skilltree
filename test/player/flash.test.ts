@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createFlashLimiter, snapFlashIntensity } from "../../src/player/flash.ts";
+import { createFlashLimiter, eyesClosedDimOpacity, snapFlashIntensity } from "../../src/player/flash.ts";
 
 test("limiter: at most 3 flashes per second", () => {
   const l = createFlashLimiter({ maxPerSecond: 3 });
@@ -45,4 +45,13 @@ test("snapFlashIntensity: default 60 %, clamped, 0 = off", () => {
   assert.equal(snapFlashIntensity("80"), 0.8);
   assert.equal(snapFlashIntensity(250), 1);
   assert.equal(snapFlashIntensity(-5), 0);
+});
+
+test("eyesClosedDimOpacity: default 30 %, never darker than 60 %, 0 = off", () => {
+  assert.equal(eyesClosedDimOpacity(undefined), 0.3);
+  assert.equal(eyesClosedDimOpacity("x"), 0.3);
+  assert.equal(eyesClosedDimOpacity(0), 0);
+  assert.equal(eyesClosedDimOpacity("45"), 0.45);
+  assert.equal(eyesClosedDimOpacity(100), 0.6);
+  assert.equal(eyesClosedDimOpacity(-1), 0);
 });
