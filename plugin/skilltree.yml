@@ -35,3 +35,14 @@ settings:
       mouse (the pointer stands in for gaze, for testing). Calibrate at
       /skilltree/calibrate.
     type: STRING
+  snapFlash:
+    displayName: Snap flash brightness (%)
+    description: >-
+      When a scene's funscript has a "snap" axis, the video flashes white at
+      each snap while the clip plays. Brightness 0-100, default 60; 0 turns
+      the flashes off. For photosensitivity safety there are never more than
+      3 flashes in any one second (the WCAG 2.3.1 seizure threshold); snaps
+      beyond that are skipped. With "reduce motion" set in your system, the
+      flash is a much dimmer, slower pulse at most once per second. Turn this
+      off if flashing light affects you.
+    type: NUMBER

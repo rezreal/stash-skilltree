@@ -1069,3 +1069,43 @@
   .skilltree-play .stp-stage:has(.stp-overlay.is-dark) .stp-video { position: absolute; inset: 0; }
   .skilltree-play .stp-stage:has(.stp-overlay.is-dark) .stp-overlay { position: relative; }
 }
+
+/* --- snap flashes ----------------------------------------------------------------------------
+   Portalled into the video container, which may be stash's own player outside .skilltree-play,
+   so these rules are not scoped (the stp-snap- prefix keeps them apart). The outer layer's inline
+   opacity is the brightness setting; the pulse fades from white to clear. At most 3 per second
+   (enforced in code, WCAG 2.3.1). Reduced motion: a much dimmer, slower pulse, 1 per second. */
+
+.stp-snap-flash {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1; /* over the video, under hint banners and dialogs */
+}
+
+.stp-snap-flash-pulse {
+  animation: stp-snap-flash 150ms ease-out forwards;
+  background: #fff;
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+@keyframes stp-snap-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes stp-snap-pulse {
+  0% { opacity: 0; }
+  40% { opacity: 0.25; }
+  100% { opacity: 0; }
+}
+
+.stp-snap-flash-pulse.is-reduced { animation: stp-snap-pulse 700ms ease-in-out forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stp-snap-flash-pulse { animation: stp-snap-pulse 700ms ease-in-out forwards; }
+}
+
+.skilltree-play .stp-snap-count { margin-top: 4px; }

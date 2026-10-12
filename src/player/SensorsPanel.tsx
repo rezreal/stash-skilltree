@@ -7,7 +7,11 @@ import { CALIBRATE_ROUTE } from "./common.tsx";
 import { attentionSourceLabel, gazeChipView, gazeSensorView, type AttentionReading } from "./gazeView.ts";
 import { measuredRate, useGaze, useShowGaze } from "./useGaze.ts";
 
-export function SensorsPanel(props: { reading: AttentionReading }) {
+export function SensorsPanel(props: {
+  reading: AttentionReading;
+  /** snap flashes in the clip (funscript snap axis), shown when > 0 */
+  snapFlashes?: number;
+}) {
   const { Link } = router();
   const { reading } = props;
   const gaze = useGaze();
@@ -40,6 +44,12 @@ export function SensorsPanel(props: { reading: AttentionReading }) {
         <span>{attentionSourceLabel(reading)}</span>
         <span className={reading.attending ? "stp-blue" : "stp-orange"}>{reading.attending ? "with you" : "away"}</span>
       </div>
+      {!!props.snapFlashes && (
+        <div className="stp-row stp-small stp-snap-count">
+          <span className="stp-muted">Snap flashes</span>
+          <span className="stp-mono">{props.snapFlashes} in this clip</span>
+        </div>
+      )}
       {status && view && (
         <div className="stp-col stp-gap-sm stp-sensor-block">
           <div className="stp-row">

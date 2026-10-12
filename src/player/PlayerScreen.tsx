@@ -30,6 +30,7 @@ import {
   formatSignedCoins,
   nodeLabel,
 } from "./format.ts";
+import { FlashOverlay } from "./FlashOverlay.tsx";
 import { GazeDot } from "./GazeDot.tsx";
 import { graceText, pauseReasonText } from "./gazeView.ts";
 import { HoldButton } from "./HoldButton.tsx";
@@ -38,6 +39,7 @@ import { SensorsPanel } from "./SensorsPanel.tsx";
 import { timelineDots, timelineSegments } from "./timeline.ts";
 import { useAttentionSource } from "./useAttentionSource.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
+import { useSnapEvents, useSnapFlashIntensity } from "./useSnapEvents.ts";
 import {
   abortReasonText,
   baseLabel,
@@ -149,6 +151,8 @@ function PlayerSession(props: SessionProps) {
   const exposureOnly = isExposureOnly(policy);
   const spends = React.useMemo(() => spendPrompts(scene.markers), [scene]);
   const prompts = React.useMemo(() => promptMarkers(scene.markers), [scene]);
+  const snaps = useSnapEvents(scene.id, scene.interactive);
+  const flashIntensity = useSnapFlashIntensity();
 
   const [session, dispatch] = React.useReducer(step, undefined, () =>
     createSession({ scene, policy, nowMs: Date.now(), priorExposureSec: previousExposure(scene) }),
@@ -494,6 +498,12 @@ function PlayerSession(props: SessionProps) {
               </svg>
             </button>
             <GazeDot getContainer={() => containerRef.current} />
+            <FlashOverlay
+              getContainer={() => containerRef.current}
+              getVideoTime={() => videoRef.current?.currentTime}
+              events={snaps}
+              intensity={flashIntensity}
+            />
 
             {session.phase === "ready" && !videoError && (
               <div className="stp-hint-banner" role="status">
@@ -596,7 +606,7 @@ function PlayerSession(props: SessionProps) {
             previousExposureSec={previousExposure(scene)}
           />
 
-          <SensorsPanel reading={attention.reading} />
+          <SensorsPanel reading={attention.reading} snapFlashes={flashIntensity > 0 ? snaps.length : 0} />
         </aside>
       </main>
     </div>
