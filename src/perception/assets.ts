@@ -27,8 +27,12 @@ export const ASSETS = {
    * model must get a new name or users keep the old one.
    */
   voskModel: "vosk/vosk-model-small-en-us-0.15.tar.gz",
-  /** AudioWorklet that taps the mic (src/perception/speech-worklet.js) */
-  speechWorklet: "vosk/speech-worklet.js",
+  /**
+   * AudioWorklet that taps the mic (src/perception/speech-worklet.js). Stash
+   * serves assets without Cache-Control, so bump ?v= whenever the file
+   * changes or browsers keep running the cached copy.
+   */
+  speechWorklet: "vosk/speech-worklet.js?v=2",
 } as const;
 
 /** Absolute URL of the plugin's asset root, with a trailing slash. */

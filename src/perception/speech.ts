@@ -237,7 +237,7 @@ export function createSpeech(opts: SpeechOptions = {}): Speech {
             processorOptions: { chunkSize: 4096 },
           });
           node.port.onmessage = (e: MessageEvent) => {
-            if (e.data instanceof Float32Array) feed(e.data);
+            if (e.data instanceof Float32Array && e.data.length > 0) feed(e.data);
           };
           chain.worklet = node;
           tap = node;

@@ -13,7 +13,10 @@ class SkilltreeSpeechTap extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const size = (options && options.processorOptions && options.processorOptions.chunkSize) || 4096;
-    this.buf = new Float32Array(size);
+    // kept apart from buf: posting transfers buf.buffer, which detaches buf
+    // (its length reads 0 afterwards)
+    this.size = Math.max(1, Math.floor(size));
+    this.buf = new Float32Array(this.size);
     this.n = 0;
     this.running = true;
     this.port.onmessage = (e) => {
@@ -33,7 +36,7 @@ class SkilltreeSpeechTap extends AudioWorkletProcessor {
         i += k;
         if (this.n === this.buf.length) {
           this.port.postMessage(this.buf, [this.buf.buffer]);
-          this.buf = new Float32Array(this.buf.length);
+          this.buf = new Float32Array(this.size);
           this.n = 0;
         }
       }
