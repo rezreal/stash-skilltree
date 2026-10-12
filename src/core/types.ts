@@ -61,6 +61,8 @@ export interface SceneInput {
   completions: number;
   earned: number;
   spent: number;
+  /** st.exposure_seconds: loop listening time stored so far */
+  exposureSec?: number;
   markers: MarkerInput[];
 }
 

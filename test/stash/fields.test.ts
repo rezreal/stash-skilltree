@@ -208,3 +208,9 @@ describe("sceneProgressFields", () => {
     );
   });
 });
+
+it("sceneProgressFields reads stored loop exposure", () => {
+  assert.equal(sceneProgressFields({ "st.exposure_seconds": "1830.5" }).exposureSec, 1830.5);
+  assert.equal(sceneProgressFields({ "st.exposure_seconds": 0 }).exposureSec, undefined);
+  assert.equal(sceneProgressFields({}).exposureSec, undefined);
+});

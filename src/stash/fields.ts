@@ -168,6 +168,7 @@ export interface SceneProgressFields {
   completions: number;
   earned: number;
   spent: number;
+  exposureSec?: number;
 }
 
 /** Progress the plugin wrote to a scene. Unparseable numbers count as 0. */
@@ -180,5 +181,7 @@ export function sceneProgressFields(customFields: CustomFields | null | undefine
   };
   const completedAt = fieldString(f["st.completed_at"]);
   if (completedAt !== undefined) out.completedAt = completedAt;
+  const exposure = fieldNumber(f["st.exposure_seconds"]);
+  if (exposure !== undefined && exposure > 0) out.exposureSec = exposure;
   return out;
 }
