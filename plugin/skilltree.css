@@ -1,0 +1,522 @@
+/* Skilltree plugin. Everything is scoped under .skilltree so stash's own
+   pages are never affected. Fits stash's dark Bootstrap 4 theme. */
+
+.skilltree {
+  --st-complete: #5b9df0;
+  --st-open: #f0a04b;
+  --st-gold: #e3c16f;
+  --st-locked: #4a545e;
+  --st-locked-line: #6b7782;
+  --st-text: #f5f8fa;
+  --st-muted: #a7b6c2;
+  --st-node-bg: #26323b;
+  --st-panel-bg: rgba(16, 22, 26, 0.35);
+  --st-border: rgba(138, 155, 168, 0.25);
+  --st-error: #e5534b;
+  --st-warning: var(--st-open);
+
+  color: var(--st-text);
+  margin: 0 auto;
+  max-width: 1600px;
+  padding: 1rem 15px 2rem;
+}
+
+/* --- header ------------------------------------------------------------- */
+
+.skilltree-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.skilltree-title {
+  font-size: 1.6rem;
+  margin: 0;
+}
+
+.skilltree-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--st-muted);
+}
+
+.skilltree-stats b {
+  color: var(--st-text);
+}
+
+.skilltree-stats .is-error b {
+  color: var(--st-error);
+}
+
+.skilltree-stats .is-warning b {
+  color: var(--st-warning);
+}
+
+.skilltree-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-left: auto;
+}
+
+.skilltree-performer {
+  min-width: 12rem;
+  width: auto;
+}
+
+.skilltree-status {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.skilltree-empty {
+  padding: 2rem 0;
+}
+
+/* --- main grid: tree + side panel ---------------------------------------- */
+
+.skilltree-main {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: start;
+}
+
+.skilltree-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.skilltree-panel {
+  background: var(--st-panel-bg);
+  border: 1px solid var(--st-border);
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+}
+
+.skilltree-panel-title {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.skilltree-panel-subtitle {
+  font-size: 0.95rem;
+  margin: 0.75rem 0 0.4rem;
+}
+
+.skilltree-tree-wrap {
+  min-width: 0;
+}
+
+/* --- tree ---------------------------------------------------------------- */
+
+.skilltree-tree {
+  display: block;
+  height: auto;
+  max-height: 85vh;
+  width: 100%;
+  font-family: inherit;
+}
+
+.skilltree-ring {
+  fill: none;
+  stroke: var(--st-border);
+  stroke-dasharray: 3 5;
+}
+
+.skilltree-ring-label {
+  fill: var(--st-muted);
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.skilltree-topic-label {
+  fill: var(--st-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.skilltree-edge {
+  stroke: var(--st-locked-line);
+  stroke-width: 1.5;
+}
+
+.skilltree-edge.is-explicit {
+  stroke-dasharray: 5 4;
+}
+
+.skilltree-edge.is-met {
+  stroke: var(--st-complete);
+}
+
+.skilltree-arrow {
+  fill: var(--st-locked-line);
+}
+
+.skilltree-junction {
+  fill: var(--st-locked-line);
+}
+
+.skilltree-junction.is-met {
+  fill: var(--st-complete);
+}
+
+.skilltree-junction-cost {
+  fill: var(--st-gold);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+.skilltree-stub {
+  stroke: var(--st-muted);
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+  stroke-width: 2;
+  opacity: 0.7;
+}
+
+.skilltree-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.skilltree-node-disc {
+  fill: var(--st-locked);
+  stroke: var(--st-locked-line);
+  stroke-width: 2;
+  transition: stroke-width 0.15s;
+}
+
+.skilltree-node-text {
+  fill: var(--st-text);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.skilltree-node-level {
+  fill: var(--st-muted);
+  font-size: 8.5px;
+  pointer-events: none;
+}
+
+.skilltree-node.is-complete .skilltree-node-disc {
+  fill: var(--st-complete);
+  stroke: var(--st-complete);
+}
+
+.skilltree-node.is-complete .skilltree-node-text {
+  fill: #0d1a26;
+}
+
+.skilltree-node.is-open .skilltree-node-disc {
+  fill: var(--st-node-bg);
+  stroke: var(--st-open);
+  stroke-width: 3;
+}
+
+.skilltree-node.is-ahead {
+  opacity: 0.5;
+}
+
+.skilltree-node.is-ahead .skilltree-node-disc {
+  fill: var(--st-node-bg);
+  stroke-dasharray: 3 3;
+}
+
+.skilltree-node.is-gate .skilltree-node-disc {
+  fill: var(--st-node-bg);
+  stroke: var(--st-gold);
+  stroke-width: 3;
+}
+
+.skilltree-node.is-gate .skilltree-node-text {
+  fill: var(--st-gold);
+}
+
+.skilltree-node-halo {
+  fill: none;
+  stroke: var(--st-text);
+  stroke-width: 1.5;
+}
+
+.skilltree-node:hover .skilltree-node-disc,
+.skilltree-node:focus .skilltree-node-disc {
+  stroke-width: 4;
+}
+
+.skilltree-node:focus-visible .skilltree-node-halo,
+.skilltree-node:focus .skilltree-node-disc {
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6));
+}
+
+/* --- legend -------------------------------------------------------------- */
+
+.skilltree-legend {
+  color: var(--st-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.25rem 1rem;
+  justify-content: center;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.skilltree-swatch {
+  border: 2px solid var(--st-locked-line);
+  border-radius: 50%;
+  display: inline-block;
+  height: 0.8rem;
+  margin-right: 0.35rem;
+  vertical-align: -0.1rem;
+  width: 0.8rem;
+  background: var(--st-locked);
+}
+
+.skilltree-swatch.is-complete {
+  background: var(--st-complete);
+  border-color: var(--st-complete);
+}
+
+.skilltree-swatch.is-open {
+  background: var(--st-node-bg);
+  border-color: var(--st-open);
+}
+
+.skilltree-swatch.is-ahead {
+  background: var(--st-node-bg);
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.skilltree-swatch.is-gate {
+  background: var(--st-node-bg);
+  border-color: var(--st-gold);
+}
+
+/* --- node panel ---------------------------------------------------------- */
+
+.skilltree-facts {
+  display: grid;
+  gap: 0.2rem 0.75rem;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 0;
+}
+
+.skilltree-facts dt {
+  color: var(--st-muted);
+  font-weight: normal;
+}
+
+.skilltree-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.skilltree-state {
+  border-radius: 0.2rem;
+  font-size: 0.8rem;
+  padding: 0.05rem 0.4rem;
+  background: var(--st-locked);
+}
+
+.skilltree-state.is-complete {
+  background: var(--st-complete);
+  color: #0d1a26;
+}
+
+.skilltree-state.is-open {
+  background: var(--st-open);
+  color: #26180a;
+}
+
+.skilltree-state.is-gate {
+  background: var(--st-gold);
+  color: #26200a;
+}
+
+.skilltree-gold {
+  color: var(--st-gold);
+}
+
+.skilltree-scenes {
+  list-style: none;
+  margin: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.skilltree-scenes li {
+  border-top: 1px solid var(--st-border);
+  padding: 0.35rem 0;
+}
+
+.skilltree-scene-title {
+  overflow-wrap: anywhere;
+}
+
+.skilltree-done {
+  color: var(--st-complete);
+  font-weight: bold;
+}
+
+.skilltree-scene-meta {
+  color: var(--st-muted);
+  font-size: 0.8rem;
+}
+
+/* --- lint ---------------------------------------------------------------- */
+
+.skilltree-lint-group summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.2rem 0;
+}
+
+.skilltree-lint-group ul {
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+  padding-left: 1rem;
+}
+
+.skilltree-lint-group li {
+  margin: 0.15rem 0;
+}
+
+.skilltree-count {
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  padding: 0 0.45rem;
+  background: var(--st-locked);
+}
+
+.skilltree-lint-group.is-error .skilltree-count {
+  background: var(--st-error);
+}
+
+.skilltree-lint-group.is-warning .skilltree-count {
+  background: var(--st-warning);
+  color: #26180a;
+}
+
+.skilltree-lint-code {
+  color: var(--st-muted);
+  font-size: 0.75rem;
+}
+
+.skilltree-linkish {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.skilltree-linkish:hover,
+.skilltree-linkish:focus {
+  text-decoration: underline;
+}
+
+/* --- topic table --------------------------------------------------------- */
+
+.skilltree-topics-panel {
+  margin-top: 1rem;
+}
+
+.skilltree-table-wrap {
+  overflow-x: auto;
+}
+
+.skilltree-table {
+  color: var(--st-text);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.skilltree-table th,
+.skilltree-table td {
+  border-color: var(--st-border);
+  vertical-align: middle;
+}
+
+.skilltree-table td {
+  text-align: center;
+}
+
+.skilltree-table td .skilltree-linkish {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: center;
+  width: 100%;
+}
+
+.skilltree-cell-scenes {
+  color: var(--st-muted);
+  font-size: 0.75rem;
+}
+
+.skilltree-table td.is-complete .skilltree-cell-progress {
+  color: var(--st-complete);
+}
+
+.skilltree-table td.is-open .skilltree-cell-progress {
+  color: var(--st-open);
+}
+
+.skilltree-table td.is-locked .skilltree-cell-progress {
+  color: var(--st-muted);
+}
+
+.skilltree-table td.is-empty {
+  color: var(--st-locked-line);
+}
+
+.skilltree-table td.is-selected {
+  box-shadow: inset 0 0 0 2px var(--st-text);
+}
+
+/* --- phone width: side panel stacks below the tree ----------------------- */
+
+@media (max-width: 991px) {
+  .skilltree-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .skilltree-controls {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 575px) {
+  .skilltree {
+    padding: 0.5rem 8px 5rem; /* stash moves its navbar to the bottom here */
+  }
+
+  .skilltree-performer {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .skilltree-tree {
+    max-height: none;
+  }
+}
