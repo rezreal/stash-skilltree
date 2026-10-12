@@ -18,6 +18,11 @@
 // - A replaying spec whose seek request is ignored (the video plays on to
 //   more than REPLAY_IGNORED_SEC past the window end) fails.
 // Spend specs are not run here (the player handles spend prompts).
+//
+// Gaze target eyes_closed has no region: it gets the tracker's presence with
+// each gaze sample (GazeFeedSample.present, from the gaze source status) and
+// the webcam frames (feedViewer goes to action checks and to active
+// eyes_closed gaze checks).
 
 import { createActionCheck } from "./actionCheck.ts";
 import { createGazeTargetCheck } from "./gazeCheck.ts";
@@ -45,6 +50,12 @@ export const REPLAY_IGNORED_SEC = 3;
 /** person frames older/newer than this (video seconds) don't locate gaze targets */
 export const PERSON_MAX_AGE_SEC = 1;
 
+/** A gaze sample mapped to the viewport, plus the tracker's presence. */
+export type GazeFeedSample = GazeAttentionSample & {
+  /** the tracker reports a person in front of it (GazeStatus.present; undefined = unknown) */
+  present?: boolean;
+};
+
 export interface PromptRunnerOptions {
   /** replays allowed per prompt (default 1) */
   replays?: number;
@@ -62,9 +73,10 @@ export interface PromptRunner {
   update(input: { videoTime: number; nowMs: number }): PromptEvents;
   /** the video ended: evaluates active windows (no replay), fails replaying ones */
   finish(input: { nowMs: number }): PromptEvents;
-  /** gaze already mapped to the viewport */
-  feedGaze(sample: GazeAttentionSample): void;
+  /** gaze already mapped to the viewport (present: from the gaze source status) */
+  feedGaze(sample: GazeFeedSample): void;
   feedSpeech(result: SpeechResult): void;
+  /** webcam frames: action checks and eyes_closed gaze checks */
   feedViewer(frame: ViewerFrame): void;
   /** the analysed video frame; box = where the video is on the page */
   feedPerson(frame: PersonFrame, box?: VideoBox): void;
@@ -160,7 +172,7 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
   }
 
   function regionFor(spec: PromptSpec): Region | undefined {
-    if (spec.target === undefined || box === undefined) return undefined;
+    if (spec.target === undefined || spec.target === "eyes_closed" || box === undefined) return undefined;
     const fresh = person !== undefined && Number.isFinite(videoTime) && Math.abs(person.videoTime - videoTime) <= PERSON_MAX_AGE_SEC;
     const frame = fresh ? person! : NO_PERSON(videoTime);
     return targetRegion(spec.target, frame, box, opts?.region);
@@ -213,8 +225,12 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
         if (e.phase !== "active" || e.check?.kind !== "gaze") continue;
         const input: Parameters<GazeTargetCheck["push"]>[0] = { t: sample.t, videoTime, gazeValid: sample.valid };
         if (sample.point !== undefined) input.gaze = sample.point;
-        const region = regionFor(e.spec);
-        if (region !== undefined) input.region = region;
+        if (e.spec.target === "eyes_closed") {
+          if (sample.present !== undefined) input.present = sample.present;
+        } else {
+          const region = regionFor(e.spec);
+          if (region !== undefined) input.region = region;
+        }
         e.check.c.push(input);
       }
     },
@@ -224,7 +240,11 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
     },
 
     feedViewer(frame) {
-      for (const e of entries) if (e.phase === "active" && e.check?.kind === "action") e.check.c.push(frame);
+      for (const e of entries) {
+        if (e.phase !== "active") continue;
+        if (e.check?.kind === "action") e.check.c.push(frame);
+        else if (e.check?.kind === "gaze" && e.spec.target === "eyes_closed") e.check.c.pushViewer(frame);
+      }
     },
 
     feedPerson(frame, b) {

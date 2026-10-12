@@ -183,3 +183,59 @@ describe("createPromptRunner", () => {
     assert.equal(phase(r2, "e").detail, "held 0.0 of 2.0 s");
   });
 });
+
+describe("createPromptRunner: gaze eyes_closed", () => {
+  const EC: PromptSpec = spec({ markerId: "ec", check: "gaze", target: "eyes_closed", start: 10, end: 15, holdSec: 2 });
+  const ACT: PromptSpec = spec({ markerId: "act", check: "action", action: "eyes_closed", start: 10, end: 15, holdSec: 2 });
+
+  it("tracker presence without gaze passes it (no video box or person needed)", () => {
+    const r = createPromptRunner([EC]);
+    const e = play(r, 9, 15, (_vt, nowMs) => r.feedGaze({ t: nowMs, valid: false, present: true }));
+    assert.deepEqual(e.results, [{ markerId: "ec", passed: true }]);
+  });
+
+  it("without presence a lost gaze is no evidence", () => {
+    const r = createPromptRunner([EC], { replays: 0 });
+    const e = play(r, 9, 15, (_vt, nowMs) => r.feedGaze({ t: nowMs, valid: false }));
+    assert.deepEqual(e.results, [{ markerId: "ec", passed: false }]);
+    assert.equal(phase(r, "ec").progress, 0);
+  });
+
+  it("webcam frames reach active eyes_closed gaze checks and action checks", () => {
+    const r = createPromptRunner([EC, ACT]);
+    const e = play(r, 9, 15, (_vt, nowMs) =>
+      r.feedViewer({ t: nowMs, facePresent: true, personPresent: true, eyeBlinkLeft: 0.9, eyeBlinkRight: 0.8 }),
+    );
+    assert.deepEqual(
+      e.results.map((x) => x.markerId).sort(),
+      ["act", "ec"],
+    );
+    assert.ok(e.results.every((x) => x.passed));
+  });
+
+  it("webcam frames don't reach other gaze targets", () => {
+    const r = createPromptRunner([GAZE], { replays: 0 });
+    r.setVideoBox(BOX);
+    const e = play(r, 9, 15, (_vt, nowMs) =>
+      r.feedViewer({ t: nowMs, facePresent: true, personPresent: true, eyeBlinkLeft: 0.9, eyeBlinkRight: 0.9 }),
+    );
+    assert.deepEqual(e.results, [{ markerId: "m1", passed: false }]);
+  });
+
+  it("an open-eyes signal from either source blocks it", () => {
+    const r = createPromptRunner([EC], { replays: 0 });
+    const e = play(r, 9, 15, (_vt, nowMs) => {
+      r.feedViewer({ t: nowMs, facePresent: true, personPresent: true, eyeBlinkLeft: 0.05, eyeBlinkRight: 0.05 });
+      r.feedGaze({ t: nowMs, valid: false, present: true });
+    });
+    assert.deepEqual(e.results, [{ markerId: "ec", passed: false }]);
+  });
+
+  it("has no region", () => {
+    const r = createPromptRunner([EC]);
+    r.setVideoBox(BOX);
+    r.feedPerson(frame([pose(STANDING)], { videoTime: 12 }), BOX);
+    play(r, 12, 12);
+    assert.equal(r.regionFor(EC), undefined);
+  });
+});

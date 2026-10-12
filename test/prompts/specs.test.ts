@@ -55,3 +55,19 @@ describe("promptSpecs", () => {
     assert.equal(activeAt(specs, 12).length, 0);
   });
 });
+
+describe("promptSpecs: gaze eyes_closed", () => {
+  it("accepts eyes_closed as a gaze target (and still as an action)", () => {
+    const specs = promptSpecs([
+      m({ id: "g", check: "gaze", target: "eyes_closed", seconds: 1 }),
+      m({ id: "a", check: "action", action: "eyes_closed", seconds: 2 }),
+    ]);
+    assert.deepEqual(
+      specs.map((s) => [s.markerId, s.check, s.target ?? s.action]),
+      [
+        ["g", "gaze", "eyes_closed"],
+        ["a", "action", "eyes_closed"],
+      ],
+    );
+  });
+});

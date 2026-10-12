@@ -247,7 +247,8 @@ function findPerson(frame: PersonFrame, r: ContentRect, minVis: number): Person 
  * The region of the page that counts as looking at `target`, or undefined
  * when the landmarks it needs are missing (the checker then does not count
  * that time). screen_center, off_screen and the feet_floor fallback need no
- * person.
+ * person. eyes_closed has no region (always undefined; its check does not
+ * use one, so this is not "landmarks missing").
  */
 export function targetRegion(
   target: GazeTarget,
@@ -260,6 +261,7 @@ export function targetRegion(
   const r = videoContentRect(box);
   const centre: P = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 
+  if (target === "eyes_closed") return undefined;
   if (target === "screen_center") return ellipse(centre, r.width * 0.125, r.height * 0.125, minD);
   if (target === "off_screen") {
     const mx = r.width * 0.05;

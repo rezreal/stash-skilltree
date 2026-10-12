@@ -30,6 +30,7 @@ export const GAZE_TARGETS = [
   "feet_floor",
   "screen_center",
   "off_screen",
+  "eyes_closed",
 ] as const;
 export const PROMPT_ACTIONS = [
   "nod",
@@ -106,6 +107,7 @@ export const GAZE_TARGET_HELP: Readonly<Record<string, string>> = {
   feet_floor: "the floor in front of the person's feet",
   screen_center: "the middle of the picture",
   off_screen: "anywhere but the video",
+  eyes_closed: "the viewer keeps the eyes closed (eye tracker or webcam)",
 };
 
 export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {

@@ -1,5 +1,6 @@
 // What the prompt banner says. Pure.
 
+import { eyesClosedHoldSec } from "../prompts/gazeCheck.ts";
 import type { GazeTarget, PromptAction, PromptPhase, PromptProgress, PromptSpec } from "../prompts/types.ts";
 
 const TARGET_WORDS: Readonly<Record<GazeTarget, string>> = {
@@ -15,6 +16,7 @@ const TARGET_WORDS: Readonly<Record<GazeTarget, string>> = {
   feet_floor: "the floor in front of their feet",
   screen_center: "the center of the screen",
   off_screen: "away from the screen",
+  eyes_closed: "your eyes closed",
 };
 
 const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
@@ -42,9 +44,10 @@ export function actionWords(action: PromptAction): string {
   return ACTION_WORDS[action] ?? action.replace(/_/g, " ");
 }
 
-/** "Look at their eyes", "Look away from the screen" */
+/** "Look at their eyes", "Look away from the screen", "Close your eyes" */
 export function gazeInstruction(target: GazeTarget): string {
   if (target === "off_screen") return "Look away from the screen";
+  if (target === "eyes_closed") return "Close your eyes";
   return `Look at ${gazeTargetWords(target)}`;
 }
 
@@ -65,12 +68,12 @@ export function promptInstruction(spec: Pick<PromptSpec, "check" | "title" | "ta
 }
 
 /** The label of the progress bar: what is measured. */
-export function progressLabel(spec: Pick<PromptSpec, "check" | "holdSec">): string {
+export function progressLabel(spec: Pick<PromptSpec, "check" | "holdSec"> & { target?: GazeTarget | undefined }): string {
   switch (spec.check) {
     case "repeat":
       return "match";
     case "gaze":
-      return `hold ${formatSec(spec.holdSec)}`;
+      return `hold ${formatSec(spec.target === "eyes_closed" ? eyesClosedHoldSec(spec.holdSec) : spec.holdSec)}`;
     default:
       return "hold";
   }

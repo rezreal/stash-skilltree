@@ -13,7 +13,8 @@
 //   analysed at ~10 Hz only from ~1 s before such a window until it ends.
 //   Disposed on unmount.
 // - webcam: owned by useViewerPresence; this hook only subscribes to its
-//   frames and raises the rate around action windows.
+//   frames and raises the rate around action windows (and gaze eyes_closed
+//   windows, which use the webcam's blink scores as well as the tracker).
 // A prompt whose sensor is unavailable (see schedule.ts) is not reported.
 //
 // The spec list is frozen when the runner is created (first time enabled for
@@ -26,7 +27,7 @@ import { createSpeech, type Speech } from "../perception/speech.ts";
 import { createVision, type PersonAnalyzer, type Vision } from "../perception/vision.ts";
 import type { PerceptionError } from "../perception/errors.ts";
 import { gazeStatusNow, subscribeGaze } from "../player/useGaze.ts";
-import { createPromptRunner, type PromptRunner } from "../prompts/runner.ts";
+import { createPromptRunner, type GazeFeedSample, type PromptRunner } from "../prompts/runner.ts";
 import { promptSpecs } from "../prompts/specs.ts";
 import { grammarFor } from "../prompts/speechCheck.ts";
 import type { PromptEvents, PromptPhase, PromptProgress, PromptResult, PromptSpec, Region, VideoBox } from "../prompts/types.ts";
@@ -40,6 +41,7 @@ import {
   scheduleChecks,
   selectSpecs,
   uncheckableReason,
+  usesWebcam,
   type SensorAvailability,
   type SkippedSpec,
 } from "./schedule.ts";
@@ -74,6 +76,12 @@ export interface PromptChecksInput {
   gazeSamples?: (cb: (s: GazeAttentionSample) => void) => () => void;
   /** an eye tracker is connected; default: the shared gaze source's status */
   trackerConnected?: () => boolean;
+  /**
+   * the tracker reports a person in front of it (undefined = unknown);
+   * default: the shared gaze source's status. Gaze eyes_closed prompts read
+   * "present without gaze" as closed eyes.
+   */
+  trackerPresent?: () => boolean | undefined;
   onResult: (r: PromptResult) => void;
   onSeek: (toSec: number) => void;
   /** default: from the plugin settings */
@@ -144,6 +152,8 @@ interface Runtime {
   byId: Map<Id, PromptSpec>;
   hasRepeat: boolean;
   hasAction: boolean;
+  /** specs use the webcam frames (actions, gaze eyes_closed) */
+  wantsViewer: boolean;
   /** gaze specs that want video analysis */
   analysisTargets: PromptSpec[];
   finished: boolean;
@@ -172,6 +182,7 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
       byId: new Map(sel.specs.map((s) => [s.markerId, s])),
       hasRepeat: sel.specs.some((s) => s.check === "repeat"),
       hasAction: sel.specs.some((s) => s.check === "action"),
+      wantsViewer: sel.specs.some(usesWebcam),
       analysisTargets: settings.videoAnalysis
         ? sel.specs.filter((s) => s.check === "gaze" && personPartsFor([s.target]).pose)
         : [],
@@ -306,14 +317,26 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
   // --- webcam frames + gaze samples -> runner -------------------------------------
   const viewerSubscribe = viewer?.subscribe;
   React.useEffect(() => {
-    if (!live || !rt.hasAction || !viewerSubscribe) return;
+    if (!live || !rt.wantsViewer || !viewerSubscribe) return;
     return viewerSubscribe((f) => rt.runner.feedViewer(f));
   }, [live, rt, viewerSubscribe]);
 
   const gazeSamples = input.gazeSamples ?? subscribeGaze;
   React.useEffect(() => {
     if (!live || !rt.specs.some((s) => s.check === "gaze")) return;
-    return gazeSamples((s) => rt.runner.feedGaze({ t: s.t, point: s.point, valid: s.valid }));
+    const present = (): boolean | undefined => {
+      const own = inputRef.current.trackerPresent;
+      if (own) return own();
+      const st = gazeStatusNow();
+      return st?.connection === "connected" ? st.present : undefined;
+    };
+    return gazeSamples((s) => {
+      const sample: GazeFeedSample = { t: s.t, valid: s.valid };
+      if (s.point !== undefined) sample.point = s.point;
+      const p = present();
+      if (p !== undefined) sample.present = p;
+      rt.runner.feedGaze(sample);
+    });
   }, [live, rt, gazeSamples]);
 
   // --- the tick: runner, mic, analysis, webcam rate --------------------------------
@@ -425,8 +448,8 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
           }
         }
 
-        // webcam rate around action windows
-        if (rt.hasAction && sched.actionRate !== actionRate) {
+        // webcam rate around action (and gaze eyes_closed) windows
+        if (rt.wantsViewer && sched.actionRate !== actionRate) {
           actionRate = sched.actionRate;
           viewerRef.current?.setRate(actionRate ? VIEWER_RATE.action : VIEWER_RATE.idle);
         }
@@ -458,7 +481,7 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
     forward(runtime, runtime.runner.finish({ nowMs }), undefined, nowMs);
     speechRef.current?.stop();
     if (statusRef.current.speech.state === "listening") patchStatus({ speech: { state: "idle" } });
-    if (runtime.hasAction) viewerRef.current?.setRate(VIEWER_RATE.idle);
+    if (runtime.wantsViewer) viewerRef.current?.setRate(VIEWER_RATE.idle);
     activeRef.current = [];
     setActive([]);
     setGazeActive(false);

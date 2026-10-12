@@ -22,6 +22,9 @@ export const GAZE_TARGETS = [
   "feet_floor",
   "screen_center",
   "off_screen",
+  // no region: the viewer keeps the eyes closed (tracker presence without
+  // gaze, or webcam blink blendshapes; see gazeCheck.ts)
+  "eyes_closed",
 ] as const;
 export type GazeTarget = (typeof GAZE_TARGETS)[number];
 
@@ -53,7 +56,7 @@ export interface PromptSpec {
   title: string;
   target?: GazeTarget;
   action?: PromptAction;
-  /** gaze: seconds the gaze must hold on the target (default 2) */
+  /** gaze: seconds the gaze must hold on the target (default 2; eyes_closed: at most 1.5) */
   holdSec: number;
 }
 

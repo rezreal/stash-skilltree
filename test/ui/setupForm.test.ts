@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import type { SetupTag } from "../../src/stash/tags.ts";
 import {
   CONFIG_KEYS,
+  GAZE_TARGETS,
+  GAZE_TARGET_HELP,
   activeFields,
   describeChange,
   diffForm,
@@ -179,6 +181,7 @@ describe("validateForm", () => {
     assert.deepEqual(validateForm(withValue(f, "st.check", "action"), ctx()).errors, { "st.action": "Required" });
     assert.deepEqual(validateForm(withValue(f, "st.check", "repeat"), ctx()).errors, {});
     assert.match(validateForm(edit(f, { "st.check": "gaze", "st.target": "nose" }), ctx()).errors["st.target"], /^Must be one of eyes, face/);
+    assert.deepEqual(validateForm(edit(f, { "st.check": "gaze", "st.target": "eyes_closed" }), ctx()).errors, {});
     assert.match(validateForm(withValue(f, "st.check", "blink"), ctx()).errors["st.check"], /repeat, gaze, action, spend/);
   });
 
@@ -368,5 +371,14 @@ describe("tag list", () => {
     ];
     assert.deepEqual([...setupContext(all).levels], [["a", [0, 2]], ["b", [0]]]);
     assert.deepEqual([...setupContext(all, "3").levels], [["a", [0, 2]]]);
+  });
+});
+
+describe("gaze targets", () => {
+  it("match the plugin's list, each with help (eyes_closed: tracker or webcam)", async () => {
+    const prompts = await import("../../src/prompts/types.ts");
+    assert.deepEqual([...GAZE_TARGETS], [...prompts.GAZE_TARGETS]);
+    for (const t of GAZE_TARGETS) assert.ok(GAZE_TARGET_HELP[t], t);
+    assert.equal(GAZE_TARGET_HELP.eyes_closed, "the viewer keeps the eyes closed (eye tracker or webcam)");
   });
 });

@@ -214,3 +214,10 @@ describe("targetRegion", () => {
     assert.equal(inR(r, X(0.115), Y(0.55)), false);
   });
 });
+
+describe("targetRegion: eyes_closed", () => {
+  it("has no region, with or without a person", () => {
+    assert.equal(targetRegion("eyes_closed", frame([pose(STANDING)]), BOX), undefined);
+    assert.equal(targetRegion("eyes_closed", frame([]), BOX), undefined);
+  });
+});

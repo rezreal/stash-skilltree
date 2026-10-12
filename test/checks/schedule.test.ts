@@ -8,6 +8,7 @@ import {
   scheduleChecks,
   selectSpecs,
   uncheckableReason,
+  usesWebcam,
   wantsAnalysis,
 } from "../../src/checks/schedule.ts";
 import type { PromptPhase, PromptSpec } from "../../src/prompts/types.ts";
@@ -158,5 +159,41 @@ describe("scheduleChecks", () => {
 
   it("custom lead", () => {
     assert.equal(scheduleChecks([entry(rep)], 7.5, { leadSec: 3 }).mic, true);
+  });
+});
+
+describe("gaze eyes_closed", () => {
+  const ec = spec({ check: "gaze", start: 20, end: 25, target: "eyes_closed" });
+  const all = { speech: true, vision: true, camera: true, tracker: true };
+
+  it("needs no person, no video analysis and no models", () => {
+    assert.equal(needsPerson("eyes_closed"), false);
+    assert.equal(wantsAnalysis("eyes_closed"), false);
+    assert.deepEqual(personPartsFor(["eyes_closed"]), { pose: false, face: false, hands: false });
+    assert.deepEqual(selectSpecs([ec], { speechEnabled: false, videoAnalysis: false }), { specs: [ec], skipped: [] });
+  });
+
+  it("checkable with the eye tracker OR the webcam", () => {
+    assert.equal(uncheckableReason(ec, all), undefined);
+    assert.equal(uncheckableReason(ec, { ...all, camera: false }), undefined);
+    assert.equal(uncheckableReason(ec, { ...all, tracker: false }), undefined);
+    assert.equal(uncheckableReason(ec, { ...all, vision: false, speech: false }), undefined);
+    assert.match(uncheckableReason(ec, { ...all, tracker: false, camera: false })!, /eye tracker or camera/);
+    // other gaze targets still need the tracker
+    const centre = spec({ check: "gaze", start: 0, end: 5, target: "screen_center" });
+    assert.match(uncheckableReason(centre, { ...all, tracker: false })!, /eye tracker/);
+  });
+
+  it("uses the webcam: action rate around its window, suspends attention, no analysis", () => {
+    assert.equal(usesWebcam(ec), true);
+    assert.equal(usesWebcam({ check: "action" }), true);
+    assert.equal(usesWebcam({ check: "gaze", target: "eyes" }), false);
+    const s = scheduleChecks([entry(ec, "active")], 21);
+    assert.equal(s.actionRate, true);
+    assert.equal(s.gazeActive, true);
+    assert.equal(s.analysis, false);
+    assert.equal(scheduleChecks([entry(ec)], 19.5).actionRate, true);
+    assert.equal(scheduleChecks([entry(ec)], 18).actionRate, false);
+    assert.equal(scheduleChecks([entry(ec, "passed")], 21).actionRate, false);
   });
 });

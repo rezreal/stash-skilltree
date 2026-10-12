@@ -9,6 +9,9 @@
 // - A prompt whose sensor is unavailable (mic denied, analysis failed, no
 //   camera, no eye tracker) can't be checked: its result is not reported,
 //   so it neither passes nor fails the clip.
+// - Gaze target eyes_closed needs no region and no video analysis: it is
+//   checked by the eye tracker OR the webcam (either is enough), uses the
+//   webcam frames and raises the webcam to the action rate like an action.
 
 import type { Id } from "../core/types.ts";
 import type { PersonParts } from "../perception/vision.ts";
@@ -17,7 +20,7 @@ import type { GazeTarget, PromptEvents, PromptPhase, PromptSpec } from "../promp
 export const DEFAULT_LEAD_SEC = 1;
 
 /** Gaze targets located without analysing the video. */
-const NO_PERSON_TARGETS: readonly GazeTarget[] = ["screen_center", "off_screen", "feet_floor"];
+const NO_PERSON_TARGETS: readonly GazeTarget[] = ["screen_center", "off_screen", "feet_floor", "eyes_closed"];
 /** feet_floor has a person-free fallback but is better with the pose */
 const PERSON_HELPS: readonly GazeTarget[] = ["feet_floor"];
 
@@ -29,6 +32,11 @@ export function needsPerson(target: GazeTarget | undefined): boolean {
 /** The target benefits from analysis (needs it, or is better with it). */
 export function wantsAnalysis(target: GazeTarget | undefined): boolean {
   return target !== undefined && (needsPerson(target) || PERSON_HELPS.includes(target));
+}
+
+/** The spec uses the webcam frames: actions, and the gaze target eyes_closed. */
+export function usesWebcam(spec: Pick<PromptSpec, "check" | "target">): boolean {
+  return spec.check === "action" || (spec.check === "gaze" && spec.target === "eyes_closed");
 }
 
 /** The MediaPipe models a set of targets needs (pose always: it finds the person). */
@@ -89,12 +97,15 @@ export interface SensorAvailability {
   tracker: boolean;
 }
 
+
 /** Why `spec` can't be checked now, or undefined when it can. */
 export function uncheckableReason(spec: PromptSpec, a: SensorAvailability): string | undefined {
   switch (spec.check) {
     case "repeat":
       return a.speech ? undefined : "no microphone / speech recognition";
     case "gaze":
+      // eyes_closed: the tracker (presence without gaze) or the webcam (blinks)
+      if (spec.target === "eyes_closed") return a.tracker || a.camera ? undefined : "no eye tracker or camera";
       if (!a.tracker) return "no eye tracker connected";
       if (needsPerson(spec.target) && !a.vision) return "video analysis unavailable";
       return undefined;
@@ -151,7 +162,7 @@ export interface CheckSchedule {
   analysis: boolean;
   /** models to run when analysing */
   parts: PersonParts;
-  /** the webcam should run at the action rate */
+  /** the webcam should run at the action rate (action or eyes_closed gaze windows) */
   actionRate: boolean;
   /** a gaze window is active (the attention rule is suspended meanwhile) */
   gazeActive: boolean;
@@ -192,6 +203,7 @@ export function scheduleChecks(
       case "gaze":
         if (e.phase === "active") out.gazeActive = true;
         if (wantsAnalysis(e.spec.target)) targets.push(e.spec.target!);
+        if (usesWebcam(e.spec)) out.actionRate = true;
         break;
       case "action":
         out.actionRate = true;

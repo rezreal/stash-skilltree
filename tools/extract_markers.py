@@ -35,7 +35,7 @@ import urllib.request
 
 GAZE_TARGETS = [
     "eyes", "face", "mouth", "hands", "chest", "torso", "hips", "groin", "legs",
-    "feet_floor", "screen_center", "off_screen",
+    "feet_floor", "screen_center", "off_screen", "eyes_closed",
 ]
 ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still",
            "arms_up", "hands_on_head", "hands_together", "kneel", "stand", "lie_down"]
@@ -58,7 +58,9 @@ computer can verify, of these four types:
 - gaze: the viewer is told where to look. "target" is one of:
   eyes, face, mouth, hands, chest, torso, hips, groin, legs, feet_floor (floor in front
   of the speaker's feet), screen_center, off_screen (look away / down / close to
-  nothing on screen).
+  nothing on screen), eyes_closed (the viewer is told to close their eyes in
+  the middle of looking/gaze instructions, e.g. "look at my lips ... now close
+  your eyes ... open them and look at my hands").
 - action: the viewer is told to do a visible body action. "action" is one of:
   nod, shake_head, eyes_closed, eyes_open, hand_raised, still (stay completely
   still), arms_up, hands_on_head, hands_together, kneel, stand, lie_down.
@@ -77,6 +79,9 @@ Rules:
 - Skip instructions that do not fit the four types.
 - cue_start = number of the line where the instruction starts, cue_end = line
   where it ends. Use the [numbers] shown.
+- "Close your eyes" is ONE instruction: gaze with target eyes_closed when it
+  is part of a run of gaze instructions, otherwise action eyes_closed. Never
+  return both for the same line.
 - When unsure, leave it out. An empty list is a good answer.
 """
 
@@ -399,9 +404,43 @@ def validate(item, chunk, args):
     return marker, None
 
 
+# A gaze eyes_closed and an action eyes_closed this close (seconds) are the
+# same "close your eyes" instruction; the gaze variant is kept only when other
+# gaze instructions are within EYES_CLOSED_CONTEXT_SEC of it.
+EYES_CLOSED_CONTEXT_SEC = 60.0
+
+
+def is_eyes_closed(m, kind=None):
+    """kind: "gaze", "action" or None (either)."""
+    fields = m.get("tag_fields") or {}
+    if m.get("type") == "gaze" and kind in (None, "gaze"):
+        return fields.get("st.target") == "eyes_closed"
+    if m.get("type") == "action" and kind in (None, "action"):
+        return fields.get("st.action") == "eyes_closed"
+    return False
+
+
+def resolve_eyes_closed(markers, gap=3.0, context=EYES_CLOSED_CONTEXT_SEC):
+    """Keep one marker per "close your eyes": if the model returned both a gaze
+    eyes_closed and an action eyes_closed within `gap` seconds, keep the gaze
+    one when other gaze instructions (another target) are within `context`
+    seconds (it belongs to a gaze sequence), else the action one."""
+    drop = set()
+    gazes = [m for m in markers if is_eyes_closed(m, "gaze")]
+    actions = [m for m in markers if is_eyes_closed(m, "action")]
+    for g in gazes:
+        for a in actions:
+            if id(g) in drop or id(a) in drop or abs(g["seconds"] - a["seconds"]) > gap:
+                continue
+            in_sequence = any(m["type"] == "gaze" and not is_eyes_closed(m)
+                              and abs(m["seconds"] - g["seconds"]) <= context for m in markers)
+            drop.add(id(a) if in_sequence else id(g))
+    return [m for m in markers if id(m) not in drop]
+
+
 def dedupe(markers, gap=3.0):
     out = []
-    for m in sorted(markers, key=lambda m: m["seconds"]):
+    for m in sorted(resolve_eyes_closed(markers, gap), key=lambda m: m["seconds"]):
         dup = next((o for o in out if o["tag"] == m["tag"] and abs(o["seconds"] - m["seconds"]) <= gap
                     and (m["type"] != "repeat" or norm(o["title"]) == norm(m["title"]))), None)
         if dup is None:

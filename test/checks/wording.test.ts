@@ -2,7 +2,15 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { GAZE_TARGETS, PROMPT_ACTIONS } from "../../src/prompts/types.ts";
 import type { PromptProgress } from "../../src/prompts/types.ts";
-import { actionWords, bannerView, gazeInstruction, gazeTargetWords, promptInstruction, RESULT_SHOW_MS } from "../../src/checks/wording.ts";
+import {
+  actionWords,
+  bannerView,
+  gazeInstruction,
+  gazeTargetWords,
+  progressLabel,
+  promptInstruction,
+  RESULT_SHOW_MS,
+} from "../../src/checks/wording.ts";
 import { spec } from "./fixtures.ts";
 
 describe("prompt wording", () => {
@@ -75,5 +83,19 @@ describe("bannerView", () => {
     const done = bannerView({ progress: prog([[g, "passed", 1]]), nowMs: 600, last: { spec: g, passed: true, atMs: 500 } })!;
     assert.equal(done.tone, "passed");
     assert.equal(done.progress, 1);
+  });
+});
+
+describe("gaze eyes_closed wording", () => {
+  it("banner says close your eyes, with the capped hold", () => {
+    assert.equal(gazeInstruction("eyes_closed"), "Close your eyes");
+    assert.equal(promptInstruction({ check: "gaze", title: "", target: "eyes_closed" }), "Close your eyes");
+    assert.equal(progressLabel({ check: "gaze", holdSec: 2, target: "eyes_closed" }), "hold 1.5 s");
+    assert.equal(progressLabel({ check: "gaze", holdSec: 1, target: "eyes_closed" }), "hold 1 s");
+    assert.equal(progressLabel({ check: "gaze", holdSec: 2, target: "eyes" }), "hold 2 s");
+    const ec = spec({ check: "gaze", start: 10, end: 15, target: "eyes_closed" });
+    const v = bannerView({ progress: [{ spec: ec, phase: "active", progress: 0.5, replays: 0 }], nowMs: 0 })!;
+    assert.equal(v.instruction, "Close your eyes");
+    assert.equal(v.progressLabel, "hold 1.5 s");
   });
 });
