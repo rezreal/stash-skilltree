@@ -31,7 +31,7 @@ export interface CameraManagerOptions {
   start: (opts: { rateHz: number }) => Promise<CameraSessionLike>;
   /** ms the camera stays on after the last release (default 1000) */
   lingerMs?: number;
-  /** initial analysis rate (default 5 Hz) */
+  /** initial analysis rate (default 2 Hz, VIEWER_RATE.idle) */
   rateHz?: number;
   presence?: PresenceOptions;
   now?: () => number;
@@ -85,7 +85,7 @@ export function createCameraManager(opts: CameraManagerOptions): CameraManager {
   let session: CameraSessionLike | undefined;
   let offSession: (() => void)[] = [];
   let seq = 0;
-  let rate = opts.rateHz ?? 5;
+  let rate = opts.rateHz ?? 2;
   let linger: unknown;
 
   function setState(s: CameraState, e?: PerceptionError): void {

@@ -3,7 +3,7 @@
 // analysis loop at a configurable rate; stopViewer() stops the tracks so the
 // camera light goes off.
 //
-// Rates: VIEWER_RATE.idle (5 Hz) while no action prompt is active, .action
+// Rates: VIEWER_RATE.idle (2 Hz) while no action prompt is active, .action
 // (15 Hz) during one - the caller switches with setRate(). The loop uses
 // setTimeout, which browsers throttle to ~1 Hz in hidden tabs.
 
@@ -15,7 +15,10 @@ import type { ViewerAnalyzer, Vision, VisionOptions } from "./vision.ts";
 import { openWebcam, stopStream } from "./webcam.ts";
 import type { WebcamOptions } from "./webcam.ts";
 
-export const VIEWER_RATE = { idle: 5, action: 15 } as const;
+// idle only serves presence (DEFAULT_PRESENCE_STALE_MS 2 s, grace 1.5 s):
+// 2 Hz keeps well inside both, at well under half the main-thread cost of
+// the face / pose models per second
+export const VIEWER_RATE = { idle: 2, action: 15 } as const;
 
 export interface ViewerSessionOptions {
   /** analysis rate in Hz (default VIEWER_RATE.idle) */
