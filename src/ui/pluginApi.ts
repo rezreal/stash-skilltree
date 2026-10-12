@@ -34,6 +34,8 @@ export interface PluginApiShape {
     ReactRouterDOM: {
       Link: ReactTypes.ComponentType<LinkProps>;
       useRouteMatch: (path?: string) => RouteMatch | null;
+      useHistory: () => { replace(path: string): void; push(path: string): void };
+      useLocation: () => { pathname: string; search: string };
     };
     Bootstrap: {
       Button: AnyComponent;

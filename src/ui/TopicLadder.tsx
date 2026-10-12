@@ -27,14 +27,22 @@ export interface TopicLadderProps {
   client: StashClient;
   /** called after a batch write (also a partial one); resolves once the tag list is fresh */
   onApplied: () => Promise<void>;
+  /** the topic to open first (a deep link) */
+  initialTopic?: string;
+  /** the open topic changed (for the page's deep link) */
+  onTopic?: (topic: string | undefined) => void;
 }
 
 export function TopicLadder(props: TopicLadderProps) {
   const { tags, client, onApplied } = props;
   const topics = React.useMemo(() => ladderTopics(tags), [tags]);
-  const [topicInput, setTopicInput] = React.useState("");
+  const startTopic = props.initialTopic !== undefined && !topicError(props.initialTopic) ? normalizeTopic(props.initialTopic) : undefined;
+  const [topicInput, setTopicInput] = React.useState(startTopic ?? "");
   const [topicInputError, setTopicInputError] = React.useState<string | undefined>(undefined);
-  const [topic, setTopic] = React.useState<string | undefined>(undefined);
+  const [topic, setTopic] = React.useState<string | undefined>(startTopic);
+  React.useEffect(() => {
+    props.onTopic?.(topic);
+  }, [topic]);
   // Pending edits belong to one topic and one tag list; a refreshed list
   // (after writing) starts over from the saved fields.
   const [draft, setDraft] = React.useState<{ topic: string; tags: SetupTag[]; ladder: Ladder } | undefined>(undefined);

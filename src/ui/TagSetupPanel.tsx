@@ -50,6 +50,8 @@ export interface TagSetupPanelProps {
   tags: SetupTag[];
   client: StashClient;
   focus?: SetupFocus;
+  /** the tag in the editor changed (for the page's deep link) */
+  onSelect?: (id: Id | undefined) => void;
   /** called after a successful write; resolves once the tag list is fresh */
   onSaved: () => Promise<void>;
 }
@@ -94,6 +96,7 @@ export function TagSetupPanel(props: TagSetupPanelProps) {
 
   React.useEffect(() => {
     if (selectedId !== undefined) editorHeading.current?.focus();
+    props.onSelect?.(selectedId);
   }, [selectedId]);
 
   const filtered = React.useMemo(() => filterTags(tags, query, filter), [tags, query, filter]);

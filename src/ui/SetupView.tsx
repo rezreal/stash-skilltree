@@ -26,7 +26,9 @@ type GroupsState =
   | { status: "error"; error: string }
   | { status: "ready"; groups: SetupGroup[]; refreshError?: string };
 
-type Tab = "tags" | "ladder" | "series";
+import type { SetupTab } from "./deepLink.ts";
+
+type Tab = SetupTab;
 
 const TAB_LABELS: Record<Tab, string> = { tags: "Tags", ladder: "Topic ladder", series: "Series" };
 
@@ -35,15 +37,22 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 export interface SetupViewProps {
   hidden: boolean;
   focus?: SetupFocus;
+  /** the open tab, held by the page (it is part of the deep link) */
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  /** the ladder topic to open first, and changes to it (deep link) */
+  initialTopic?: string;
+  onTopic?: (topic: string | undefined) => void;
+  /** the tag in the editor changed (deep link) */
+  onTag?: (id: Id | undefined) => void;
   /** reloads the library so the tree reflects written tags */
   onLibraryChanged: () => void;
 }
 
 export function SetupView(props: SetupViewProps) {
-  const { hidden, focus, onLibraryChanged } = props;
+  const { hidden, focus, onLibraryChanged, tab, onTab: setTab } = props;
   const client = React.useMemo(() => createClient(), []);
   const [state, setState] = React.useState<TagsState>({ status: "loading" });
-  const [tab, setTab] = React.useState<Tab>("tags");
   const mounted = React.useRef(true);
 
   const loadTags = React.useCallback(async () => {
@@ -132,10 +141,16 @@ export function SetupView(props: SetupViewProps) {
         )}
         {/* both stay mounted so unsaved edits survive switching */}
         <div hidden={tab !== "tags"}>
-          <TagSetupPanel tags={state.tags} client={client} focus={focus} onSaved={afterWrite} />
+          <TagSetupPanel tags={state.tags} client={client} focus={focus} onSelect={props.onTag} onSaved={afterWrite} />
         </div>
         <div hidden={tab !== "ladder"}>
-          <TopicLadder tags={state.tags} client={client} onApplied={afterWrite} />
+          <TopicLadder
+            tags={state.tags}
+            client={client}
+            onApplied={afterWrite}
+            {...(props.initialTopic !== undefined ? { initialTopic: props.initialTopic } : {})}
+            {...(props.onTopic ? { onTopic: props.onTopic } : {})}
+          />
         </div>
       </>
     );

@@ -262,6 +262,21 @@ Start: pick a performer → each step suggests 1–2 scenes (continue / explore 
 earn) from open nodes, plus a switch-performer row ranked by topic overlap →
 player with live checks → completion summary (coins, nodes out of the fog).
 
+## Deep links
+
+Every view keeps what is open in its query string, so it can be bookmarked,
+shared or reloaded (the author page also has a "Copy link" button):
+
+- `/skilltree?node=Relaxation%3A2&performer=12` — tree, node selected, performer filter
+- `/skilltree?fog=1&performer=12` — the viewer's fog view
+- `/skilltree?view=setup&tag=345` — setup, tag 345 in the editor
+- `/skilltree?view=setup&tab=ladder&topic=Relaxation` — topic ladder
+- `/skilltree?view=setup&tab=series` — daily series setup
+- `/skilltree/sensor?tab=status|calibrate|range|device` — sensor menu
+
+A tag implies the tags tab, a topic the ladder tab; fog=1 wins over setup
+(setup needs the author view); unknown nodes or performers are dropped.
+
 ## Test mode
 
 A per-viewer switch in the choice screen header (localStorage) replaces the
