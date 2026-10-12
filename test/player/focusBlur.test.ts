@@ -4,8 +4,11 @@ import {
   FOCUS_RAMP_SEC,
   FOCUS_RING_UNIT_MAX_PX,
   focusBlurPx,
+  blurAt,
+  FOCUS_CANVAS_MAX_PX,
+  FOCUS_REACH,
+  focusCanvasSize,
   focusEllipse,
-  focusLayers,
   focusRamp,
   ringUnit,
   smoothEllipse,
@@ -89,25 +92,25 @@ test("ringUnit: the region's mean radius, capped for large regions", () => {
   assert.equal(ringUnit({ cx: 0, cy: 0, rx: 300, ry: 500 }), FOCUS_RING_UNIT_MAX_PX);
 });
 
-test("focusLayers: three rings out from the region's edge, blur growing outwards", () => {
-  // unit = sqrt(80 * 20) = 40
-  const layers = focusLayers({ cx: 200, cy: 150, rx: 80, ry: 20 }, 12);
-  assert.deepEqual(
-    layers.map((l) => l.blurPx),
-    [3, 6, 12],
-  );
-  // ring 1: sharp right up to the region (0 units), full from 0.6 units = 24 px out
-  assert.equal(layers[0]!.mask, "radial-gradient(ellipse 104px 44px at 200px 150px, transparent 67.6%, #000 100%)");
-  // ring 3: from 1.6 units (64 px) to 3.2 units (128 px) out
-  assert.equal(layers[2]!.mask, "radial-gradient(ellipse 208px 148px at 200px 150px, transparent 64%, #000 100%)");
-  assert.deepEqual(
-    focusLayers({ cx: 0, cy: 0, rx: 10, ry: 10 }, 0).map((l) => l.blurPx),
-    [0, 0, 0],
-  );
+test("blurAt: sharp inside the region, growing past its edge to full at the reach", () => {
+  const e = { cx: 200, cy: 150, rx: 80, ry: 20 };
+  const unit = ringUnit(e); // 40
+  assert.equal(blurAt(e, unit, 12, 200, 150), 0);
+  assert.equal(blurAt(e, unit, 12, 270, 150), 0);
+  // along x: past the edge by half the reach (0.5 * 3.2 * 40 = 64 px) -> half the blur
+  assert.ok(Math.abs(blurAt(e, unit, 12, 200 + 80 + 64, 150) - 6) < 1e-9);
+  // along y the edge is closer: the same distance past it gives the same blur
+  assert.ok(Math.abs(blurAt(e, unit, 12, 200, 150 + 20 + 64) - 6) < 1e-9);
+  assert.equal(blurAt(e, unit, 12, 200 + 80 + FOCUS_REACH * 40, 150), 12);
+  assert.equal(blurAt(e, unit, 12, 2000, 1500), 12);
+  assert.ok(blurAt(e, unit, 12, 300, 150) < blurAt(e, unit, 12, 320, 150));
 });
 
-test("focusLayers: a large region keeps its rings within the capped unit", () => {
-  const [, , outer] = focusLayers({ cx: 500, cy: 400, rx: 300, ry: 400 }, 12);
-  // 3.2 * 100 px beyond the region, not 3.2 * sqrt(300 * 400)
-  assert.match(outer!.mask, /^radial-gradient\(ellipse 620px 720px /);
+test("focusCanvasSize: device pixels, capped for huge screens", () => {
+  assert.deepEqual(focusCanvasSize(1280, 720, 1), { width: 1280, height: 720, scale: 1 });
+  assert.deepEqual(focusCanvasSize(1280, 720, 2), { width: 2560, height: 1440, scale: 2 });
+  const big = focusCanvasSize(1920, 1080, 2);
+  assert.equal(big.width, FOCUS_CANVAS_MAX_PX);
+  assert.equal(big.height, 1440);
+  assert.equal(focusCanvasSize(800, 600, 0).scale, 1);
 });

@@ -480,6 +480,7 @@ function SessionOverlay(props: {
         spec={focusSpec}
         regionFor={checks.regionFor}
         getVideoTime={getVideoTime}
+        getVideo={getVideo}
         strength={focusBlurPx(rawSettings.focusBlur)}
       />
       <GazeDot getContainer={getContainer} />

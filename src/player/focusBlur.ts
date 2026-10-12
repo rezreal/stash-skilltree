@@ -1,19 +1,18 @@
 // Focus blur: while a gaze prompt targets a region of the video (eyes, face,
 // hands, chest, ...), the picture around that region blurs, more the further
 // from it and more the longer the window runs; the region stays sharp. Pure:
-// the setting, the ramp over the window, the region as an ellipse, its
-// smoothing and the layer stack (blur + radial mask per layer) that
-// FocusBlur.tsx draws with backdrop-filter.
+// the setting, the ramp over the window, the region as an ellipse and its
+// smoothing, the canvas size, and the blur at a point (what the shader in
+// focusShader.ts computes per pixel).
 //
-// The rings grow outwards from the region's edge by multiples of the region's
-// size, capped so a large region (chest, legs) still leaves blur on screen.
-// The layers stack: each blurs what the ones below already blurred, so the
-// outermost ring ends up at about sqrt(sum of squares) of their radii.
+// The blur grows from 0 at the region's edge to full strength FOCUS_REACH
+// ring units out; the unit is the region's size, capped so a large region
+// (chest, legs) still leaves blur on screen.
 
 import type { PromptSpec, Region } from "../prompts/types.ts";
 
 export const DEFAULT_FOCUS_BLUR = 60;
-/** blur of the outermost layer at 100 %, CSS px */
+/** blur (Gaussian sigma) at full reach at 100 %, CSS px */
 export const MAX_FOCUS_BLUR_PX = 20;
 /** the blur reaches full strength after this many seconds of the window (or at its end, if shorter) */
 export const FOCUS_RAMP_SEC = 8;
@@ -21,12 +20,16 @@ export const FOCUS_RAMP_SEC = 8;
 export const FOCUS_FADE_OUT_MS = 700;
 /** the region was not found for this long: the blur eases out instead of holding a stale spot */
 export const FOCUS_LOST_MS = 1500;
-/** the rings' unit: the region's size (geometric mean radius), at most this many CSS px */
+/** the ring unit: the region's size (geometric mean radius), at most this many CSS px */
 export const FOCUS_RING_UNIT_MAX_PX = 100;
+/** the blur is full this many ring units out from the region's edge */
+export const FOCUS_REACH = 3.2;
+/** the canvas is drawn at the device pixel ratio, but never wider or taller than this (device px) */
+export const FOCUS_CANVAS_MAX_PX = 2560;
 
 /**
- * Blur of the outermost layer in CSS px for the focusBlur setting in
- * percent: unset or invalid -> 60 %, clamped to 0..100, 0 = off.
+ * Blur at full reach in CSS px for the focusBlur setting in percent: unset or
+ * invalid -> 60 %, clamped to 0..100, 0 = off.
  */
 export function focusBlurPx(setting: unknown): number {
   const n = typeof setting === "number" ? setting : typeof setting === "string" && setting.trim() !== "" ? Number(setting) : NaN;
@@ -55,7 +58,7 @@ export function focusRamp(spec: Pick<PromptSpec, "start" | "end">, t: number | u
   return f * f * (3 - 2 * f);
 }
 
-/** An ellipse in the overlay's own coordinates (px from its top-left). */
+/** An ellipse in the canvas's own coordinates (px from its top-left). */
 export interface FocusEllipse {
   cx: number;
   cy: number;
@@ -64,7 +67,7 @@ export interface FocusEllipse {
 }
 
 /**
- * The sharp spot for a target region (viewport px) inside an overlay whose
+ * The sharp spot for a target region (viewport px) inside a canvas whose
  * top-left is at `origin`: an ellipse as is; a polygon by the ellipse through
  * its bounding box's corners (so the whole polygon stays sharp); undefined
  * without a region or for "outside" regions.
@@ -105,43 +108,28 @@ export function smoothEllipse(prev: FocusEllipse | undefined, next: FocusEllipse
   return { cx: ease(prev.cx, next.cx), cy: ease(prev.cy, next.cy), rx: ease(prev.rx, next.rx), ry: ease(prev.ry, next.ry) };
 }
 
-/**
- * The rings, in ring units out from the region's edge: sharp inside `from`,
- * the layer's full blur from `to` outwards; `share` of the outermost blur.
- * Regions are already padded to tracker accuracy, so the first ring starts
- * right at the edge.
- */
-export const FOCUS_RINGS: readonly { from: number; to: number; share: number }[] = [
-  { from: 0, to: 0.6, share: 0.25 },
-  { from: 0.6, to: 1.6, share: 0.5 },
-  { from: 1.6, to: 3.2, share: 1 },
-];
-
-export interface FocusLayer {
-  /** CSS px; 0 = the layer is not drawn */
-  blurPx: number;
-  /** CSS mask-image: transparent (sharp) inside, opaque (blurred) outside */
-  mask: string;
-}
-
-const px = (n: number) => `${Math.round(n * 10) / 10}px`;
-
 /** The ring unit of an ellipse: its geometric mean radius, capped. */
 export function ringUnit(e: FocusEllipse): number {
   return Math.min(Math.sqrt(Math.max(0, e.rx) * Math.max(0, e.ry)), FOCUS_RING_UNIT_MAX_PX);
 }
 
-/** The layer stack for the ellipse at `strength` (blur px of the outermost layer, ramp applied). */
-export function focusLayers(e: FocusEllipse, strength: number): FocusLayer[] {
-  const u = ringUnit(e);
-  return FOCUS_RINGS.map((ring) => {
-    const blurPx = strength > 0 ? Math.round(strength * ring.share * 10) / 10 : 0;
-    // the gradient's ending shape is the ring's outer edge; past it the last stop (opaque) continues.
-    // The inner edge is the region grown by `from` units, as a share of the outer edge (mean of the axes).
-    const outX = e.rx + ring.to * u;
-    const outY = e.ry + ring.to * u;
-    const inner = Math.round(((e.rx + e.ry + 2 * ring.from * u) / (outX + outY)) * 1000) / 10;
-    const mask = `radial-gradient(ellipse ${px(outX)} ${px(outY)} at ${px(e.cx)} ${px(e.cy)}, transparent ${inner}%, #000 100%)`;
-    return { blurPx, mask };
-  });
+/**
+ * Blur sigma at point (x, y) for full-reach blur `sigma` (same units as the
+ * ellipse): 0 inside the ellipse, growing linearly with the distance past its
+ * edge (measured along the ray from its centre) to `sigma` at FOCUS_REACH
+ * units. The fragment shader computes the same per pixel.
+ */
+export function blurAt(e: FocusEllipse, unit: number, sigma: number, x: number, y: number): number {
+  const dx = x - e.cx;
+  const dy = y - e.cy;
+  const q = Math.hypot(dx / Math.max(e.rx, 1), dy / Math.max(e.ry, 1));
+  const past = q > 1 ? Math.hypot(dx, dy) * (1 - 1 / q) : 0;
+  return sigma * Math.min(1, Math.max(0, past / Math.max(unit * FOCUS_REACH, 1)));
+}
+
+/** Canvas backing size for a CSS box: the device pixel ratio, capped at FOCUS_CANVAS_MAX_PX. */
+export function focusCanvasSize(cssW: number, cssH: number, dpr: number): { width: number; height: number; scale: number } {
+  const big = Math.max(cssW, cssH, 1);
+  const scale = Math.max(0.1, Math.min(dpr > 0 ? dpr : 1, FOCUS_CANVAS_MAX_PX / big));
+  return { width: Math.max(1, Math.round(cssW * scale)), height: Math.max(1, Math.round(cssH * scale)), scale };
 }

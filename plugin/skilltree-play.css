@@ -1747,13 +1747,15 @@
   transition: opacity 900ms ease;
   z-index: 1;
 }
-/* focus blur rings around a gaze prompt's region (FocusBlur.tsx): same level as the dim. No opacity, filter or
-   mask on a wrapper: that would make it a backdrop root and the rings would blur nothing. */
+/* focus blur (FocusBlur.tsx): a WebGL canvas redrawing the video, same level as the dim; hidden
+   while the blur is off */
 .skilltree-play .stp-sp-focus {
+  height: 100%;
   inset: 0;
   pointer-events: none;
   position: absolute;
   visibility: hidden;
+  width: 100%;
   z-index: 1;
 }
 .skilltree-play.stp-sp .stp-sp-passive { pointer-events: none; }
