@@ -14,6 +14,7 @@ Examples:
   extract_markers.py extract --scene 123 --scene 456 -o review.jsonl
   extract_markers.py --stash https://stash.lan/stash --insecure extract --model ... --limit 3
   extract_markers.py apply review.jsonl
+  extract_markers.py --stash https://stash.lan/stash --insecure --resolve stash.lan:192.168.1.10 extract ...
 
 Delete lines (scenes) or entries in "markers" from the review file to skip them.
 Only the standard library is used.
@@ -25,6 +26,7 @@ import difflib
 import json
 import os
 import re
+import socket
 import ssl
 import sys
 import urllib.error
@@ -586,11 +588,42 @@ def parse_windows(s):
     return w
 
 
+def parse_resolve(items):
+    """["stash.lan:192.168.1.10", ...] -> {"stash.lan": "192.168.1.10"} (like curl --resolve, port optional)"""
+    out = {}
+    for item in items or []:
+        parts = item.split(":")
+        if len(parts) == 3:  # curl style host:port:addr
+            parts = [parts[0], parts[2]]
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise SystemExit("--resolve expects HOST:ADDRESS, e.g. stash.lan:192.168.1.10 (got %r)" % item)
+        out[parts[0].lower()] = parts[1]
+    return out
+
+
+def install_resolve(mapping):
+    """Answers DNS lookups for these host names with fixed addresses. The URL
+    keeps the name, so TLS (SNI) and the Host header still say e.g. "stash.lan"."""
+    if not mapping:
+        return
+    real = socket.getaddrinfo
+
+    def getaddrinfo(host, *a, **kw):
+        if isinstance(host, str) and host.lower() in mapping:
+            host = mapping[host.lower()]
+        return real(host, *a, **kw)
+
+    socket.getaddrinfo = getaddrinfo
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--stash", default=os.environ.get("STASH_URL", "http://localhost:9999"))
     p.add_argument("--api-key", default=os.environ.get("STASH_API_KEY", ""))
     p.add_argument("--insecure", action="store_true", help="accept self-signed TLS certificates")
+    p.add_argument("--resolve", action="append", metavar="HOST:ADDRESS",
+                   help="use this address for a host name that doesn't resolve here, "
+                        "e.g. stash.lan:192.168.1.10 (repeatable)")
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -617,6 +650,7 @@ def main():
     a.add_argument("--dry-run", action="store_true")
 
     args = p.parse_args()
+    install_resolve(parse_resolve(args.resolve))
     if args.insecure:
         global SSL_CONTEXT
         SSL_CONTEXT = ssl._create_unverified_context()

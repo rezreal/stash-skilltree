@@ -82,4 +82,10 @@ r = em.render_chunk(cues[:2], "T", "D " * 600)
 assert r.startswith("Title: T\nDescription: D") and "Transcript:\n[1] (00:10.0)" in r and len(r) < 1100, r
 assert em.parse_llm_json('<think>hmm</think>```json\n{"instructions":[{"type":"gaze"}]}\n```') == [{"type": "gaze"}]
 assert list(map(len, em.chunk_cues(list(range(100)), 40, 6))) == [40, 40, 32]
+assert em.parse_resolve(["stash.lan:192.168.1.10", "Box:443:10.0.0.2"]) == {"stash.lan": "192.168.1.10", "box": "10.0.0.2"}
+try:
+    em.parse_resolve(["nocolon"])
+    raise AssertionError("bad --resolve accepted")
+except SystemExit:
+    pass
 print("OK")
