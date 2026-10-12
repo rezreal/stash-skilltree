@@ -12,7 +12,8 @@ import {
   topicDepth,
 } from "../core/index.ts";
 import { createClient, loadLibrary } from "../stash/index.ts";
-import { usePluginSettings } from "./pluginApi.ts";
+import { pluginApi, usePluginSettings } from "./pluginApi.ts";
+import { PLAY_ROUTE } from "./register.tsx";
 import { countBySeverity, performerOptions, scenesInTree } from "./derive.ts";
 import { RadialTree } from "./RadialTree.tsx";
 import { NodePanel } from "./NodePanel.tsx";
@@ -156,6 +157,7 @@ function SkilltreeView(props: SkilltreeViewProps) {
           )}
         </ul>
         <div className="skilltree-controls">
+          <PlayLink />
           {authorView && (
             <div className="btn-group btn-group-sm skilltree-sections" role="group" aria-label="Section">
               {(["tree", "setup"] as Section[]).map((s) => (
@@ -291,5 +293,14 @@ function Legend(props: { authorView: boolean }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function PlayLink() {
+  const { Link } = pluginApi().libraries.ReactRouterDOM;
+  return (
+    <Link to={PLAY_ROUTE} className="btn btn-sm btn-primary">
+      Play
+    </Link>
   );
 }

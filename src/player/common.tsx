@@ -2,12 +2,12 @@
 import type { ReactNode } from "react";
 import type { PlayDataState } from "./usePlayData.ts";
 import { formatCoins } from "./format.ts";
-import { ROUTE } from "../ui/register.tsx";
+import { PLAY_ROUTE, ROUTE } from "../ui/register.tsx";
 
 // Not under /plugin/: stash's server answers /plugin/<id>/<page> with a 404
 // on reload or direct links. Other paths get the app's index.html.
 export const AUTHOR_ROUTE = ROUTE;
-export const PLAY_ROUTE = `${ROUTE}/play`;
+export { PLAY_ROUTE };
 
 export const playerRoute = (sceneId: string) => `${PLAY_ROUTE}/${encodeURIComponent(sceneId)}`;
 

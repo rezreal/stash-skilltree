@@ -6,6 +6,7 @@ import { SkilltreePage } from "./SkilltreePage.tsx";
 // answers anything else below /plugin/<id> with a 404, so such a page breaks
 // on reload or when opened from a link. Other paths get the app's index.html.
 export const ROUTE = "/skilltree";
+export const PLAY_ROUTE = `${ROUTE}/play`;
 
 export function register(): void {
   const api = pluginApi();
@@ -32,7 +33,11 @@ function AuthorRoute() {
   return match?.isExact ? <SkilltreePage /> : null;
 }
 
-/** Mirrors the markup of stash's own menu items (MainNavbar.tsx). */
+/**
+ * The nav entry opens the choice screen - playing is what most visits are
+ * for; the author view is one click away from there. Highlighted on both.
+ *
+ * Mirrors the markup of stash's own menu items (MainNavbar.tsx). */
 function SkilltreeNavItem() {
   const { libraries, components } = pluginApi();
   const { Link, useRouteMatch } = libraries.ReactRouterDOM;
@@ -43,7 +48,7 @@ function SkilltreeNavItem() {
 
   return (
     <Nav.Link eventKey={ROUTE} as="div" className="col-4 col-sm-3 col-md-2 col-lg-auto">
-      <Link to={ROUTE}>
+      <Link to={PLAY_ROUTE}>
         <Button
           className={
             "minimal p-4 p-xl-2 d-flex d-xl-inline-block flex-column justify-content-between align-items-center" +
