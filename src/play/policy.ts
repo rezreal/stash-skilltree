@@ -61,8 +61,6 @@ export function hasPromptMarkers(scene: SceneInput): boolean {
  * - rules = union over the scene's policy tags; no policy tag (or none with a
  *   valid rule) -> ["attention"];
  * - prompt markers add "prompts";
- * - interactive scenes (a funscript) add "track": the distance sensor follows
- *   the script; without a sensor or calibration the rule stays unscored;
  * - "exposure" (loops) drops "attention": a loop may play in a background tab;
  * - minMinutes = max over tags; rewardMult = max over tags (default 1);
  * - trackMin = max over tags (the strictest), values above 1 read as percent
@@ -84,7 +82,6 @@ export function policyForScene(scene: SceneInput, policyTags: PolicyTagInput[]):
   }
   if (rules.size === 0) rules.add("attention");
   if (hasPromptMarkers(scene)) rules.add("prompts");
-  if (scene.interactive) rules.add("track");
   if (rules.has("exposure")) rules.delete("attention");
 
   const policy: WatchPolicy = {

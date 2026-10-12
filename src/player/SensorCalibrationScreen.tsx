@@ -1,8 +1,9 @@
-// /skilltree/sensor: the distance sensor for interactive (funscript) clips,
+// /skilltree/sensor: the distance sensor for track clips (tagged with the
+// track rule; they follow the scene's funscript),
 // as a menu of four sections (?tab=…):
 // - Status: connection with Connect / Disconnect, the auto-connect switch,
 //   the live raw reading and calibrated position with a 10 s trace, and a
-//   checklist of what interactive clips still need to be scored;
+//   checklist of what track clips still need to be scored;
 // - Calibrate: a three-step wizard - capture the rest and the deepest
 //   position (median of 1.5 s each), check the 0..100 mapping by moving,
 //   save it;
@@ -119,8 +120,8 @@ export function SensorCalibrationScreen() {
           </Link>
         </div>
         <p className="stp-soft stp-lh">
-          Interactive clips follow the scene's funscript with your Bluetooth distance sensor. The sensor is optional: without
-          it the clips still play, the track just isn't scored.
+          Track clips (tagged with a policy whose rules include track) follow the scene's funscript with your Bluetooth
+          distance sensor. The sensor is optional: without it the clips still play, the track just isn't scored.
         </p>
         {sensor.settings.problems.length > 0 && (
           <ul className="stp-small stp-orange">
@@ -239,7 +240,7 @@ function StatusTab(props: { sensor: TrackSensorHandle; onTab: (t: SensorTab) => 
             </label>
             <p className="stp-small stp-muted stp-lh">
               When the link drops (out of range, switched off) it is retried every few seconds. With this on, the sensor also
-              comes back by itself when an interactive clip starts.{" "}
+              comes back by itself when a track clip starts.{" "}
               {sensor.reloadReconnects
                 ? "This browser remembers the sensor, so it reconnects after a page reload without a click too."
                 : "After a page reload this browser needs one click on Connect (or enable chrome://flags/#enable-web-bluetooth-new-permissions-backend to reconnect without a click)."}
@@ -253,7 +254,7 @@ function StatusTab(props: { sensor: TrackSensorHandle; onTab: (t: SensorTab) => 
       <section className="stp-panel" aria-labelledby="stp-sensor-ready">
         <div className="stp-panel-head">
           <h2 id="stp-sensor-ready" className="stp-caps">
-            Interactive clips
+            Track clips
           </h2>
         </div>
         <ol className="stp-sensor-checklist">
@@ -461,7 +462,7 @@ function CalibrateTab(props: { sensor: TrackSensorHandle; onTab: (t: SensorTab) 
     setRest(undefined);
     setDeep(undefined);
     setStep(0);
-    setNote(stored ? "Saved. Interactive clips use this mapping from now on." : "The browser blocked storage: the mapping applies until the page is reloaded.");
+    setNote(stored ? "Saved. Track clips use this mapping from now on." : "The browser blocked storage: the mapping applies until the page is reloaded.");
   };
 
   const restart = () => {
@@ -582,7 +583,7 @@ function CalibrateTab(props: { sensor: TrackSensorHandle; onTab: (t: SensorTab) 
                 className="stp-btn stp-btn-outline stp-btn-sm"
                 onClick={() => {
                   sensor.setCalibration(undefined);
-                  setNote("The calibration is cleared. Interactive clips aren't scored until you calibrate again.");
+                  setNote("The calibration is cleared. Track clips aren't scored until you calibrate again.");
                 }}
               >
                 Clear saved calibration

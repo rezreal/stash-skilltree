@@ -440,7 +440,7 @@ export interface ReadinessStep {
 
 export interface ReadinessView {
   steps: ReadinessStep[];
-  /** every step done: interactive clips are scored */
+  /** every step done: track clips are scored */
   ready: boolean;
   summary: string;
 }
@@ -454,8 +454,8 @@ export function readinessView(input: { configured: boolean; connected: boolean; 
   const ready = steps.every((s) => s.done);
   const missing = steps.find((s) => !s.done);
   const summary = ready
-    ? "Ready: interactive clips follow their funscript with the sensor and score the track."
-    : `Interactive clips still play, but the track isn't scored until: ${missing!.label.toLowerCase()}.`;
+    ? "Ready: track clips follow their funscript with the sensor and score the track."
+    : `Track clips still play, but the track isn't scored until: ${missing!.label.toLowerCase()}.`;
   return { steps, ready, summary };
 }
 
@@ -567,7 +567,7 @@ export function sensorChipView(status: SensorStatus | undefined, opts: { configu
   if (c === "connected") {
     return opts.calibrated
       ? { label: "Sensor", tone: "blue", action: "open", title: `Distance sensor connected${status?.device ? ` (${status.device})` : ""}` }
-      : { label: "Sensor · calibrate", tone: "orange", action: "setup", title: "Calibrate the distance sensor so interactive clips are scored" };
+      : { label: "Sensor · calibrate", tone: "orange", action: "setup", title: "Calibrate the distance sensor so track clips are scored" };
   }
   if (c === "connecting") return { label: "Sensor · connecting", tone: "orange", action: "open", title: status?.message ?? "Connecting to the distance sensor" };
   if (c === "error") return { label: "Sensor · problem", tone: "red", action: "setup", title: status?.message ?? "The distance sensor has a problem" };

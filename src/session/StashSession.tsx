@@ -391,7 +391,8 @@ function SessionOverlay(props: {
   runningRef.current = !finished;
   const isPlaying = React.useCallback(() => runningRef.current && !handle.paused() && !handle.ended(), [handle]);
   const { track } = useTrackSession(scene.id, getVideoTime, {
-    enabled: policy.rules.includes("track") || scene.interactive,
+    // only clips tagged with the track rule; a funscript alone isn't enough
+    enabled: policy.rules.includes("track"),
     isPlaying,
   });
   trackRef.current = track;
@@ -511,7 +512,7 @@ function SessionOverlay(props: {
             <SensorsPanel
               reading={attention.reading}
               snapFlashes={flashIntensity > 0 ? snaps.length : 0}
-              distanceSensor={policy.rules.includes("track") || track !== undefined}
+              distanceSensor={policy.rules.includes("track")}
               track={track}
             />
             {sensorRows}

@@ -91,9 +91,8 @@ describe("policyForScene", () => {
     assert.deepEqual(policyForScene(plain, tags).rules, ["attention"]);
   });
 
-  it("interactive scenes (a funscript) add track", () => {
-    assert.deepEqual(policyForScene(scene("1", [], { interactive: true }), tags).rules, ["attention", "track"]);
-    assert.deepEqual(policyForScene(scene("2", [], { interactive: false }), tags).rules, ["attention"]);
+  it("a funscript alone doesn't add track: only a tag with the track rule does", () => {
+    assert.deepEqual(policyForScene(scene("1", [], { interactive: true }), tags).rules, ["attention"]);
   });
 
   it("trackMin: strictest over tags, percent values read as shares, default 0.7", () => {

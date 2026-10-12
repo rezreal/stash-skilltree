@@ -156,9 +156,9 @@ Watch policy = rules composed per scene from its tags:
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
   for drift correction). Lag measured per session. User limits (max depth,
   max hold) stop scoring beyond them. Attention relaxes during track sections.
-  Every interactive scene (stash's `interactive`: it has a funscript) gets
-  this rule automatically; without a connected, calibrated sensor it stays
-  unscored. The sensor menu at /skilltree/sensor has four sections: Status
+  Only scenes with a policy tag naming `track` get it (user decision: a
+  funscript alone is not enough); without a connected, calibrated sensor it
+  stays unscored. The sensor menu at /skilltree/sensor has four sections: Status
   (connection, auto-connect switch, live raw/position with a 10 s trace,
   readiness checklist), Calibrate (rest → deepest → check & save wizard),
   Range & limits (no-target raw range, max depth/hold, saved into the plugin

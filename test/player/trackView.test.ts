@@ -303,7 +303,7 @@ describe("sensor menu", () => {
     assert.equal(err[2]!.badge, "depth 60");
   });
 
-  it("lists what is missing before interactive clips are scored", () => {
+  it("lists what is missing before track clips are scored", () => {
     const ready = readinessView({ configured: true, connected: true, calibrated: true });
     assert.ok(ready.ready);
     assert.match(ready.summary, /^Ready/);
