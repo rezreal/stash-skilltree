@@ -58,6 +58,11 @@ Every level L > 0 implicitly requires `topic:L-1`.
 `st.completed_at`, `st.completions`, `st.earned`, `st.spent`,
 `st.exposure_seconds`, `st.markers_extracted_at`, `st.markers_model`.
 
+### Performers (written by the plugin)
+
+`st.gaze_regions`: where the viewer looked on the clip's person, summed over
+saved sessions — JSON `{"v":1,"sessions":n,"sec":{"eyes":12.3,...}}`.
+
 ### Markers
 
 Prompt markers: primary tag carries `st.kind=prompt` and `st.check`
@@ -151,6 +156,17 @@ Watch policy = rules composed per scene from its tags:
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
   for drift correction). Lag measured per session. User limits (max depth,
   max hold) stop scoring beyond them. Attention relaxes during track sections.
+
+- **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
+  video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the
+  prompt checks' frames are reused around gaze prompts) and every gaze
+  sample's time goes to the body region it lands on: eyes, mouth, hands,
+  face, chest, groin, hips, torso, legs, feet (the most specific region
+  wins), else rest of the body, elsewhere in the video, off the video.
+  Counted only while the clip plays in front. The summary shows the
+  session's shares; once the session is saved (complete, or a loop's
+  minutes; ≥ 5 s counted) they are added to every performer of the clip
+  (`st.gaze_regions`). Setting `gazeRegions` (default on).
 
 - **Presence** — during a session the webcam runs continuously and the
   viewer must be in front of it (face or body found). Attention = present

@@ -164,3 +164,14 @@ settings:
       tools/fetch_models.sh. Off: gaze prompts that need the person are
       skipped.
     type: BOOLEAN
+  gazeRegions:
+    displayName: Where you look (gaze regions)
+    description: >-
+      On by default (also while this switch has never been set). With an eye
+      tracker connected, the clip is analysed about twice a second to find
+      the person's eyes, mouth, hands, chest and so on, and the time your
+      gaze spends on each is counted. The session summary shows the shares;
+      saved sessions add them to each performer of the clip (custom field
+      st.gaze_regions). Everything is analysed in the browser. Needs
+      "Analyse the clip for gaze targets". Off: nothing is analysed or saved.
+    type: BOOLEAN

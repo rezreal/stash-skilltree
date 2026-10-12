@@ -30,7 +30,16 @@ import { gazeStatusNow, subscribeGaze } from "../player/useGaze.ts";
 import { createPromptRunner, type GazeFeedSample, type PromptRunner } from "../prompts/runner.ts";
 import { promptSpecs } from "../prompts/specs.ts";
 import { grammarFor } from "../prompts/speechCheck.ts";
-import type { PromptEvents, PromptPhase, PromptProgress, PromptResult, PromptSpec, Region, VideoBox } from "../prompts/types.ts";
+import type {
+  PersonFrame,
+  PromptEvents,
+  PromptPhase,
+  PromptProgress,
+  PromptResult,
+  PromptSpec,
+  Region,
+  VideoBox,
+} from "../prompts/types.ts";
 import { usePluginSettings } from "../ui/pluginApi.ts";
 import type { MicState, VisionState } from "./gate.ts";
 import {
@@ -85,6 +94,8 @@ export interface PromptChecksInput {
   trackerPresent?: () => boolean | undefined;
   onResult: (r: PromptResult) => void;
   onSeek: (toSec: number) => void;
+  /** every analysed video frame (the gaze region heatmap reuses them) */
+  onPersonFrame?: (frame: PersonFrame, box: VideoBox | undefined) => void;
   /** default: from the plugin settings */
   settings?: ChecksSettings;
 }
@@ -445,6 +456,11 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
             if (frame) {
               failures = 0;
               rt.runner.feedPerson(frame, box);
+              try {
+                cur.onPersonFrame?.(frame, box);
+              } catch (err) {
+                console.error("[skilltree] onPersonFrame failed", err);
+              }
             } else if (a.analyzer.lastError !== undefined && ++failures >= MAX_ANALYSIS_FAILURES) {
               patchStatus({ vision: { state: "error", message: `Video analysis keeps failing: ${message(a.analyzer.lastError)}` } });
             }

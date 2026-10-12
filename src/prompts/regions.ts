@@ -20,6 +20,8 @@ export interface RegionOptions {
   minDiameterPx?: number;
   /** landmarks with a lower visibility are ignored */
   minVisibility?: number;
+  /** only regions on the person: feet_floor has no fallback without feet (the region heatmap) */
+  personOnly?: boolean;
 }
 
 type P = ViewportPoint;
@@ -247,8 +249,9 @@ function findPerson(frame: PersonFrame, r: ContentRect, minVis: number): Person 
  * The region of the page that counts as looking at `target`, or undefined
  * when the landmarks it needs are missing (the checker then does not count
  * that time). screen_center, off_screen and the feet_floor fallback need no
- * person. eyes_closed has no region (always undefined; its check does not
- * use one, so this is not "landmarks missing").
+ * person (opts.personOnly: feet_floor without feet is undefined). eyes_closed
+ * has no region (always undefined; its check does not use one, so this is
+ * not "landmarks missing").
  */
 export function targetRegion(
   target: GazeTarget,
@@ -388,6 +391,7 @@ export function targetRegion(
     case "feet_floor": {
       let feet = presentOf(pose, [POSE.leftHeel, POSE.rightHeel, POSE.leftFootIndex, POSE.rightFootIndex]);
       if (feet.length === 0) feet = presentOf(pose, [POSE.leftAnkle, POSE.rightAnkle]);
+      if (feet.length === 0 && opts?.personOnly) return undefined;
       if (feet.length === 0) {
         const top = r.bottom - r.height * 0.2;
         return polygonRegion(
@@ -432,14 +436,37 @@ export function targetRegion(
   return undefined;
 }
 
-function handsRegion(frame: PersonFrame, pose: Pose, r: ContentRect, minVis: number, u: number, minD: number): Region | undefined {
+/**
+ * The main person as a whole: the hull of their visible pose landmarks and
+ * face box, padded by a tenth of the shoulder width (at least 10 px).
+ * undefined without a person.
+ */
+export function personRegion(frame: PersonFrame, box: VideoBox, opts?: RegionOptions): Region | undefined {
+  const minD = opts?.minDiameterPx ?? DEFAULT_MIN_DIAMETER_PX;
+  const minVis = opts?.minVisibility ?? DEFAULT_MIN_VISIBILITY;
+  const person = findPerson(frame, videoContentRect(box), minVis);
+  const pts = (person.pose ?? []).filter((p): p is P => p !== undefined);
+  const f = person.face;
+  if (f) {
+    pts.push(
+      { x: f.left, y: f.top },
+      { x: f.left + f.width, y: f.top },
+      { x: f.left + f.width, y: f.top + f.height },
+      { x: f.left, y: f.top + f.height },
+    );
+  }
+  if (pts.length === 0) return undefined;
+  return polygonRegion(pts, Math.max(person.unit * 0.1, 10), minD);
+}
+
+/** One point set per hand of the main person; undefined when the hands can't be told apart from someone else's. */
+function handSets(frame: PersonFrame, pose: Pose, r: ContentRect, minVis: number, u: number, minD: number): P[][] | undefined {
   const hands: P[][] = frame.hands
     .map((h) => h.filter((p) => visible(p, minVis)).map((p) => project(p, r)))
     .filter((h) => h.length > 0);
   const wrists = presentOf(pose, [POSE.leftWrist, POSE.rightWrist]);
   const reach = Math.max(u * 0.8, minD);
 
-  // one point set per hand of the main person
   const sets: P[][] = [];
   if (wrists.length > 0) {
     const used = new Set<number>();
@@ -465,18 +492,38 @@ function handsRegion(frame: PersonFrame, pose: Pose, r: ContentRect, minVis: num
   } else {
     sets.push(...hands.slice(0, 2));
   }
-  if (sets.length === 0) return undefined;
+  return sets;
+}
 
-  const pad = (s: P[]): number => (s.length === 1 ? Math.max(u * 0.3, 10) : Math.max(u * 0.08, 10));
-  if (sets.length === 1) {
-    const s = sets[0]!;
-    const b = bbox(s);
-    const p = pad(s);
-    return ellipse({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }, (b.maxX - b.minX) / 2 + p, (b.maxY - b.minY) / 2 + p, minD);
-  }
+const handPad = (s: P[], u: number): number => (s.length === 1 ? Math.max(u * 0.3, 10) : Math.max(u * 0.08, 10));
+
+function handEllipse(s: P[], u: number, minD: number): Region {
+  const b = bbox(s);
+  const p = handPad(s, u);
+  return ellipse({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }, (b.maxX - b.minX) / 2 + p, (b.maxY - b.minY) / 2 + p, minD);
+}
+
+/** both hands as one region (the hull of the two), or the one hand */
+function handsRegion(frame: PersonFrame, pose: Pose, r: ContentRect, minVis: number, u: number, minD: number): Region | undefined {
+  const sets = handSets(frame, pose, r, minVis, u, minD);
+  if (!sets || sets.length === 0) return undefined;
+  if (sets.length === 1) return handEllipse(sets[0]!, u, minD);
   const all: P[] = [];
-  for (const s of sets) all.push(...padPoints(s, pad(s)));
+  for (const s of sets) all.push(...padPoints(s, handPad(s, u)));
   return polygonRegion(all, 0, minD);
+}
+
+/**
+ * Each hand of the main person as its own region (the "hands" target joins
+ * them into one hull, which also covers what lies between them).
+ */
+export function handRegions(frame: PersonFrame, box: VideoBox, opts?: RegionOptions): Region[] {
+  const minD = opts?.minDiameterPx ?? DEFAULT_MIN_DIAMETER_PX;
+  const minVis = opts?.minVisibility ?? DEFAULT_MIN_VISIBILITY;
+  const r = videoContentRect(box);
+  const person = findPerson(frame, r, minVis);
+  const sets = handSets(frame, person.pose ?? [], r, minVis, person.unit, minD) ?? [];
+  return sets.map((s) => handEllipse(s, person.unit, minD));
 }
 
 // --- hit test ------------------------------------------------------------------

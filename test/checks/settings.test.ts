@@ -10,11 +10,12 @@ describe("checksSettings", () => {
   });
 
   it("reads booleans and tolerant strings / numbers", () => {
-    assert.deepEqual(checksSettings({ webcamRequired: false, promptsEnabled: "no", speechEnabled: 0, videoAnalysis: "TRUE" }), {
+    assert.deepEqual(checksSettings({ webcamRequired: false, promptsEnabled: "no", speechEnabled: 0, videoAnalysis: "TRUE", gazeRegions: "off" }), {
       webcamRequired: false,
       promptsEnabled: false,
       speechEnabled: false,
       videoAnalysis: true,
+      gazeRegions: false,
     });
   });
 

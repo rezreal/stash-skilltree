@@ -2,6 +2,7 @@ export * from "./types.ts";
 export * from "./specs.ts";
 export * from "./hold.ts";
 export * from "./regions.ts";
+export * from "./regionHeatmap.ts";
 export * from "./gazeCheck.ts";
 export * from "./speechCheck.ts";
 export * from "./posture.ts";

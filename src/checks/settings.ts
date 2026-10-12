@@ -11,6 +11,8 @@ export interface ChecksSettings {
   speechEnabled: boolean;
   /** MediaPipe on the clip (gaze targets on the person in the video); default true */
   videoAnalysis: boolean;
+  /** with an eye tracker: time per body region looked at, per session and performer (needs videoAnalysis); default true */
+  gazeRegions: boolean;
 }
 
 export const DEFAULT_CHECKS_SETTINGS: Readonly<ChecksSettings> = {
@@ -18,6 +20,7 @@ export const DEFAULT_CHECKS_SETTINGS: Readonly<ChecksSettings> = {
   promptsEnabled: true,
   speechEnabled: true,
   videoAnalysis: true,
+  gazeRegions: true,
 };
 
 const TRUE = ["true", "1", "yes", "on"];
@@ -43,5 +46,6 @@ export function checksSettings(raw: Record<string, unknown> | null | undefined):
     promptsEnabled: parseBool(r.promptsEnabled, DEFAULT_CHECKS_SETTINGS.promptsEnabled),
     speechEnabled: parseBool(r.speechEnabled, DEFAULT_CHECKS_SETTINGS.speechEnabled),
     videoAnalysis: parseBool(r.videoAnalysis, DEFAULT_CHECKS_SETTINGS.videoAnalysis),
+    gazeRegions: parseBool(r.gazeRegions, DEFAULT_CHECKS_SETTINGS.gazeRegions),
   };
 }

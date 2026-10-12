@@ -5,6 +5,8 @@
 //   adjustAttention: presenceAdjuster(() => viewer, settings.webcamRequired)
 //   const checks = usePromptChecks({ scene, enabled, getVideoTime, getVideo,
 //     viewer, onResult: s.reportPrompt, onSeek: s.seek });
+//   const regions = useGazeRegions({ enabled, getVideoTime, getVideo, counting });
+//     (usePromptChecks({ ..., onPersonFrame: regions.feedPerson }))
 //   beforeEnd: checks.finish
 //   <CameraGate onReady={...} />, <PromptBanner checks={checks} />,
 //   <ChecksSensorRows viewer={viewer} status={checks.status} />
@@ -18,6 +20,7 @@ export * from "./gate.ts";
 export * from "./camera.ts";
 export * from "./useViewerPresence.ts";
 export * from "./usePromptChecks.ts";
+export * from "./useGazeRegions.ts";
 export * from "./PromptBanner.tsx";
 export * from "./CameraGate.tsx";
 export * from "./ChecksSensorRows.tsx";

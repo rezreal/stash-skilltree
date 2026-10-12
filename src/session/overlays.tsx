@@ -164,6 +164,8 @@ export function CompleteSummary(props: {
   onRetrySave: () => void;
   /** test mode: rule results; the summary is a preview, nothing was saved */
   testResults?: RuleResult[];
+  /** extra summary blocks (the gaze regions) */
+  children?: ReactNode;
 }) {
   const { start, data, session, save } = props;
   const { Link } = router();
@@ -283,6 +285,7 @@ export function CompleteSummary(props: {
             Out of the fog: {revealed.map((k) => fogLabel(k, data.visibility.get(k))).join(" · ")}
           </div>
         )}
+        {props.children}
         <Link to={PLAY_ROUTE} className="stp-btn stp-btn-orange stp-btn-lg">
           Choose next
         </Link>
@@ -297,6 +300,8 @@ export function LoopSaved(props: {
   minMinutes?: number;
   onRetry: () => void;
   onAgain: () => void;
+  /** extra summary blocks (the gaze regions) */
+  children?: ReactNode;
 }) {
   const { save } = props;
   const { Link } = router();
@@ -333,6 +338,7 @@ export function LoopSaved(props: {
                 </span>
               </div>
             </div>
+            {props.children}
           </>
         )}
         <div className="stp-overlay-actions">

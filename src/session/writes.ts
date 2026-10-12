@@ -7,6 +7,8 @@
 // Pure apart from the writer; tested under node --test.
 import type { Id } from "../core/types.ts";
 import { commitSession, saveExposure } from "../play/commit.ts";
+import { saveGazeRegions, type SavedRegions } from "../play/gazeRegions.ts";
+import type { RegionSeconds } from "../prompts/regionHeatmap.ts";
 import type { SessionCommit } from "../play/types.ts";
 import type { StashClient } from "../stash/client.ts";
 
@@ -15,6 +17,8 @@ export interface SessionWriter {
   commit(c: SessionCommit): Promise<void>;
   /** a loop's total exposure (st.exposure_seconds) */
   saveExposure(sceneId: Id, totalSec: number): Promise<void>;
+  /** the session's gaze regions added to each performer (st.gaze_regions) */
+  saveGazeRegions(performerIds: readonly Id[], sec: RegionSeconds): Promise<SavedRegions>;
 }
 
 /** The session's writer; undefined when it must not persist (test mode). */
@@ -23,6 +27,7 @@ export function sessionWriter(client: StashClient, persist: boolean): SessionWri
   return {
     commit: (c) => commitSession(client, c),
     saveExposure: (sceneId, totalSec) => saveExposure(client, sceneId, totalSec),
+    saveGazeRegions: (performerIds, sec) => saveGazeRegions(client, performerIds, sec),
   };
 }
 

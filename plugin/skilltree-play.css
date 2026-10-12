@@ -1906,3 +1906,22 @@
   position: absolute;
   transform-origin: 0 50%;
 }
+
+/* gaze regions in the session summary: one bar per region */
+.skilltree-play .stp-region-row {
+  align-items: center;
+  display: grid;
+  font-size: 14px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) 3.2em;
+}
+.skilltree-play .stp-region-label { color: var(--stp-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skilltree-play .stp-region-bar {
+  background: var(--stp-thumb);
+  border-radius: 3px;
+  display: block;
+  height: 8px;
+  overflow: hidden;
+}
+.skilltree-play .stp-region-bar > span { background: var(--st-complete); display: block; height: 100%; }
+.skilltree-play .stp-region-pct { text-align: right; }

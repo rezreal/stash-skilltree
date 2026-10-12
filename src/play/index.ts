@@ -8,3 +8,4 @@ export * from "./chronology.ts";
 export * from "./suggest.ts";
 export * from "./commit.ts";
 export * from "./queries.ts";
+export * from "./gazeRegions.ts";

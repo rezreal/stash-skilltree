@@ -107,9 +107,14 @@ describe("persist = false: nothing is written", () => {
   it("the session code reaches the write functions only through sessionWriter", () => {
     // structural: the session hook and overlay import no write function, so
     // without a writer (persist: false) nothing can be committed or stored
-    for (const file of ["src/session/useSkilltreeSession.ts", "src/session/StashSession.tsx", "src/session/overlays.tsx"]) {
+    for (const file of [
+      "src/session/useSkilltreeSession.ts",
+      "src/session/StashSession.tsx",
+      "src/session/overlays.tsx",
+      "src/session/GazeRegionsSummary.tsx",
+    ]) {
       const src = readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
-      for (const fn of ["commitSession", "saveExposure(", "payForNode", "SCENE_UPDATE_FIELDS", "TAG_UPDATE_PAID", ".gql("]) {
+      for (const fn of ["commitSession", "saveExposure(", "saveGazeRegions(", "payForNode", "SCENE_UPDATE_FIELDS", "TAG_UPDATE_PAID", "PERFORMER_UPDATE_FIELDS", ".gql("]) {
         assert.equal(src.includes(fn), false, `${file} must not use ${fn}`);
       }
     }

@@ -2,7 +2,8 @@
 // introspection: findTags(ids, tag_filter, filter), sceneUpdate(input:
 // SceneUpdateInput!) with custom_fields: CustomFieldsInput {full, partial,
 // remove}, sceneAddPlay(id: ID!, times: [Timestamp!]) -> HistoryMutationResult
-// {count, history}, tagUpdate(input: TagUpdateInput!).
+// {count, history}, tagUpdate(input: TagUpdateInput!), findPerformer(id: ID!)
+// and performerUpdate(input: PerformerUpdateInput!) with custom_fields.
 
 import type { CustomFields } from "../stash/fields.ts";
 
@@ -62,10 +63,32 @@ export const TAG_UPDATE_PAID = /* GraphQL */ `
   }
 `;
 
+/** One performer's custom fields (to add to st.gaze_regions). */
+export const FIND_PERFORMER_FIELDS = /* GraphQL */ `
+  query SkilltreePerformerFields($id: ID!) {
+    findPerformer(id: $id) {
+      id
+      custom_fields
+    }
+  }
+`;
+
+export const PERFORMER_UPDATE_FIELDS = /* GraphQL */ `
+  mutation SkilltreePerformerFields($input: PerformerUpdateInput!) {
+    performerUpdate(input: $input) {
+      id
+    }
+  }
+`;
+
 export interface FindPolicyTagsResult {
   findTags: { tags: { id: string; name: string; custom_fields: CustomFields | null }[] };
 }
 
 export interface FindTagFieldsResult {
   findTags: { tags: { id: string; custom_fields: CustomFields | null }[] };
+}
+
+export interface FindPerformerFieldsResult {
+  findPerformer: { id: string; custom_fields: CustomFields | null } | null;
 }

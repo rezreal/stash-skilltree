@@ -38,7 +38,7 @@ import { isExposureOnly, previousExposure, promptMarkers } from "../player/view.
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import type { MarkerInput } from "../core/types.ts";
 import { isViewerPause, loopWorthSaving, playerRequest, spendDeadlineMs } from "./controller.ts";
-import { finishComplete, sessionWriter, storeExposure, type SaveState } from "./writes.ts";
+import { finishComplete, sessionWriter, storeExposure, type SaveState, type SessionWriter } from "./writes.ts";
 
 export type { SaveState } from "./writes.ts";
 
@@ -94,6 +94,8 @@ export interface SkilltreeSession {
   exposureOnly: boolean;
   /** false in test mode: this session writes nothing */
   persists: boolean;
+  /** adds the gaze regions to the performers; undefined in test mode */
+  saveGazeRegions: SessionWriter["saveGazeRegions"] | undefined;
   session: SessionState;
   /** balance minus what this session spent so far */
   balance: number;
@@ -417,6 +419,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     policy,
     exposureOnly,
     persists: writer !== undefined,
+    saveGazeRegions: writer?.saveGazeRegions,
     session,
     balance,
     attention,

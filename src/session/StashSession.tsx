@@ -22,6 +22,9 @@
 //   active gaze prompt replaces the gaze-on-video target: "close your eyes"
 //   pauses while the eyes are open), prompt checks on the video clock, the
 //   distance-sensor guide over the video and its score fed to the session.
+// - Gaze regions (src/checks/useGazeRegions.ts): with an eye tracker, the
+//   time the gaze spends on each body region of the person in the clip,
+//   shown in the summary and added to the clip's performers once saved.
 // Resources: the webcam is reference counted by the checks module and turns
 // off ~1 s after the session ends or the overlay unmounts (leaving the scene
 // page); usePromptChecks frees the microphone and the speech / vision models
@@ -33,6 +36,7 @@ import { CameraGate, useCameraPermission } from "../checks/CameraGate.tsx";
 import { ChecksSensorRows } from "../checks/ChecksSensorRows.tsx";
 import { PromptBanner } from "../checks/PromptBanner.tsx";
 import { checksSettings } from "../checks/settings.ts";
+import { useGazeRegions } from "../checks/useGazeRegions.ts";
 import { usePromptChecks, type PromptChecks } from "../checks/usePromptChecks.ts";
 import { useViewerPresence, type ViewerPresence } from "../checks/useViewerPresence.ts";
 import { isTerminal } from "../play/index.ts";
@@ -68,6 +72,7 @@ import {
 import { bannerNotice, findTreeScene, ruleResults, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
 import { CameraPip } from "./CameraPip.tsx";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
+import { GazeRegionsSummary, usePerformerRegions } from "./GazeRegionsSummary.tsx";
 import { calloutAim } from "./gazeCallout.ts";
 import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog, TEST_NOT_SAVED } from "./overlays.tsx";
 import { CountsWhen, SlimTimeline, useRecentChange } from "./panels.tsx";
@@ -346,6 +351,19 @@ function SessionOverlay(props: {
   // --- checks: webcam presence + prompt checks ---
   const viewer = useViewerPresence({ enabled: presenceWanted({ required, permission, finished }) });
   viewerRef.current = viewer;
+  // where the gaze lands on the person: counted while the clip plays in front
+  const readingRef = React.useRef(attention.reading);
+  readingRef.current = attention.reading;
+  const regionsCounting = React.useCallback(
+    () => !handle.paused() && !handle.ended() && !readingRef.current.background,
+    [handle],
+  );
+  const regions = useGazeRegions({
+    enabled: settings.videoAnalysis && settings.gazeRegions && !finished,
+    getVideoTime,
+    getVideo,
+    counting: regionsCounting,
+  });
   // no getVideoBox: the hook measures the <video> itself
   const checks = usePromptChecks({
     scene,
@@ -355,8 +373,16 @@ function SessionOverlay(props: {
     viewer,
     onResult: s.reportPrompt,
     onSeek: s.seek,
+    onPersonFrame: regions.feedPerson,
   });
   checksRef.current = checks;
+  const performerRegions = usePerformerRegions({
+    ended: s.save.status === "saved" || s.save.status === "preview",
+    seconds: regions.seconds,
+    save: s.saveGazeRegions,
+    performerIds: scene.performerIds,
+  });
+  const regionsSummary: ReactNode = <GazeRegionsSummary state={performerRegions} performers={data.graph.performers} />;
 
   // --- track: the distance-sensor guide and its score ---
   const runningRef = React.useRef(!finished);
@@ -534,7 +560,9 @@ function SessionOverlay(props: {
           promptCount={s.prompts.length}
           onRetrySave={s.retrySave}
           testResults={testResults}
-        />
+        >
+          {regionsSummary}
+        </CompleteSummary>
       )}
 
       {loopSaveShown && (
@@ -544,7 +572,9 @@ function SessionOverlay(props: {
           minMinutes={policy.minMinutes}
           onRetry={s.retryLoopSave}
           onAgain={props.onRetry}
-        />
+        >
+          {regionsSummary}
+        </LoopSaved>
       )}
 
       {!finished && !loopSaveShown && (
