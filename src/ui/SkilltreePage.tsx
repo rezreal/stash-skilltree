@@ -15,7 +15,8 @@ import { createClient, loadLibrary } from "../stash/index.ts";
 import { pluginApi, usePluginSettings } from "./pluginApi.ts";
 import { PLAY_ROUTE } from "./register.tsx";
 import { countBySeverity, performerOptions, scenesInTree } from "./derive.ts";
-import { RadialTree } from "./RadialTree.tsx";
+import { SkillTreeView } from "./SkillTreeView.tsx";
+import { fogStats } from "./fogView.ts";
 import { NodePanel } from "./NodePanel.tsx";
 import { LintPanel } from "./LintPanel.tsx";
 import { TopicTable } from "./TopicTable.tsx";
@@ -131,8 +132,10 @@ function SkilltreeView(props: SkilltreeViewProps) {
   const counts = countBySeverity(issues);
   let complete = 0;
   for (const p of progress.values()) if (p.state === "complete") complete++;
+  // the fog view never shows totals of the hidden graph
+  const fogCounts = authorView ? undefined : fogStats(graph, progress);
 
-  const fog = authorView ? undefined : (selected ? visibility.get(selected) : undefined);
+  const fog = authorView ? undefined : (selected ? (visibility.get(selected) ?? "hidden") : undefined);
   const onPerformer = (e: ChangeEvent<HTMLSelectElement>) => setPerformerId(e.target.value || undefined);
   const showSetup = authorView && section === "setup";
   const openSetup = (tagId?: Id) => {
@@ -146,9 +149,19 @@ function SkilltreeView(props: SkilltreeViewProps) {
       <header className="skilltree-header">
         <h2 className="skilltree-title">Skilltree</h2>
         <ul className="skilltree-stats" aria-label="Summary">
-          <li><b>{graph.topics.length}</b> topics</li>
-          <li><b>{complete}/{graph.nodes.size}</b> nodes complete</li>
-          <li><b>{scenesInTree(graph)}</b> scenes in tree</li>
+          {fogCounts ? (
+            <>
+              <li><b>{fogCounts.reached}</b> {fogCounts.reached === 1 ? "level" : "levels"} reached</li>
+              <li><b>{fogCounts.open}</b> open</li>
+              <li><b>{fogCounts.topics}</b> {fogCounts.topics === 1 ? "topic" : "topics"} entered</li>
+            </>
+          ) : (
+            <>
+              <li><b>{graph.topics.length}</b> topics</li>
+              <li><b>{complete}/{graph.nodes.size}</b> nodes complete</li>
+              <li><b>{scenesInTree(graph)}</b> scenes in tree</li>
+            </>
+          )}
           {authorView && (
             <>
               <li className={counts.error ? "is-error" : undefined}><b>{counts.error}</b> errors</li>
@@ -234,7 +247,7 @@ function SkilltreeView(props: SkilltreeViewProps) {
         <>
           <div className="skilltree-main">
             <div className="skilltree-tree-wrap">
-              <RadialTree
+              <SkillTreeView
                 graph={graph}
                 layout={layout}
                 progress={progress}
@@ -249,6 +262,7 @@ function SkilltreeView(props: SkilltreeViewProps) {
               <NodePanel
                 graph={graph}
                 progress={progress}
+                visibility={visibility}
                 selected={selected}
                 fog={fog}
                 performerId={performerId}
@@ -282,7 +296,7 @@ function Legend(props: { authorView: boolean }) {
     ["open", "open"],
     ...(props.authorView
       ? ([["locked", "locked"]] as [string, string][])
-      : ([["ahead", "ahead"], ["gate", "can be bought"]] as [string, string][])),
+      : ([["ahead", "next, still unknown"], ["gate", "can be bought"]] as [string, string][])),
   ];
   return (
     <ul className="skilltree-legend" aria-label="Legend">

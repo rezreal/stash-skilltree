@@ -1,31 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { GraphNode, Layout, LayoutNode, NodeKey, Requirement } from "../../src/core/types.ts";
+import type { GraphNode, Layout, NodeKey, Requirement } from "../../src/core/types.ts";
 import {
   DEFAULT_DIMS,
+  MAX_VIEW,
+  MIN_VIEW,
+  START_RADIUS,
   buildEdges,
-  dimsFor,
-  fogStubs,
+  fitBox,
   junctionPoint,
-  labelAnchor,
-  placeNodes,
-  polar,
-  ringRadius,
-  successorPairs,
+  panBox,
+  positions,
+  startEdges,
   trim,
-  viewBoxFor,
+  viewBoxString,
+  zoomBox,
   type Point,
 } from "../../src/ui/geometry.ts";
 
 const dims = DEFAULT_DIMS;
-
-function layoutOf(nodes: LayoutNode[]): Layout {
-  return {
-    nodes: new Map(nodes.map((n) => [n.key, n])),
-    topicAngles: new Map(),
-    maxRing: Math.max(0, ...nodes.map((n) => n.ring)),
-  };
-}
 
 function node(key: NodeKey, explicit: Requirement = []): GraphNode {
   const [topic, l] = key.split(":");
@@ -46,58 +39,19 @@ function node(key: NodeKey, explicit: Requirement = []): GraphNode {
 
 const lvl = (topic: string, level: number) => ({ kind: "level" as const, topic, level });
 
-test("polar: 0° is right, 90° is down (SVG coordinates)", () => {
-  assert.deepEqual(polar(10, 0), { x: 10, y: 0 });
-  assert.deepEqual(polar(10, 90), { x: 0, y: 10 });
-  assert.deepEqual(polar(10, -90), { x: 0, y: -10 });
-});
+function layoutOf(points: Record<NodeKey, Point>, entries: NodeKey[] = []): Layout {
+  return {
+    nodes: new Map(Object.entries(points).map(([key, p]) => [key, { key, ...p, depth: 0 }])),
+    entries,
+    bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    maxDepth: 0,
+  };
+}
 
-test("ringRadius grows by gap per ring", () => {
-  assert.equal(ringRadius(0), dims.inner);
-  assert.equal(ringRadius(2) - ringRadius(1), dims.gap);
-});
-
-test("dimsFor widens ring 0 only when many entry nodes share it", () => {
-  const few = layoutOf([{ key: "a:0", ring: 0, angle: 0 }, { key: "b:0", ring: 0, angle: 180 }]);
-  assert.equal(dimsFor(few).inner, dims.inner);
-  const many = layoutOf(
-    Array.from({ length: 24 }, (_, i) => ({ key: `t${i}:0`, ring: 0, angle: i * 15 })),
-  );
-  const wide = dimsFor(many);
-  assert.ok(wide.inner > dims.inner);
-  // neighbours 15° apart no longer collide
-  assert.ok((2 * Math.PI * wide.inner) / 24 >= 2.3 * dims.node);
-});
-
-test("placeNodes keeps separate angles untouched", () => {
-  const placed = placeNodes(
-    layoutOf([
-      { key: "a:0", ring: 0, angle: -90 },
-      { key: "b:0", ring: 0, angle: 90 },
-    ]),
-    (k) => k.split(":")[0],
-    ["a", "b"],
-  );
-  assert.equal(placed.get("a:0")!.angle, -90);
-  assert.deepEqual({ x: placed.get("b:0")!.x, y: placed.get("b:0")!.y }, polar(ringRadius(0), 90));
-});
-
-test("placeNodes spreads colliding nodes of one ring symmetrically, in topic order", () => {
-  const placed = placeNodes(
-    layoutOf([
-      { key: "b:1", ring: 2, angle: 0 },
-      { key: "a:1", ring: 2, angle: 0 },
-      { key: "c:0", ring: 1, angle: 0 },
-    ]),
-    (k) => k.split(":")[0],
-    ["a", "b", "c"],
-  );
-  const a = placed.get("a:1")!;
-  const b = placed.get("b:1")!;
-  assert.ok(a.angle < 0 && b.angle > 0, "topic order decides the side");
-  assert.equal(a.angle, -b.angle, "symmetric around the mean");
-  assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= 2 * dims.node, "circles do not overlap");
-  assert.equal(placed.get("c:0")!.angle, 0, "other rings are unaffected");
+test("positions: all layout nodes, or only those passing the filter", () => {
+  const l = layoutOf({ "a:0": { x: 1, y: 2 }, "b:0": { x: 3, y: 4 } });
+  assert.deepEqual([...positions(l)], [["a:0", { x: 1, y: 2 }], ["b:0", { x: 3, y: 4 }]]);
+  assert.deepEqual([...positions(l, (k) => k === "b:0").keys()], ["b:0"]);
 });
 
 test("trim shortens both ends and collapses short segments", () => {
@@ -152,61 +106,61 @@ test("buildEdges: OR alternatives meet in a junction before the target", () => {
   assert.deepEqual(last[0].sources, ["a:0", "b:0"]);
 });
 
-test("buildEdges skips references to nodes without a position", () => {
-  const pos = new Map<NodeKey, Point>([["c:0", { x: 0, y: 0 }]]);
-  const { segments, junctions } = buildEdges([node("c:0", [[lvl("ghost", 3)]])], pos);
-  assert.equal(segments.length + junctions.length, 0);
+test("buildEdges: alternatives without a position leave no trace", () => {
+  // b:0 is not drawn: the OR group becomes a plain edge from a:0, and the
+  // junction (if any) would not lean towards b:0
+  const pos = new Map<NodeKey, Point>([
+    ["a:0", { x: -100, y: 0 }],
+    ["c:0", { x: 0, y: 200 }],
+  ]);
+  const { segments, junctions } = buildEdges([node("c:0", [[lvl("a", 0), lvl("b", 0)]])], pos);
+  assert.equal(junctions.length, 0);
+  assert.deepEqual(segments.map((s) => s.sources), [["a:0"]]);
+  const ghost = buildEdges([node("c:0", [[lvl("ghost", 3)]])], new Map([["c:0", { x: 0, y: 0 }]]));
+  assert.equal(ghost.segments.length + ghost.junctions.length, 0);
 });
 
-test("junctionPoint falls back towards the centre when sources sit on the target", () => {
+test("junctionPoint falls back towards START when sources sit on the target", () => {
   const j = junctionPoint({ x: 0, y: 100 }, [{ x: 0, y: 100 }]);
   assert.equal(j.x, 0);
   assert.ok(j.y < 100);
+  const atOrigin = junctionPoint({ x: 0, y: 0 }, [{ x: 0, y: 0 }]);
+  assert.ok(Number.isFinite(atOrigin.x) && Number.isFinite(atOrigin.y));
 });
 
-test("successorPairs lists every prerequisite once, including implicit levels", () => {
-  const pairs = successorPairs([node("a:1", [[lvl("b", 0), lvl("a", 0)]]), node("b:1")]);
-  assert.deepEqual(
-    pairs.map((p) => p.join(">")).sort(),
-    ["a:0>a:1", "b:0>a:1", "b:0>b:1"],
-  );
+test("startEdges: from the START marker to entry nodes that have a position", () => {
+  const pos = new Map<NodeKey, Point>([["a:0", { x: 100, y: 0 }]]);
+  const edges = startEdges(["a:0", "hidden:0"], pos);
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0].kind, "start");
+  assert.deepEqual(edges[0].from, { x: START_RADIUS, y: 0 });
+  assert.deepEqual(edges[0].to, { x: 100 - dims.node - 3, y: 0 });
 });
 
-test("fogStubs: only visible → hidden, short and pointing at the hidden node", () => {
-  const pos = new Map<NodeKey, Point>([
-    ["a:0", { x: 0, y: 0 }],
-    ["a:1", { x: 200, y: 0 }],
-    ["b:0", { x: 0, y: 200 }],
-  ]);
-  const visible = new Set(["a:0", "b:0"]);
-  const stubs = fogStubs(
-    [
-      ["a:0", "a:1"],
-      ["a:0", "b:0"],
-      ["a:1", "b:0"],
-    ],
-    (k) => visible.has(k),
-    pos,
-    22,
-  );
-  assert.equal(stubs.length, 1);
-  const s = stubs[0];
-  assert.equal(s.id, "a:0~a:1");
-  assert.equal(s.from.x, dims.node + 2);
-  assert.ok(Math.abs(s.to.x - s.from.x - 22) < 0.01);
-  assert.equal(s.to.y, 0);
+test("fitBox frames the points and START with a margin, never smaller than minSize", () => {
+  const box = fitBox([{ x: 100, y: 50 }, { x: 900, y: -400 }], 50, 100);
+  assert.deepEqual(box, { x: -50, y: -450, w: 1000, h: 550 });
+  const small = fitBox([{ x: 40, y: 0 }], 10, 480);
+  assert.equal(small.w, 480);
+  assert.equal(small.h, 480);
+  assert.equal(small.x + small.w / 2, 20, "centred on what is shown");
+  assert.deepEqual(fitBox([], 70, 0), { x: -70, y: -70, w: 140, h: 140 });
 });
 
-test("labelAnchor follows the side of the circle", () => {
-  assert.equal(labelAnchor(0), "start");
-  assert.equal(labelAnchor(180), "end");
-  assert.equal(labelAnchor(-90), "middle");
+test("zoomBox keeps the zoom centre in place and clamps the scale", () => {
+  const box = { x: 0, y: 0, w: 1000, h: 500 };
+  const z = zoomBox(box, 2, { x: 100, y: 100 });
+  assert.deepEqual(z, { x: 50, y: 50, w: 500, h: 250 });
+  // the centre stays at the same relative spot
+  assert.equal((100 - z.x) / z.w, (100 - box.x) / box.w);
+  assert.equal(zoomBox(box, 1000).w, MIN_VIEW);
+  assert.equal(zoomBox(box, 1e-6).w, MAX_VIEW);
+  assert.deepEqual(zoomBox(box, NaN), box);
+  const centred = zoomBox(box, 2);
+  assert.deepEqual(centred, { x: 250, y: 125, w: 500, h: 250 });
 });
 
-test("viewBoxFor is square and centred", () => {
-  const [x, y, w, h] = viewBoxFor(2, dims, 100).split(" ").map(Number);
-  assert.equal(x, -(ringRadius(2) + 100));
-  assert.equal(y, x);
-  assert.equal(w, -2 * x);
-  assert.equal(h, w);
+test("panBox moves without resizing; viewBoxString rounds", () => {
+  assert.deepEqual(panBox({ x: 0, y: 0, w: 10, h: 20 }, 5, -3), { x: 5, y: -3, w: 10, h: 20 });
+  assert.equal(viewBoxString({ x: -1.23456, y: 2, w: 100, h: 50.005 }), "-1.23 2 100 50.01");
 });

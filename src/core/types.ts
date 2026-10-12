@@ -158,18 +158,32 @@ export type Progress = Map<NodeKey, NodeProgress>;
 
 export type Visibility = "shown" | "ahead" | "gate" | "hidden";
 
+/**
+ * Position of one node in the organic tree layout. Coordinates are in SVG
+ * user units (y grows downwards); the virtual START node sits at (0, 0).
+ */
 export interface LayoutNode {
   key: NodeKey;
-  /** graph depth, ring index */
-  ring: number;
-  /** degrees, 0 = right, clockwise, -90 = top */
-  angle: number;
+  x: number;
+  y: number;
+  /** requirement depth: 0 = entry node, 1 + deepest prerequisite otherwise */
+  depth: number;
+}
+
+export interface LayoutBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 export interface Layout {
   nodes: Map<NodeKey, LayoutNode>;
-  topicAngles: Map<string, number>;
-  maxRing: number;
+  /** nodes hanging off the virtual START node (entry nodes), sorted */
+  entries: NodeKey[];
+  /** bounding box of every node centre and START */
+  bounds: LayoutBounds;
+  maxDepth: number;
 }
 
 export type Severity = "error" | "warning" | "info";

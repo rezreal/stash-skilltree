@@ -14,6 +14,7 @@
   --st-border: rgba(138, 155, 168, 0.25);
   --st-error: #e5534b;
   --st-warning: var(--st-open);
+  --st-page-bg: #202b33;
 
   color: var(--st-text);
   margin: 0 auto;
@@ -122,30 +123,57 @@
 
 /* --- tree ---------------------------------------------------------------- */
 
+.skilltree-tree-frame {
+  position: relative;
+}
+
 .skilltree-tree {
+  cursor: grab;
   display: block;
-  height: auto;
-  max-height: 85vh;
-  width: 100%;
   font-family: inherit;
+  height: min(75vh, 760px);
+  min-height: 320px;
+  touch-action: none;
+  user-select: none;
+  width: 100%;
 }
 
-.skilltree-ring {
-  fill: none;
-  stroke: var(--st-border);
-  stroke-dasharray: 3 5;
+.skilltree-tree.is-dragging {
+  cursor: grabbing;
 }
 
-.skilltree-ring-label {
+.skilltree-zoom {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+}
+
+.skilltree-zoom .btn {
+  min-width: 2.25rem;
+}
+
+.skilltree-start-disc {
+  fill: var(--st-text);
+  opacity: 0.85;
+}
+
+.skilltree-start-label {
   fill: var(--st-muted);
   font-size: 9px;
-  opacity: 0.7;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-transform: uppercase;
 }
 
 .skilltree-topic-label {
   fill: var(--st-text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: var(--st-page-bg);
+  stroke-linejoin: round;
+  stroke-width: 3px;
 }
 
 .skilltree-edge {
@@ -155,6 +183,11 @@
 
 .skilltree-edge.is-explicit {
   stroke-dasharray: 5 4;
+}
+
+.skilltree-edge.is-start {
+  opacity: 0.6;
+  stroke-dasharray: 2 4;
 }
 
 .skilltree-edge.is-met {
@@ -177,14 +210,6 @@
   fill: var(--st-gold);
   font-size: 9px;
   text-anchor: middle;
-}
-
-.skilltree-stub {
-  stroke: var(--st-muted);
-  stroke-dasharray: 1 4;
-  stroke-linecap: round;
-  stroke-width: 2;
-  opacity: 0.7;
 }
 
 .skilltree-node {

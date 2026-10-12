@@ -127,8 +127,9 @@ test("progressText and aria labels", () => {
   assert.equal(progressText(undefined), "–");
   const n = gnode("a:2");
   assert.equal(nodeAriaLabel(n, prog("open", 1, 3), "shown", 0), "a level 2, open, 1 of 3 scenes completed");
-  assert.equal(nodeAriaLabel(n, prog("locked"), "ahead", 0), "a level 2, not yet open");
+  assert.equal(nodeAriaLabel(n, prog("locked"), "ahead", 0), "Unknown level, not yet open");
   assert.equal(nodeAriaLabel(n, prog("locked"), "gate", 50), "a level 2, can be opened for 50 coins");
+  assert.equal(nodeAriaLabel(n, prog("locked"), "gate", 50, false), "Unknown level, can be opened for 50 coins");
 });
 
 test("topicRows: one cell per level, empty where a topic has no such level", () => {

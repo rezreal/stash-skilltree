@@ -85,15 +85,25 @@ export function progressText(p: NodeProgress | undefined): string {
   return p ? `${p.completed}/${p.need}` : "–";
 }
 
+/** "1 more scene", "3 more scenes" */
+export function plural(n: number, singular: string, pluralForm = singular + "s"): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
+/**
+ * Accessible name of a tree node. Ahead nodes are always anonymous; gate
+ * nodes are named only when `named` (their topic is known to the player).
+ */
 export function nodeAriaLabel(
   node: GraphNode,
   p: NodeProgress | undefined,
   vis: Visibility | undefined,
   cost: number,
+  named = true,
 ): string {
   const where = `${node.topic} level ${node.level}`;
-  if (vis === "ahead") return `${where}, not yet open`;
-  if (vis === "gate") return `${where}, can be opened for ${cost} coins`;
+  if (vis === "ahead") return "Unknown level, not yet open";
+  if (vis === "gate") return `${named ? where : "Unknown level"}, can be opened for ${cost} coins`;
   if (!p) return where;
   return `${where}, ${p.state}, ${p.completed} of ${p.need} scenes completed`;
 }

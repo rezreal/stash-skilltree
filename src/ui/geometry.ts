@@ -1,6 +1,7 @@
-// Pure geometry for the radial tree: ring radii, node placement with
-// collision spreading, edge segments (with OR-group junctions) and fog stubs.
-// No React here so it runs under `node --test`.
+// Pure geometry for the skill tree view: node positions from the layout,
+// edge segments (with OR-group junctions), edges from START, the fitted
+// viewBox and pan/zoom arithmetic. No React here so it runs under
+// `node --test`.
 import type { GraphNode, Layout, NodeKey, Requirement } from "../core/types.ts";
 
 export interface Point {
@@ -9,110 +10,42 @@ export interface Point {
 }
 
 export interface Dims {
-  /** radius of ring 0 */
-  inner: number;
-  /** distance between rings */
-  gap: number;
   /** node circle radius */
   node: number;
+  /** how far an OR junction may sit in front of its target, beyond the node */
+  junction: number;
 }
 
-export const DEFAULT_DIMS: Dims = { inner: 56, gap: 72, node: 19 };
+export const DEFAULT_DIMS: Dims = { node: 19, junction: 29 };
 
-/**
- * Dims for a layout: ring 0 grows when many entry nodes share it, so they
- * fit side by side without the collision spreading wrapping around.
- */
-export function dimsFor(layout: Layout, base: Dims = DEFAULT_DIMS): Dims {
-  let entries = 0;
-  for (const n of layout.nodes.values()) if (n.ring === 0) entries++;
-  const needed = (entries * base.node * 2.5) / (2 * Math.PI);
-  return { ...base, inner: Math.max(base.inner, Math.ceil(needed)) };
-}
+/** radius of the START marker at the origin */
+export const START_RADIUS = 9;
 
-export function ringRadius(ring: number, dims: Dims = DEFAULT_DIMS): number {
-  return dims.inner + ring * dims.gap;
-}
-
-/** angle in degrees, 0 = right, clockwise (SVG y grows downwards) */
-export function polar(radius: number, angleDeg: number): Point {
-  const a = (angleDeg * Math.PI) / 180;
-  return { x: round(radius * Math.cos(a)), y: round(radius * Math.sin(a)) };
-}
+export const ORIGIN: Point = { x: 0, y: 0 };
 
 function round(n: number): number {
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 100) / 100 || 0;
 }
 
-export interface PlacedNode extends Point {
-  key: NodeKey;
-  ring: number;
-  /** final angle after collision spreading */
-  angle: number;
-}
-
-/**
- * Places every layout node at (ring, angle). Nodes on the same ring closer
- * than two node diameters along the arc are spread symmetrically around their
- * mean angle, ordered by topic order so the result is stable.
- */
-export function placeNodes(
-  layout: Layout,
-  topicOf: (key: NodeKey) => string,
-  topics: string[],
-  dims: Dims = DEFAULT_DIMS,
-): Map<NodeKey, PlacedNode> {
-  const byRing = new Map<number, { key: NodeKey; angle: number }[]>();
+/** layout positions of the given nodes (all of them without a filter) */
+export function positions(layout: Layout, include?: (key: NodeKey) => boolean): Map<NodeKey, Point> {
+  const out = new Map<NodeKey, Point>();
   for (const n of layout.nodes.values()) {
-    const list = byRing.get(n.ring) ?? [];
-    list.push({ key: n.key, angle: n.angle });
-    byRing.set(n.ring, list);
-  }
-  const topicIndex = (key: NodeKey) => {
-    const i = topics.indexOf(topicOf(key));
-    return i < 0 ? topics.length : i;
-  };
-
-  const out = new Map<NodeKey, PlacedNode>();
-  for (const [ring, list] of byRing) {
-    const radius = ringRadius(ring, dims);
-    // minimum angular distance so circles don't touch (plus some air)
-    const minDeg = radius > 0 ? ((dims.node * 2.3) / radius) * (180 / Math.PI) : 0;
-    list.sort((a, b) => a.angle - b.angle || topicIndex(a.key) - topicIndex(b.key));
-
-    for (const cluster of clusterByAngle(list, minDeg)) {
-      cluster.sort((a, b) => topicIndex(a.key) - topicIndex(b.key));
-      const mean = cluster.reduce((s, n) => s + n.angle, 0) / cluster.length;
-      cluster.forEach((n, i) => {
-        const angle = mean + (i - (cluster.length - 1) / 2) * minDeg;
-        out.set(n.key, { key: n.key, ring, angle, ...polar(radius, angle) });
-      });
-    }
+    if (!include || include(n.key)) out.set(n.key, { x: n.x, y: n.y });
   }
   return out;
 }
 
-/** groups consecutive (sorted) entries closer than minDeg */
-function clusterByAngle<T extends { angle: number }>(sorted: T[], minDeg: number): T[][] {
-  const clusters: T[][] = [];
-  for (const n of sorted) {
-    const last = clusters[clusters.length - 1];
-    if (last && n.angle - last[last.length - 1].angle < minDeg) last.push(n);
-    else clusters.push([n]);
-  }
-  return clusters;
-}
-
 // --- edges -------------------------------------------------------------------
 
-export type EdgeKind = "implicit" | "explicit";
+export type EdgeKind = "implicit" | "explicit" | "start";
 
 export interface EdgeSegment {
   id: string;
   kind: EdgeKind;
   from: Point;
   to: Point;
-  /** node(s) this segment comes from; it is visible if any of them is */
+  /** node(s) this segment comes from (empty for START) */
   sources: NodeKey[];
   target: NodeKey;
   /** segment ends at the target node (draw an arrow head) */
@@ -130,10 +63,13 @@ export interface Junction extends Point {
 export type EdgeNode = Pick<GraphNode, "key" | "topic" | "level" | "requires" | "explicitRequires">;
 
 /**
- * Edge segments for drawing. Implicit previous-level edges are solid,
- * explicit requirement edges dashed. Alternatives of one OR group run into a
- * junction dot placed just before the target; the junction connects to the
- * target with one segment.
+ * Edge segments between the nodes that have a position. Implicit
+ * previous-level edges are solid, explicit requirement edges dashed.
+ * Alternatives of one OR group run into a junction dot placed just before
+ * the target; the junction connects to the target with one segment. Pass
+ * only the positions of drawn nodes: alternatives without a position are
+ * left out entirely, so neither a segment nor the junction's placement
+ * hints at them.
  */
 export function buildEdges(
   nodes: Iterable<EdgeNode>,
@@ -149,29 +85,41 @@ export function buildEdges(
     const prevKey = node.level > 0 ? `${node.topic}:${node.level - 1}` : undefined;
     const prev = prevKey ? pos.get(prevKey) : undefined;
     if (prevKey && prev) {
-      segments.push(segment(`${prevKey}>${node.key}`, "implicit", prev, to, [prevKey], node.key, true, dims));
+      segments.push(segment(`${prevKey}>${node.key}`, "implicit", prev, to, [prevKey], node.key, dims));
     }
 
     node.explicitRequires.forEach((group, gi) => {
-      const alts = levelAlternatives(group).filter((k) => pos.has(k));
+      const alts = levelAlternatives(group).filter((k) => pos.has(k) && k !== node.key);
       const cost = costOf(group);
       if (alts.length === 0) return;
       if (alts.length === 1 && cost === undefined) {
         if (alts[0] === prevKey) return; // already drawn as implicit
-        segments.push(segment(`${alts[0]}>${node.key}#${gi}`, "explicit", pos.get(alts[0])!, to, alts, node.key, true, dims));
+        segments.push(segment(`${alts[0]}>${node.key}#${gi}`, "explicit", pos.get(alts[0])!, to, alts, node.key, dims));
         return;
       }
       const j = junctionPoint(to, alts.map((k) => pos.get(k)!), dims);
       const id = `${node.key}#${gi}`;
       junctions.push({ id, target: node.key, sources: alts, ...j, ...(cost === undefined ? {} : { cost }) });
       for (const alt of alts) {
-        const from = trimStart(pos.get(alt)!, j, dims.node);
+        const from = trim(pos.get(alt)!, j, dims.node, 0)[0];
         segments.push({ id: `${alt}>${id}`, kind: "explicit", from, to: j, sources: [alt], target: node.key, intoTarget: false });
       }
-      segments.push(segment(`${id}>${node.key}`, "explicit", j, to, alts, node.key, true, dims, 0));
+      segments.push(segment(`${id}>${node.key}`, "explicit", j, to, alts, node.key, dims, 0));
     });
   }
   return { segments, junctions };
+}
+
+/** edges from the START marker to the entry nodes that have a position */
+export function startEdges(entries: NodeKey[], pos: Map<NodeKey, Point>, dims: Dims = DEFAULT_DIMS): EdgeSegment[] {
+  const out: EdgeSegment[] = [];
+  for (const key of entries) {
+    const p = pos.get(key);
+    if (!p) continue;
+    const [from, to] = trim(ORIGIN, p, START_RADIUS, dims.node + 3);
+    out.push({ id: `start>${key}`, kind: "start", from, to, sources: [], target: key, intoTarget: true });
+  }
+  return out;
 }
 
 function segment(
@@ -181,12 +129,11 @@ function segment(
   b: Point,
   sources: NodeKey[],
   target: NodeKey,
-  intoTarget: boolean,
   dims: Dims,
   startTrim = dims.node,
 ): EdgeSegment {
   const [from, to] = trim(a, b, startTrim, dims.node + 3);
-  return { id, kind, from, to, sources, target, intoTarget };
+  return { id, kind, from, to, sources, target, intoTarget: true };
 }
 
 export function levelAlternatives(group: Requirement[number]): NodeKey[] {
@@ -208,12 +155,17 @@ export function junctionPoint(target: Point, sources: Point[], dims: Dims = DEFA
   let dy = c.y - target.y;
   let len = Math.hypot(dx, dy);
   if (len < 1e-6) {
-    // sources sit on the target: point towards the centre instead
+    // sources sit on the target: point towards START instead
     dx = -target.x;
     dy = -target.y;
-    len = Math.hypot(dx, dy) || 1;
+    len = Math.hypot(dx, dy);
+    if (len < 1e-6) {
+      dx = 0;
+      dy = -1;
+      len = 1;
+    }
   }
-  const d = Math.min(dims.node + dims.gap * 0.4, Math.max(len * 0.5, dims.node + 6));
+  const d = Math.min(dims.node + dims.junction, Math.max(len * 0.5, dims.node + 6));
   return { x: round(target.x + (dx / len) * d), y: round(target.y + (dy / len) * d) };
 }
 
@@ -234,71 +186,70 @@ export function trim(a: Point, b: Point, start: number, end: number): [Point, Po
   ];
 }
 
-function trimStart(a: Point, b: Point, start: number): Point {
-  return trim(a, b, start, 0)[0];
+// --- viewBox, pan and zoom -----------------------------------------------------
+
+export interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
-// --- fog ---------------------------------------------------------------------
-
-/** every (prerequisite → node) pair from the full requirements, deduplicated */
-export function successorPairs(nodes: Iterable<Pick<GraphNode, "key" | "requires">>): [NodeKey, NodeKey][] {
-  const seen = new Set<string>();
-  const pairs: [NodeKey, NodeKey][] = [];
-  for (const node of nodes) {
-    for (const group of node.requires) {
-      for (const src of levelAlternatives(group)) {
-        const id = `${src}>${node.key}`;
-        if (src === node.key || seen.has(id)) continue;
-        seen.add(id);
-        pairs.push([src, node.key]);
-      }
-    }
-  }
-  return pairs;
-}
-
-export interface Stub {
-  id: string;
-  from: Point;
-  to: Point;
+export function viewBoxString(b: ViewBox): string {
+  return `${round(b.x)} ${round(b.y)} ${round(b.w)} ${round(b.h)}`;
 }
 
 /**
- * Short dotted stubs from visible nodes towards hidden successors, so the
- * player sees that something lies beyond without learning what or where.
+ * The box around the given points (START is always included) plus a margin
+ * for node circles and labels, at least `minSize` wide and high so a handful
+ * of nodes isn't blown up to fill the screen. Only the points passed in
+ * count, so a fog view frames the known part and says nothing about the
+ * extent of the rest.
  */
-export function fogStubs(
-  pairs: [NodeKey, NodeKey][],
-  isVisible: (key: NodeKey) => boolean,
-  pos: Map<NodeKey, Point>,
-  length = 22,
-  dims: Dims = DEFAULT_DIMS,
-): Stub[] {
-  const stubs: Stub[] = [];
-  for (const [src, dst] of pairs) {
-    if (!isVisible(src) || isVisible(dst)) continue;
-    const a = pos.get(src);
-    const b = pos.get(dst);
-    if (!a || !b) continue;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len === 0) continue;
-    const [from, to] = trim(a, b, dims.node + 2, Math.max(0, len - dims.node - 2 - length));
-    stubs.push({ id: `${src}~${dst}`, from, to });
+export function fitBox(points: Iterable<Point>, margin = 70, minSize = 480): ViewBox {
+  let minX = 0;
+  let minY = 0;
+  let maxX = 0;
+  let maxY = 0;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
   }
-  return stubs;
+  let w = maxX - minX + 2 * margin;
+  let h = maxY - minY + 2 * margin;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  w = Math.max(w, minSize);
+  h = Math.max(h, minSize);
+  return { x: round(cx - w / 2), y: round(cy - h / 2), w: round(w), h: round(h) };
 }
 
-// --- labels / frame ----------------------------------------------------------
+export const MIN_VIEW = 160;
+export const MAX_VIEW = 40000;
 
-export function labelAnchor(angleDeg: number): "start" | "middle" | "end" {
-  const c = Math.cos((angleDeg * Math.PI) / 180);
-  if (c > 0.3) return "start";
-  if (c < -0.3) return "end";
-  return "middle";
+/**
+ * Zooms by `factor` (> 1 zooms in) keeping `center` (in box coordinates)
+ * at the same spot; the box width stays within [MIN_VIEW, MAX_VIEW].
+ */
+export function zoomBox(box: ViewBox, factor: number, center?: Point): ViewBox {
+  const c = center ?? { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+  let f = factor > 0 && Number.isFinite(factor) ? factor : 1;
+  const w = box.w / f;
+  if (w < MIN_VIEW) f = box.w / MIN_VIEW;
+  else if (w > MAX_VIEW) f = box.w / MAX_VIEW;
+  const nw = box.w / f;
+  const nh = box.h / f;
+  return {
+    x: round(c.x - (c.x - box.x) / f),
+    y: round(c.y - (c.y - box.y) / f),
+    w: round(nw),
+    h: round(nh),
+  };
 }
 
-/** square viewBox around the outer ring, with room for topic labels */
-export function viewBoxFor(maxRing: number, dims: Dims = DEFAULT_DIMS, margin = 120): string {
-  const r = ringRadius(Math.max(0, maxRing), dims) + margin;
-  return `${-r} ${-r} ${2 * r} ${2 * r}`;
+/** moves the box by (dx, dy) box units */
+export function panBox(box: ViewBox, dx: number, dy: number): ViewBox {
+  return { x: round(box.x + dx), y: round(box.y + dy), w: box.w, h: box.h };
 }

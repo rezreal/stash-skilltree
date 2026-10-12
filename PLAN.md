@@ -79,11 +79,23 @@ marker window (`seconds`..`end_seconds`) is when compliance is checked.
   that would open if every currently open node completed. OR alternatives
   stay hidden until their own nodes are visible. *Gate* = a node whose only
   unmet groups can be paid now.
-- **Layout**: radial, topics as spokes, ring = graph depth: `depth(n) = 1 +
-  max over groups (min over alternatives of depth(alt))`; entry nodes without
-  requirements sit at ring 0. Positions come from the full graph so fog
-  clearing never moves nodes. A node with requirements from several topics
-  sits at the mean angle of its parents.
+- **Fog view** (the player's tree; the author view shows everything): hidden
+  nodes are not drawn and nothing points towards them; ahead nodes are
+  anonymous "?" discs whose unlock condition is phrased with visible nodes
+  ("Opens after 3 more scenes in Relaxation L1"); gates show their price, and
+  their topic only once the player has an open or complete node in it. Only
+  such entered topics are ever named or labelled; header counts and the
+  depth sidebar never reveal totals or levels beyond the reached one + 1.
+  The view frames the drawn nodes only.
+- **Layout**: organic, force-directed over the full graph (so fog clearing
+  never moves nodes): a virtual START node fixed at the origin with entry
+  nodes hanging off it, springs along requirement edges (previous level
+  short and strong, explicit cross-topic edges long and weak, OR
+  alternatives share one spring), repulsion between nodes, a weak pull
+  towards each topic's centroid and a gentle radial bias by `depth(n) = 1 +
+  max over groups (min over alternatives of depth(alt))`, so the tree grows
+  away from START without levels sitting on rings. Initial positions come
+  from a PRNG seeded by the node keys; fixed iteration count with cooling.
 - **Lint** (author view): unreachable nodes (reachability fixpoint, costs
   treated as payable) = error; cycles only through one alternative = warning;
   unknown topic/level refs; level gaps; nodes without scenes; need > scene
@@ -197,7 +209,7 @@ parameter properties) so Node can run tests directly; imports use explicit
 
 1. **Graph core + author view** — requirement parser, graph builder,
    progress/fog/layout, lint; stash data loading; plugin route with the author
-   view (radial tree with author/fog toggle, lint list, per-level tables).
+   view (skill tree with author/fog toggle, lint list, per-level tables).
    Marker extraction tool. ← current
 2. **Player + attention** — player route with own `<video>`, session
    transaction, attended intervals, fallback attention (focus/mouse),
