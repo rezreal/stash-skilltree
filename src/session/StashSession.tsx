@@ -24,6 +24,7 @@ import { phaseView, previousExposure } from "../player/view.ts";
 import { OverlayInteractive } from "../stashplayer/OverlayHost.tsx";
 import type { StashPlayerContext } from "../stashplayer/patch.tsx";
 import { lockUserPause } from "../stashplayer/pauseLock.ts";
+import { lockPlaybackRate } from "../stashplayer/rateLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import { bannerNotice, findTreeScene, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
@@ -166,6 +167,8 @@ function SessionOverlay(props: {
   // watched clips can't be paused by the viewer while the session runs; loops can
   const lock = wantsPauseLock(policy, session.phase);
   React.useEffect(() => (lock ? lockUserPause(handle) : undefined), [handle, lock]);
+  // ranked play runs at 1x: a faster clip would ask for less attention
+  React.useEffect(() => lockPlaybackRate(handle), [handle]);
 
   const getContainer = React.useCallback(() => handle.container(), [handle]);
   const getVideoTime = React.useCallback(() => (handle.video() ? handle.currentTime() : undefined), [handle]);
