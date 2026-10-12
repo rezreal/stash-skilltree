@@ -15,8 +15,10 @@ import type { StashClient } from "./client.ts";
 import {
   KNOWN_KINDS,
   markerPromptFields,
+  markerReplay,
   parseInterestTag,
   parsePromptTag,
+  parseReplayTag,
   parseSeriesFields,
   parseTriggerTag,
   sceneProgressFields,
@@ -53,8 +55,8 @@ interface ClassifiedTags {
 }
 
 /**
- * Sorts tags with an st.kind into interest and trigger tags. Prompt tags are
- * validated (they are used through marker primary tags); policy and
+ * Sorts tags with an st.kind into interest and trigger tags. Prompt and
+ * replay tags are validated (they are used through marker tags); policy and
  * auto-marker tags are ignored here; an unknown kind is malformed.
  */
 export function classifyTags(tags: RawTag[]): ClassifiedTags {
@@ -74,6 +76,9 @@ export function classifyTags(tags: RawTag[]): ClassifiedTags {
       else bad(tag, r.problem);
     } else if (kind === "prompt") {
       const r = parsePromptTag(tag);
+      if (r && "problem" in r) bad(tag, r.problem);
+    } else if (kind === "replay") {
+      const r = parseReplayTag(tag);
       if (r && "problem" in r) bad(tag, r.problem);
     } else if (!(KNOWN_KINDS as readonly string[]).includes(kind)) {
       bad(tag, `unknown st.kind ${JSON.stringify(kind)}`);
@@ -140,6 +145,8 @@ export function mapScene(raw: RawScene): SceneInput {
   const markers: MarkerInput[] = (raw.scene_markers ?? []).map((m) => {
     const marker: MarkerInput = { id: m.id, title: m.title ?? "", seconds: m.seconds };
     if (m.end_seconds !== null && m.end_seconds !== undefined) marker.endSeconds = m.end_seconds;
+    const replay = markerReplay(m.tags);
+    if (replay !== undefined) marker.replay = replay;
     return { ...marker, ...markerPromptFields(m.primary_tag) };
   });
 

@@ -8,10 +8,10 @@
 
 import type { NodeKey, Requirement } from "../core/types.ts";
 import { describeRequirement, nodeKey, normalizeTopic, parseRequirement } from "../core/requirements.ts";
-import { PROMPT_CHECKS, fieldNumber, fieldString, type CustomFields } from "../stash/fields.ts";
+import { PROMPT_CHECKS, REPLAY_VALUES, fieldNumber, fieldString, type CustomFields } from "../stash/fields.ts";
 import type { FieldChange, FieldValue, SetupTag } from "../stash/tags.ts";
 
-export const SETUP_KINDS = ["none", "interest", "trigger", "policy", "prompt", "auto-marker"] as const;
+export const SETUP_KINDS = ["none", "interest", "trigger", "policy", "prompt", "auto-marker", "replay"] as const;
 export type SetupKind = (typeof SETUP_KINDS)[number];
 export type ConfiguredKind = Exclude<SetupKind, "none">;
 
@@ -82,7 +82,8 @@ export const POLICY_RULE_HELP: Readonly<Record<(typeof POLICY_RULES)[number], st
     "Replaces attention; the loop may be paused.",
   prompts:
     "Follow the clip's prompt markers - repeat a phrase, look at a target, take a pose. At least 75% of the prompts " +
-    "that could be checked must pass. Added automatically when a clip has prompt markers.",
+    "that could be checked must pass. A missed prompt up to 10 s long is replayed once; longer ones only count " +
+    "(a replay tag on the marker overrides this). Added automatically when a clip has prompt markers.",
   track:
     "Follow the clip's funscript with the distance sensor: strokes, holds and ramps, scored against Minimum track score. " +
     "Not scored without a calibrated sensor.",
@@ -125,6 +126,11 @@ export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
   kneel_sit: "kneel sitting back on the heels, back upright, as in meditation (the camera must see the legs; best from the side)",
   stand: "stand upright (the camera must see the legs)",
   lie_down: "lie down",
+};
+
+export const REPLAY_HELP: Readonly<Record<string, string>> = {
+  yes: "a missed prompt is replayed once (the clip seeks back to it), however long its window",
+  no: "a missed prompt is not replayed; it only counts against the prompts share at the end",
 };
 
 export const FIELD_SPECS: readonly FieldSpec[] = [
@@ -193,6 +199,16 @@ export const FIELD_SPECS: readonly FieldSpec[] = [
     options: PROMPT_ACTIONS,
     optionHelp: PROMPT_ACTION_HELP,
     when: (v) => (v["st.check"] ?? "").trim().toLowerCase() === "action",
+  },
+  {
+    key: "st.replay",
+    label: "Replay",
+    kind: "replay",
+    type: "choice",
+    required: true,
+    options: REPLAY_VALUES,
+    optionHelp: REPLAY_HELP,
+    help: "add this tag to a prompt marker (as a secondary tag) to override the default: windows up to 10 s replay, longer ones only count",
   },
 ];
 
@@ -584,6 +600,8 @@ export function tagSummary(customFields: CustomFields | null | undefined): TagSu
       return { kind, detail: listTokens(f["st.policy"]).join(",") || undefined };
     case "prompt":
       return { kind, detail: parts(keyword(f["st.check"]), fieldString(f["st.target"]) ?? fieldString(f["st.action"])) };
+    case "replay":
+      return { kind, detail: keyword(f["st.replay"]) };
     default:
       return { kind };
   }

@@ -50,6 +50,11 @@ export const SCENE_FIELDS = /* GraphQL */ `
             name
             custom_fields
           }
+          tags {
+            id
+            name
+            custom_fields
+          }
         }
 `;
 
@@ -205,6 +210,8 @@ export interface RawMarker {
   seconds: number;
   end_seconds: number | null;
   primary_tag: RawTag | null;
+  /** secondary tags (replay overrides) */
+  tags?: RawTag[] | null;
 }
 
 export interface RawScene {

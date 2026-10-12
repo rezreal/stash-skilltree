@@ -61,6 +61,7 @@ export function promptSpecs(markers: MarkerInput[], opts?: PromptSpecOptions): P
       title: m.title,
       holdSec: Math.max(0, Math.min(defaultHold, MAX_HOLD_SHARE * (end - start))),
     };
+    if (m.replay !== undefined) spec.replay = m.replay;
     if (check === "gaze") {
       if (!isGazeTarget(m.target)) continue;
       spec.target = m.target;

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createPromptRunner } from "../../src/prompts/runner.ts";
+import { createPromptRunner, replayAllowed } from "../../src/prompts/runner.ts";
 import type { PromptRunner } from "../../src/prompts/runner.ts";
 import type { PromptEvents, PromptSpec } from "../../src/prompts/types.ts";
 import { BOX, STANDING, frame, pose, spec } from "./fixtures.ts";
@@ -72,6 +72,27 @@ describe("createPromptRunner", () => {
 
   it("replays: 0 fails straight away", () => {
     const r = createPromptRunner([GAZE], { replays: 0 });
+    r.setVideoBox(BOX);
+    assert.deepEqual(play(r, 9, 15, away(r)), { results: [{ markerId: "m1", passed: false }], requests: [] });
+  });
+
+  it("long windows only count; a marker's replay tag overrides either way", () => {
+    assert.equal(replayAllowed({ start: 10, end: 20 }), true); // exactly 10 s: replays
+    assert.equal(replayAllowed({ start: 10, end: 20.5 }), false);
+    assert.equal(replayAllowed({ start: 10, end: 300, replay: true }), true);
+    assert.equal(replayAllowed({ start: 10, end: 15, replay: false }), false);
+
+    const long = spec({ markerId: "m1", check: "gaze", target: "screen_center", start: 10, end: 25, holdSec: 2 });
+    let r = createPromptRunner([long]);
+    r.setVideoBox(BOX);
+    assert.deepEqual(play(r, 9, 25, away(r)), { results: [{ markerId: "m1", passed: false }], requests: [] });
+    assert.equal(phase(r).replays, 0);
+
+    r = createPromptRunner([{ ...long, replay: true }]);
+    r.setVideoBox(BOX);
+    assert.deepEqual(play(r, 9, 25, away(r)), { results: [], requests: [{ type: "seek", to: 9 }] });
+
+    r = createPromptRunner([{ ...GAZE, replay: false }]);
     r.setVideoBox(BOX);
     assert.deepEqual(play(r, 9, 15, away(r)), { results: [{ markerId: "m1", passed: false }], requests: [] });
   });

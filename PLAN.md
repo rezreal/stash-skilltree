@@ -138,7 +138,10 @@ Watch policy = rules composed per scene from its tags:
   sitting on the heels, stand, lie down; pose windows over 10 s are scored
   by the share of time in the pose), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
-  prompts (hold-to-confirm or voice; declining fails the clip).
+  prompts (hold-to-confirm or voice; declining fails the clip). A missed
+  prompt up to 10 s long is replayed once (the clip seeks back to it);
+  longer windows only count toward the prompts share at the end. A marker
+  tag with `st.kind=replay`, `st.replay=yes|no` overrides this per marker.
   **Gaze prompts replace the attention target** while their window is
   active: attending = gaze inside the target region (`eyes_closed`: eyes
   closed — tracker present without gaze or webcam blink scores; an explicit

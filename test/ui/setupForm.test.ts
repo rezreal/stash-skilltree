@@ -72,6 +72,16 @@ describe("formFromFields", () => {
     assert.match(validateForm(f, ctx()).warnings[0], /"Intrest" is not a known kind/);
   });
 
+  it("knows replay tags", () => {
+    const f = formFromFields({ "st.kind": "replay", "st.replay": "No" });
+    assert.equal(f.kind, "replay");
+    assert.equal(f.values["st.replay"], "no");
+    assert.deepEqual(
+      activeFields(f).map((s) => s.key),
+      ["st.replay"],
+    );
+  });
+
   it("knows auto-marker", () => {
     assert.equal(formFromFields({ "st.kind": "auto-marker" }).kind, "auto-marker");
     assert.deepEqual(activeFields(formFromFields({ "st.kind": "auto-marker" })), []);

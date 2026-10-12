@@ -48,6 +48,12 @@ describe("promptSpecs", () => {
     assert.equal(bad!.end, 14);
   });
 
+  it("carries the marker's replay override", () => {
+    const [no, plain] = promptSpecs([m({ id: "n", check: "action", action: "kneel_sit", replay: false }), m({ id: "p", check: "action", action: "nod", seconds: 20 })]);
+    assert.equal(no!.replay, false);
+    assert.equal("replay" in plain!, false);
+  });
+
   it("activeAt is start-inclusive, end-exclusive", () => {
     const specs = promptSpecs([m({ id: "a", check: "action", action: "still", seconds: 10, endSeconds: 12 })]);
     assert.equal(activeAt(specs, 9.99).length, 0);

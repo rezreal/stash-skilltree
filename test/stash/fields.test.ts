@@ -4,8 +4,10 @@ import {
   fieldNumber,
   fieldString,
   markerPromptFields,
+  markerReplay,
   parseInterestTag,
   parsePromptTag,
+  parseReplayTag,
   parseSeriesFields,
   parseTriggerTag,
   sceneProgressFields,
@@ -145,6 +147,29 @@ describe("parseTriggerTag", () => {
       assert.deepEqual(parseTriggerTag(tag(fields)), { problem });
     });
   }
+});
+
+describe("parseReplayTag / markerReplay", () => {
+  it("reads st.replay of replay tags only", () => {
+    assert.equal(parseReplayTag(tag({ "st.kind": "prompt", "st.replay": "no" })), undefined);
+    assert.deepEqual(parseReplayTag(tag({ "st.kind": "replay", "st.replay": " No " })), { ok: false });
+    assert.deepEqual(parseReplayTag(tag({ "st.kind": "replay", "st.replay": "yes" })), { ok: true });
+    assert.deepEqual(parseReplayTag(tag({ "st.kind": "replay", "st.replay": true })), { ok: true });
+    assert.deepEqual(parseReplayTag(tag({ "st.kind": "replay" })), { problem: "st.replay is missing" });
+    assert.deepEqual(parseReplayTag(tag({ "st.kind": "replay", "st.replay": "maybe" })), {
+      problem: 'st.replay must be yes or no, got "maybe"',
+    });
+  });
+
+  it("no wins over yes; other and broken tags are ignored", () => {
+    const yes = tag({ "st.kind": "replay", "st.replay": "yes" });
+    const no = tag({ "st.kind": "replay", "st.replay": "no" });
+    const broken = tag({ "st.kind": "replay", "st.replay": "maybe" });
+    assert.equal(markerReplay([yes]), true);
+    assert.equal(markerReplay([yes, no]), false);
+    assert.equal(markerReplay([broken, tag({ "st.kind": "auto-marker" })]), undefined);
+    assert.equal(markerReplay(null), undefined);
+  });
 });
 
 describe("parsePromptTag", () => {

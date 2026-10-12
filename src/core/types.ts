@@ -46,6 +46,11 @@ export interface MarkerInput {
   check?: "repeat" | "gaze" | "action" | "spend";
   target?: string;
   action?: string;
+  /**
+   * replay a missed prompt (true) or only count it at the end (false), from
+   * a marker tag with st.kind=replay; unset = by window length (runner.ts)
+   */
+  replay?: boolean;
 }
 
 export interface SceneInput {

@@ -39,6 +39,7 @@ const KIND_LABELS: Record<SetupKind, string> = {
   policy: "policy (watch rules)",
   prompt: "prompt (marker check)",
   "auto-marker": "auto-marker",
+  replay: "replay (marker override)",
 };
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));

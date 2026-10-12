@@ -63,6 +63,8 @@ export interface PromptSpec {
    * (gazeCheck.ts); there it is the least time on target.
    */
   holdSec: number;
+  /** marker override of the replay rule (see replayAllowed in runner.ts) */
+  replay?: boolean;
 }
 
 export type PromptPhase = "upcoming" | "active" | "passed" | "failed" | "replaying";

@@ -6,6 +6,10 @@
 // Lifecycle per spec: upcoming -> active (start <= videoTime < end) ->
 // at window end: passed | replaying (failed, replays left: asks the player to
 // seek to start - 1 and re-runs the window with a fresh checker) | failed.
+// Whether a missed prompt replays or only counts at the end (the prompts
+// rule's share): the marker's replay tag decides (spec.replay); without one,
+// windows longer than LONG_WINDOW_SEC only count (replaying minutes of a
+// held pose is no second try) and shorter ones replay. See replayAllowed.
 //
 // Seeks:
 // - Seeking back before an active window's start returns it to upcoming
@@ -31,6 +35,7 @@
 
 import { createActionCheck } from "./actionCheck.ts";
 import { createGazeTargetCheck } from "./gazeCheck.ts";
+import { isSustained } from "./hold.ts";
 import { targetRegion } from "./regions.ts";
 import { createRepeatCheck } from "./speechCheck.ts";
 import type { ActionCheck, ActionCheckOptions } from "./actionCheck.ts";
@@ -109,6 +114,11 @@ interface Entry {
   last?: CheckResult;
 }
 
+/** A missed prompt is replayed (true) or only counted (false): the marker's override, else by window length. */
+export function replayAllowed(spec: Pick<PromptSpec, "start" | "end" | "replay">): boolean {
+  return spec.replay ?? !isSustained(spec);
+}
+
 const NO_PERSON = (videoTime: number): PersonFrame => ({ videoTime, poses: [], faces: [], hands: [] });
 
 export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptions): PromptRunner {
@@ -157,7 +167,7 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
     if (r.passed) {
       e.phase = "passed";
       out.results.push({ markerId: e.spec.markerId, passed: true });
-    } else if (allowReplay && e.replays < maxReplays) {
+    } else if (allowReplay && replayAllowed(e.spec) && e.replays < maxReplays) {
       e.phase = "replaying";
       e.replays++;
       out.requests.push({ type: "seek", to: Math.max(0, e.spec.start - lead) });

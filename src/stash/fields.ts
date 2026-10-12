@@ -17,7 +17,7 @@ export interface StashTag {
 
 export type ParseResult<T> = { ok: T } | { problem: string };
 
-export const KNOWN_KINDS = ["interest", "trigger", "policy", "prompt", "auto-marker"] as const;
+export const KNOWN_KINDS = ["interest", "trigger", "policy", "prompt", "auto-marker", "replay"] as const;
 
 export const PROMPT_CHECKS = ["repeat", "gaze", "action", "spend"] as const;
 export type PromptCheck = (typeof PROMPT_CHECKS)[number];
@@ -159,6 +159,38 @@ export function markerPromptFields(tag: StashTag | null | undefined): Pick<Marke
   if (!tag) return {};
   const r = parsePromptTag(tag);
   return r && "ok" in r ? { ...r.ok } : {};
+}
+
+/** st.replay values of a replay tag (yes = replay a missed prompt, no = only count it). */
+export const REPLAY_VALUES = ["yes", "no"] as const;
+
+/**
+ * Parses a marker tag that overrides the replay rule (st.kind=replay,
+ * st.replay yes|no; true/false and 1/0 are accepted too). Undefined when the
+ * tag is not a replay tag.
+ */
+export function parseReplayTag(tag: StashTag): ParseResult<boolean> | undefined {
+  if (tagKind(tag) !== "replay") return undefined;
+  const v = fieldKeyword(fields(tag)["st.replay"]);
+  if (v === undefined) return { problem: "st.replay is missing" };
+  if (v === "yes" || v === "true" || v === "1") return { ok: true };
+  if (v === "no" || v === "false" || v === "0") return { ok: false };
+  return { problem: `st.replay must be yes or no, got ${show(fields(tag)["st.replay"])}` };
+}
+
+/**
+ * The replay override of a marker from its tags: no wins over yes (a marker
+ * tagged both never seeks back), undefined without a valid replay tag.
+ */
+export function markerReplay(tags: readonly StashTag[] | null | undefined): boolean | undefined {
+  let out: boolean | undefined;
+  for (const tag of tags ?? []) {
+    const r = parseReplayTag(tag);
+    if (!r || !("ok" in r)) continue;
+    if (!r.ok) return false;
+    out = true;
+  }
+  return out;
 }
 
 // --- groups (series) ------------------------------------------------------------

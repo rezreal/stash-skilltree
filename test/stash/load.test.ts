@@ -201,7 +201,7 @@ describe("loadLibrary", () => {
         ],
         custom_fields: { "st.completed_at": "2026-10-01T10:00:00Z", "st.completions": "2", "st.earned": 30, "st.spent": "5" },
         scene_markers: [
-          { id: "m1", title: "look", seconds: 10, end_seconds: 20.5, primary_tag: promptGaze },
+          { id: "m1", title: "look", seconds: 10, end_seconds: 20.5, primary_tag: promptGaze, tags: [plainTag] },
           { id: "m2", title: "chapter", seconds: 30, end_seconds: null, primary_tag: plainTag },
           {
             id: "m3",
@@ -216,6 +216,7 @@ describe("loadLibrary", () => {
             seconds: 50,
             end_seconds: 52,
             primary_tag: t("32", "Nod", { "st.kind": "prompt", "st.check": "action", "st.action": "nod" }),
+            tags: [t("34", "Skilltree: no replay", { "st.kind": "replay", "st.replay": "no" })],
           },
           { id: "m5", title: "50", seconds: 60, end_seconds: 61, primary_tag: t("33", "Spend", { "st.kind": "prompt", "st.check": "spend" }) },
         ],
@@ -241,7 +242,7 @@ describe("loadLibrary", () => {
         { id: "m1", title: "look", seconds: 10, endSeconds: 20.5, check: "gaze", target: "eyes" },
         { id: "m2", title: "chapter", seconds: 30 },
         { id: "m3", title: "say it", seconds: 40, endSeconds: 45, check: "repeat" },
-        { id: "m4", title: "nod", seconds: 50, endSeconds: 52, check: "action", action: "nod" },
+        { id: "m4", title: "nod", seconds: 50, endSeconds: 52, check: "action", action: "nod", replay: false },
         { id: "m5", title: "50", seconds: 60, endSeconds: 61, check: "spend" },
       ],
     });
