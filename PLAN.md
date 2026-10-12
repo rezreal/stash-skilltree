@@ -11,7 +11,7 @@ Mockup: https://claude.ai/artifact/3w16htoe4NSEi9kctwkWAE (private)
 ## Principles
 
 - **Everything in the browser.** No backend process. Sensors via WebUSB
-  (Tobii 4C through the FreeTobi protocol), Web Bluetooth (distance sensor),
+  (Tobii 4C through the tobiifree protocol), Web Bluetooth (distance sensor),
   getUserMedia (mic, webcam). ML models (MediaPipe, local speech-to-text) are
   served from the plugin's own `assets`, never a CDN.
 - **All configuration lives in stash custom fields** with flat `st.*` keys.
@@ -193,7 +193,12 @@ parameter properties) so Node can run tests directly; imports use explicit
 2. **Player + attention** — player route with own `<video>`, session
    transaction, attended intervals, fallback attention (focus/mouse),
    completion write-back, choice screen with suggestions, coins.
-3. **Eye tracker** — FreeTobi protocol over WebUSB, calibration, gaze stream.
+3. **Eye tracker** — Tobii 4C / ET5 / IS5 over WebUSB through the vendored
+   tobiifree SDK (vendor/tobiifree), device calibration plus an affine
+   correction, attention from gaze. WebXR gaze as the alternative where a
+   browser exposes it; a mouse stand-in for development.
+   Then move playback onto stash's own ScenePlayer (patched, overlays inside
+   the player container) so transcoding, Handy sync and markers keep working.
 4. **Prompts** — markers, local STT, MediaPipe (webcam actions, gaze targets
    on the video person), spend prompts.
 5. **Track** — Web Bluetooth distance sensor, calibration, section scoring,
