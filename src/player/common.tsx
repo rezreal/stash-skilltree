@@ -12,7 +12,6 @@ export { PLAY_ROUTE };
 /** the gaze calibration; outside /play, registered by register.tsx */
 export const CALIBRATE_ROUTE = `${ROUTE}/calibrate`;
 
-export const playerRoute = (sceneId: string) => `${PLAY_ROUTE}/${encodeURIComponent(sceneId)}`;
 
 export function CoinIcon(props: { size?: number; strokeWidth?: number }) {
   const size = props.size ?? 18;

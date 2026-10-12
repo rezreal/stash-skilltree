@@ -19,22 +19,6 @@ export function markerWindow(m: MarkerInput, defaultSec = DEFAULT_WINDOW_SEC): M
   return { start, end };
 }
 
-/** the first marker (by start) whose window contains t, optionally filtered by check */
-export function activeMarker(
-  markers: MarkerInput[],
-  t: number,
-  check?: MarkerInput["check"],
-): MarkerInput | undefined {
-  let best: MarkerInput | undefined;
-  for (const m of markers) {
-    if (check !== undefined && m.check !== check) continue;
-    if (check === undefined && m.check === undefined) continue;
-    const w = markerWindow(m);
-    if (t >= w.start && t < w.end && (!best || m.seconds < best.seconds)) best = m;
-  }
-  return best;
-}
-
 export interface SpendPrompt {
   marker: MarkerInput;
   amount: number;

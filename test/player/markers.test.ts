@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import type { MarkerInput } from "../../src/core/types.ts";
 import {
   DEFAULT_WINDOW_SEC,
-  activeMarker,
   markerWindow,
   missedSpends,
   pendingSpend,
@@ -23,21 +22,6 @@ test("markerWindow uses end_seconds or a default length", () => {
   assert.deepEqual(markerWindow(m("a", 10)), { start: 10, end: 10 + DEFAULT_WINDOW_SEC });
   // an end before the start is ignored
   assert.deepEqual(markerWindow(m("a", 10, { endSeconds: 5 }), 4), { start: 10, end: 14 });
-});
-
-test("activeMarker finds the marker whose window contains t (half-open)", () => {
-  const markers = [
-    m("gaze", 10, { endSeconds: 20, check: "gaze" }),
-    m("spend", 15, { endSeconds: 25, check: "spend", title: "50" }),
-    m("plain", 0, { endSeconds: 100 }),
-  ];
-  assert.equal(activeMarker(markers, 5), undefined, "plain markers are not prompts");
-  assert.equal(activeMarker(markers, 10)?.id, "gaze");
-  assert.equal(activeMarker(markers, 16)?.id, "gaze", "earliest start wins");
-  assert.equal(activeMarker(markers, 16, "spend")?.id, "spend");
-  assert.equal(activeMarker(markers, 20)?.id, "spend", "end is exclusive");
-  assert.equal(activeMarker(markers, 25), undefined);
-  assert.equal(activeMarker(markers, 50, undefined), undefined);
 });
 
 test("spendPrompts parses amounts and skips unreadable ones", () => {

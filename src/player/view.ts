@@ -1,6 +1,6 @@
 // View-model helpers for the choice and player screens.
 // Pure, tested under node --test.
-import type { Graph, Id, MarkerInput, NodeKey, Progress, SceneInput, SeriesInput, Visibility } from "../core/types.ts";
+import type { Id, MarkerInput, NodeKey, Progress, SceneInput, SeriesInput, Visibility } from "../core/types.ts";
 import type {
   AbortReason,
   LedgerEntry,
@@ -147,41 +147,6 @@ export function seriesSummaryLine(series: SeriesInput, status: SeriesStatus): st
   const total = series.parts.length;
   if (status.state === "finished") return `${series.name}: finished · all ${total} parts in a ${runLabel(total)}`;
   return `${series.name}: part ${status.run} of ${total} · ${runLabel(status.run)}`;
-}
-
-// --- sidebar ---------------------------------------------------------------------
-
-export type SegmentState = "complete" | "open" | "locked";
-
-export interface DepthRow {
-  topic: string;
-  depth: number;
-  segments: { key: NodeKey; state: SegmentState }[];
-}
-
-/**
- * One row per topic with at least one visible level; segments for the
- * visible levels only, so the fog doesn't leak how deep a topic goes.
- */
-export function depthRows(
-  graph: Graph,
-  progress: Progress,
-  visibility: Map<NodeKey, Visibility>,
-  depthOf: (topic: string) => number,
-): DepthRow[] {
-  const rows: DepthRow[] = [];
-  for (const topic of graph.topics) {
-    const nodes = [...graph.nodes.values()]
-      .filter((n) => n.topic === topic && (visibility.get(n.key) ?? "hidden") !== "hidden")
-      .sort((a, b) => a.level - b.level);
-    if (nodes.length === 0) continue;
-    rows.push({
-      topic,
-      depth: depthOf(topic),
-      segments: nodes.map((n) => ({ key: n.key, state: progress.get(n.key)?.state ?? "locked" })),
-    });
-  }
-  return rows;
 }
 
 /** "Trainer clip" / "Spend prompt in X" / "Opened Deepening L2" */

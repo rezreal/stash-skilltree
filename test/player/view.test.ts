@@ -1,13 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Graph, GraphNode, MarkerInput, NodeKey, NodeProgress, Progress, SceneInput, Visibility } from "../../src/core/types.ts";
+import type { MarkerInput, NodeKey, NodeProgress, Progress, SceneInput, Visibility } from "../../src/core/types.ts";
 import { DEFAULT_POLICY, type WatchPolicy } from "../../src/play/types.ts";
 import {
   abortReasonText,
   blockedText,
   checkChips,
   costBadge,
-  depthRows,
   earnText,
   isExposureOnly,
   ledgerAmount,
@@ -70,58 +69,7 @@ test("cost badge, earn line and button label", () => {
   assert.match(blockedText({ node: "triggers:2", cost: 120, balance: 85 }), /^Triggers L2 costs 120 and you have 85\./);
 });
 
-function node(topic: string, level: number): GraphNode {
-  return {
-    key: `${topic}:${level}`,
-    topic,
-    level,
-    tagIds: [],
-    requires: [],
-    explicitRequires: [],
-    need: 2,
-    sceneIds: [],
-    paid: 0,
-  };
-}
-
-function graphOf(nodes: GraphNode[], scenes: SceneInput[] = []): Graph {
-  return {
-    nodes: new Map(nodes.map((n) => [n.key, n])),
-    topics: [...new Set(nodes.map((n) => n.topic))],
-    scenes: new Map(scenes.map((s) => [s.id, s])),
-    performers: new Map(),
-    sceneNodes: new Map(),
-    buildIssues: [],
-  };
-}
-
 const prog = (state: NodeProgress["state"]): NodeProgress => ({ state, completed: 0, need: 2 });
-
-test("depthRows: only visible levels, topics without any are left out", () => {
-  const g = graphOf([node("relax", 0), node("relax", 1), node("relax", 2), node("deep", 0), node("hidden", 0)]);
-  const progress: Progress = new Map([
-    ["relax:0", prog("complete")],
-    ["relax:1", prog("open")],
-    ["relax:2", prog("locked")],
-    ["deep:0", prog("open")],
-    ["hidden:0", prog("locked")],
-  ]);
-  const vis = new Map<NodeKey, Visibility>([
-    ["relax:0", "shown"],
-    ["relax:1", "shown"],
-    ["relax:2", "hidden"],
-    ["deep:0", "shown"],
-    ["hidden:0", "hidden"],
-  ]);
-  const rows = depthRows(g, progress, vis, (t) => (t === "relax" ? 1 : 0));
-  assert.deepEqual(
-    rows.map((r) => [r.topic, r.depth, r.segments.map((s) => s.state)]),
-    [
-      ["relax", 1, ["complete", "open"]],
-      ["deep", 0, ["open"]],
-    ],
-  );
-});
 
 test("newlyVisible and newlyCompleted compare before and after", () => {
   const before = new Map<NodeKey, Visibility>([
