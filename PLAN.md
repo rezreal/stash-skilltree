@@ -98,7 +98,9 @@ Watch policy = rules composed per scene from its tags:
 - `exposure` — loops: audible playback time, adds up across sessions, may run
   in a background tab. Stopping a loop saves its minutes.
 - `prompts` — markers: repeat-after-me (local STT, fuzzy match), webcam
-  actions (MediaPipe), gaze targets on the person in the video (MediaPipe
+  actions and body poses (MediaPipe: nod, shake, eyes closed/open, hand
+  raised, still, arms up, hands on head, hands together, kneel, stand, lie
+  down), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
   prompts (hold-to-confirm or voice; declining fails the clip). Gaze prompts
   suspend the attention rule.
@@ -107,6 +109,13 @@ Watch policy = rules composed per scene from its tags:
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
   for drift correction). Lag measured per session. User limits (max depth,
   max hold) stop scoring beyond them. Attention relaxes during track sections.
+
+- **Presence** — during a session the webcam runs continuously and the
+  viewer must be in front of it (face or body found). Attention = present
+  AND (gaze on the video, or the focus/activity stand-in without a
+  tracker). A setting makes the webcam required (default) — without camera
+  permission a session cannot start. The camera is released when the
+  session ends.
 
 ## Economy
 

@@ -31,7 +31,20 @@ export const GAZE_TARGETS = [
   "screen_center",
   "off_screen",
 ] as const;
-export const PROMPT_ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still"] as const;
+export const PROMPT_ACTIONS = [
+  "nod",
+  "shake_head",
+  "eyes_closed",
+  "eyes_open",
+  "hand_raised",
+  "still",
+  "arms_up",
+  "hands_on_head",
+  "hands_together",
+  "kneel",
+  "stand",
+  "lie_down",
+] as const;
 
 /** Written by the plugin while playing; shown read-only, never written here. */
 export const PLAYER_KEYS = ["st.paid", "st.unlocked_at"] as const;
