@@ -1,0 +1,841 @@
+/* Skilltree player side (choice screen + player). Everything is scoped under
+   .skilltree-play so stash's own pages are never affected. Same palette as
+   skilltree.css; the variables are repeated here so this file stands alone. */
+
+.skilltree-play {
+  --st-complete: #5b9df0;
+  --st-open: #f0a04b;
+  --st-gold: #e3c16f;
+  --st-locked: #2a333d;
+  --st-text: #e7eaee;
+  --st-muted: #9aa5b1;
+  --st-border: #2e3843;
+  --st-error: #e5534b;
+
+  --stp-soft: #c3ccd5;
+  --stp-card: #1a2027;
+  --stp-card-2: #161b21;
+  --stp-thumb: #232b34;
+  --stp-line: #3a4652;
+  --stp-deep: #11151a;
+  --stp-gold-text: #f3dfa6;
+  --stp-gold-muted: #c9b27a;
+  --stp-gold-bg: #1f1b12;
+  --stp-gold-border: #5a4a22;
+  --stp-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  color: var(--st-text);
+  font-size: 15px;
+  margin: 0 auto;
+  max-width: 1320px;
+  padding: 0 0 3rem;
+}
+
+.skilltree-play *,
+.skilltree-play *::before,
+.skilltree-play *::after {
+  box-sizing: border-box;
+}
+
+.skilltree-play a {
+  color: inherit;
+}
+
+/* --- text helpers -------------------------------------------------------- */
+
+.skilltree-play .stp-mono { font-family: var(--stp-mono); }
+.skilltree-play .stp-muted { color: var(--st-muted); }
+.skilltree-play .stp-soft { color: var(--stp-soft); }
+.skilltree-play .stp-text { color: var(--st-text); }
+.skilltree-play .stp-blue { color: var(--st-complete); }
+.skilltree-play .stp-orange { color: var(--st-open); }
+.skilltree-play .stp-gold { color: var(--st-gold); }
+.skilltree-play .stp-gold-text { color: var(--stp-gold-text); }
+.skilltree-play .stp-error { color: var(--st-error); margin: 0; }
+.skilltree-play .stp-small { font-size: 13px; }
+.skilltree-play .stp-strong { font-weight: 600; }
+.skilltree-play .stp-center { text-align: center; }
+.skilltree-play .stp-lh { line-height: 1.5; }
+.skilltree-play .stp-col { display: flex; flex-direction: column; gap: 4px; }
+.skilltree-play .stp-gap-sm { gap: 6px; }
+.skilltree-play .stp-grow { flex: 1 1 auto; }
+.skilltree-play .stp-spacer { flex: 1 1 0; }
+
+.skilltree-play .stp-row {
+  align-items: baseline;
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.skilltree-play .stp-caps {
+  color: var(--st-muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.skilltree-play .stp-h1 { font-size: 28px; font-weight: 600; margin: 0; }
+.skilltree-play .stp-h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.skilltree-play .stp-h3 { font-size: 16px; font-weight: 600; margin: 0; }
+
+.skilltree-play .stp-status {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.skilltree-play .stp-refresh {
+  color: var(--st-muted);
+  font-size: 13px;
+  margin: 8px 32px 0;
+}
+
+/* --- buttons ------------------------------------------------------------- */
+
+.skilltree-play .stp-btn {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  text-decoration: none;
+}
+
+.skilltree-play .stp-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.skilltree-play .stp-btn:hover { text-decoration: none; }
+.skilltree-play .stp-btn:focus-visible,
+.skilltree-play .stp-link-btn:focus-visible,
+.skilltree-play .stp-back:focus-visible,
+.skilltree-play .stp-performer-card:focus-visible,
+.skilltree-play .stp-switch-card:focus-visible,
+.skilltree-play .stp-hold:focus-visible,
+.skilltree-play .stp-fs-btn:focus-visible {
+  outline: 2px solid var(--st-text);
+  outline-offset: 2px;
+}
+
+.skilltree-play .stp-btn-orange { background: var(--st-open); color: #1a1205; }
+.skilltree-play .stp-btn-orange:hover { background: #f4b26a; color: #1a1205; }
+.skilltree-play .stp-btn-gold { background: var(--st-gold); color: #1a1405; }
+.skilltree-play .stp-btn-gold:hover { background: #ecd08b; color: #1a1405; }
+.skilltree-play .stp-btn-outline { background: transparent; border-color: var(--stp-line); color: var(--st-text); font-weight: 500; }
+.skilltree-play .stp-btn-outline:hover { background: rgba(255, 255, 255, 0.05); color: var(--st-text); }
+.skilltree-play .stp-btn-sm { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.skilltree-play .stp-btn-lg { min-height: 48px; border-radius: 10px; }
+
+.skilltree-play .stp-link-btn {
+  background: none;
+  border: 0;
+  color: var(--st-open);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 0 4px;
+}
+
+.skilltree-play .stp-link-btn:hover { text-decoration: underline; }
+
+/* --- header -------------------------------------------------------------- */
+
+.skilltree-play .stp-header {
+  align-items: center;
+  background: var(--stp-card-2);
+  border-bottom: 1px solid var(--st-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 14px 32px;
+}
+
+.skilltree-play .stp-brand {
+  align-items: center;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  gap: 10px;
+}
+
+.skilltree-play .stp-brand-icon { color: var(--st-open); display: inline-flex; }
+
+.skilltree-play .stp-nav { display: flex; gap: 4px; }
+
+.skilltree-play .stp-nav-item {
+  border-radius: 6px;
+  color: var(--st-muted);
+  font-weight: 500;
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.skilltree-play a.stp-nav-item:hover { color: var(--st-text); text-decoration: none; }
+.skilltree-play .stp-nav-item.is-active { background: var(--stp-thumb); color: var(--st-text); }
+
+.skilltree-play .stp-streak {
+  align-items: center;
+  color: var(--st-muted);
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.skilltree-play .stp-dot {
+  background: var(--stp-line);
+  border-radius: 50%;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.skilltree-play .stp-streak.is-active .stp-dot { background: var(--st-complete); }
+
+.skilltree-play .stp-balance {
+  align-items: center;
+  background: var(--stp-gold-bg);
+  border: 1px solid var(--stp-gold-border);
+  border-radius: 20px;
+  color: var(--st-gold);
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.skilltree-play .stp-balance-value { color: var(--stp-gold-text); font-weight: 500; }
+.skilltree-play .stp-balance-unit { color: var(--stp-gold-muted); font-size: 13px; }
+
+/* --- main layout ---------------------------------------------------------- */
+
+.skilltree-play .stp-main {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  padding: 32px 32px 0;
+}
+
+.skilltree-play .stp-primary {
+  display: flex;
+  flex: 999 1 620px;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.skilltree-play .stp-side {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.skilltree-play .stp-panel {
+  background: var(--stp-card);
+  border: 1px solid var(--st-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.skilltree-play .stp-panel-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.skilltree-play .stp-heading-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.skilltree-play .stp-pill {
+  background: var(--stp-thumb);
+  border-radius: 999px;
+  color: var(--stp-soft);
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.skilltree-play .stp-lead {
+  color: var(--stp-soft);
+  line-height: 1.5;
+  margin: -12px 0 0;
+}
+
+.skilltree-play .stp-notice {
+  align-items: flex-start;
+  background: var(--stp-gold-bg);
+  border: 1px solid var(--stp-gold-border);
+  border-radius: 10px;
+  color: #e9dcb8;
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  line-height: 1.5;
+  padding: 14px 16px;
+}
+
+.skilltree-play .stp-notice a { color: var(--st-open); text-decoration: underline; }
+.skilltree-play .stp-notice-icon { color: var(--st-gold); display: inline-flex; flex: none; margin-top: 1px; }
+
+.skilltree-play .stp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.skilltree-play .stp-chip {
+  border: 1px solid var(--stp-line);
+  border-radius: 4px;
+  color: var(--stp-soft);
+  font-size: 12px;
+  padding: 3px 9px;
+}
+
+/* --- start screen ----------------------------------------------------------- */
+
+.skilltree-play .stp-search {
+  background: var(--stp-card-2);
+  border: 1px solid var(--st-border);
+  border-radius: 8px;
+  color: var(--st-text);
+  font: inherit;
+  max-width: 420px;
+  min-height: 44px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.skilltree-play .stp-search:focus { border-color: var(--st-open); outline: none; }
+
+.skilltree-play .stp-performer-grid,
+.skilltree-play .stp-switch-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.skilltree-play .stp-performer-card,
+.skilltree-play .stp-switch-card {
+  align-items: flex-start;
+  background: var(--stp-card-2);
+  border: 1px solid var(--st-border);
+  border-radius: 10px;
+  color: var(--st-text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 8px;
+  min-height: 44px;
+  padding: 14px;
+  text-align: left;
+}
+
+.skilltree-play .stp-performer-card:hover,
+.skilltree-play .stp-switch-card:hover { border-color: var(--st-open); }
+
+.skilltree-play .stp-performer-name { font-weight: 600; }
+
+/* --- suggestion cards -------------------------------------------------------- */
+
+.skilltree-play .stp-options {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.skilltree-play .stp-card {
+  background: var(--stp-card);
+  border: 1px solid var(--st-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.skilltree-play .stp-thumb {
+  aspect-ratio: 16 / 9;
+  background: var(--stp-thumb);
+  position: relative;
+}
+
+.skilltree-play .stp-thumb img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.skilltree-play .stp-kind,
+.skilltree-play .stp-cost,
+.skilltree-play .stp-duration {
+  position: absolute;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.skilltree-play .stp-kind {
+  background: var(--stp-deep);
+  font-weight: 600;
+  left: 12px;
+  padding: 4px 10px;
+  top: 12px;
+}
+
+.skilltree-play .stp-kind.is-continue { color: var(--st-complete); }
+.skilltree-play .stp-kind.is-explore { color: var(--st-open); }
+.skilltree-play .stp-kind.is-earn { color: var(--st-gold); }
+
+.skilltree-play .stp-cost {
+  align-items: center;
+  background: var(--stp-gold-bg);
+  border: 1px solid var(--stp-gold-border);
+  color: var(--stp-gold-text);
+  display: flex;
+  gap: 6px;
+  padding: 4px 10px;
+  right: 12px;
+  top: 12px;
+}
+
+.skilltree-play .stp-cost .stp-coin-icon { color: var(--st-gold); }
+
+.skilltree-play .stp-duration {
+  background: var(--stp-deep);
+  bottom: 12px;
+  color: var(--stp-soft);
+  padding: 2px 8px;
+  right: 12px;
+}
+
+.skilltree-play .stp-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+}
+
+.skilltree-play .stp-card-titles { display: flex; flex-direction: column; gap: 4px; }
+
+.skilltree-play .stp-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.skilltree-play .stp-reasons {
+  color: var(--stp-soft);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.skilltree-play .stp-earns {
+  align-items: center;
+  color: var(--stp-gold-muted);
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.skilltree-play .stp-earns .stp-coin-icon { color: var(--st-gold); }
+
+/* --- switch performer ----------------------------------------------------------- */
+
+.skilltree-play .stp-switch { display: flex; flex-direction: column; gap: 12px; }
+
+.skilltree-play .stp-switch-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+/* --- sidebar: depth + ledger -------------------------------------------------------- */
+
+.skilltree-play .stp-depth-row { display: flex; flex-direction: column; gap: 6px; }
+
+.skilltree-play .stp-depth-head {
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+}
+
+.skilltree-play .stp-segs { display: grid; gap: 4px; }
+
+.skilltree-play .stp-seg,
+.skilltree-play .stp-seg-swatch {
+  background: var(--st-locked);
+  border-radius: 3px;
+  height: 10px;
+}
+
+.skilltree-play .stp-seg.is-complete,
+.skilltree-play .stp-seg-swatch.is-complete,
+.skilltree-play .stp-seg-swatch.is-attended { background: var(--st-complete); }
+
+.skilltree-play .stp-seg.is-open,
+.skilltree-play .stp-seg-swatch.is-open { background: transparent; border: 2px solid var(--st-open); }
+
+.skilltree-play .stp-seg-swatch.is-missed { background: var(--stp-line); }
+
+.skilltree-play .stp-legend {
+  align-items: center;
+  color: var(--st-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px 16px;
+}
+
+.skilltree-play .stp-legend > span { align-items: center; display: inline-flex; gap: 6px; }
+
+.skilltree-play .stp-seg-swatch {
+  border-radius: 2px;
+  display: inline-block;
+  height: 8px;
+  width: 12px;
+}
+
+.skilltree-play .stp-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.skilltree-play .stp-ledger li {
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.skilltree-play .stp-ledger-label { color: var(--stp-soft); overflow-wrap: anywhere; }
+
+/* --- player ---------------------------------------------------------------------------- */
+
+.skilltree-play .stp-player-header { background: transparent; }
+
+.skilltree-play .stp-back {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--st-muted);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 14px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.skilltree-play .stp-back:hover { color: var(--st-text); }
+
+.skilltree-play .stp-player-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skilltree-play .stp-player-main { gap: 24px; padding-top: 24px; }
+.skilltree-play .stp-player .stp-primary { gap: 14px; }
+
+.skilltree-play .stp-stage {
+  aspect-ratio: 16 / 9;
+  background: #080a0d;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.skilltree-play .stp-stage.is-fullscreen {
+  aspect-ratio: auto;
+  border-radius: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.skilltree-play .stp-video {
+  background: #000;
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.skilltree-play .stp-fs-btn {
+  align-items: center;
+  background: rgba(12, 15, 19, 0.75);
+  border: 1px solid var(--st-border);
+  border-radius: 8px;
+  color: var(--st-text);
+  cursor: pointer;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 40px;
+  z-index: 3;
+}
+
+.skilltree-play .stp-hint-banner {
+  background: rgba(12, 15, 19, 0.88);
+  border: 1px solid var(--st-border);
+  border-radius: 10px;
+  font-size: 14px;
+  left: 50%;
+  max-width: calc(100% - 120px);
+  padding: 10px 16px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.skilltree-play .stp-hint-banner.is-warning { border-color: var(--st-open); color: var(--st-open); font-weight: 600; }
+
+.skilltree-play .stp-overlay {
+  align-items: center;
+  background: rgba(8, 10, 13, 0.78);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inset: 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px;
+  position: absolute;
+  text-align: center;
+  z-index: 4;
+}
+
+.skilltree-play .stp-overlay.is-light { background: rgba(8, 10, 13, 0.62); }
+.skilltree-play .stp-overlay.is-dark { background: rgba(8, 10, 13, 0.9); text-align: left; }
+
+.skilltree-play .stp-overlay-title { font-size: 22px; font-weight: 600; }
+
+.skilltree-play .stp-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.skilltree-play .stp-dialog {
+  background: var(--stp-card-2);
+  border: 1px solid var(--stp-gold-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 100%;
+  padding: 24px;
+  text-align: left;
+  width: 380px;
+}
+
+.skilltree-play .stp-dialog-head { align-items: center; display: flex; gap: 12px; }
+.skilltree-play .stp-dialog-title { font-size: 20px; font-weight: 600; }
+
+.skilltree-play .stp-balance-row {
+  background: var(--stp-gold-bg);
+  border-radius: 8px;
+  color: var(--stp-gold-text);
+  display: flex;
+  font-size: 14px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.skilltree-play .stp-hold {
+  background: #3a3220;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  min-height: 52px;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.skilltree-play .stp-hold:disabled { cursor: not-allowed; opacity: 0.5; }
+.skilltree-play .stp-hold-fill { background: var(--st-gold); bottom: 0; left: 0; position: absolute; top: 0; }
+.skilltree-play .stp-hold-label { color: var(--stp-gold-text); mix-blend-mode: difference; position: relative; }
+
+.skilltree-play .stp-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 100%;
+  width: 440px;
+}
+
+.skilltree-play .stp-eyebrow {
+  color: var(--st-complete);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.skilltree-play .stp-summary-title { font-size: 26px; font-weight: 600; line-height: 1.2; }
+
+.skilltree-play .stp-breakdown {
+  background: var(--stp-card-2);
+  border: 1px solid #232b34;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.skilltree-play .stp-row-sep { border-top: 1px solid var(--st-border); padding-top: 8px; }
+
+.skilltree-play .stp-fog-line {
+  align-items: center;
+  color: var(--stp-soft);
+  display: flex;
+  font-size: 14px;
+  gap: 10px;
+}
+
+.skilltree-play .stp-fog-dot {
+  background: var(--stp-card-2);
+  border: 2px solid var(--stp-line);
+  border-radius: 50%;
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+/* side panel */
+
+.skilltree-play .stp-state { font-size: 22px; font-weight: 600; }
+.skilltree-play .stp-tone-blue { color: var(--st-complete); }
+.skilltree-play .stp-tone-orange { color: var(--st-open); }
+.skilltree-play .stp-tone-gold { color: var(--st-gold); }
+.skilltree-play .stp-tone-muted { color: var(--stp-soft); }
+.skilltree-play .stp-tone-red { color: var(--st-error); }
+
+.skilltree-play .stp-bar {
+  background: var(--st-locked);
+  border-radius: 3px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.skilltree-play .stp-bar > div { background: var(--st-complete); height: 100%; transition: width 0.25s linear; }
+
+/* timeline */
+
+.skilltree-play .stp-timeline { display: flex; flex-direction: column; gap: 8px; }
+
+.skilltree-play .stp-track {
+  background: #1d242c;
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+  position: relative;
+}
+
+.skilltree-play .stp-track-seg { bottom: 0; position: absolute; top: 0; }
+.skilltree-play .stp-track-seg.is-attended { background: var(--st-complete); }
+.skilltree-play .stp-track-seg.is-missed { background: var(--stp-line); }
+
+.skilltree-play .stp-playhead {
+  background: var(--st-text);
+  bottom: 0;
+  margin-left: -1px;
+  position: absolute;
+  top: 0;
+  width: 2px;
+}
+
+.skilltree-play .stp-dots { height: 14px; position: relative; }
+
+.skilltree-play .stp-tl-dot,
+.skilltree-play .stp-dot-swatch {
+  background: var(--stp-line);
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+
+.skilltree-play .stp-tl-dot { margin-left: -5px; position: absolute; top: 2px; }
+.skilltree-play .stp-dot-swatch { display: inline-block; height: 9px; width: 9px; }
+
+.skilltree-play .is-passed.stp-tl-dot,
+.skilltree-play .is-passed.stp-dot-swatch { background: var(--st-complete); }
+.skilltree-play .is-failed.stp-tl-dot,
+.skilltree-play .is-failed.stp-dot-swatch { background: transparent; border: 2px solid var(--st-open); }
+.skilltree-play .is-active.stp-tl-dot,
+.skilltree-play .is-active.stp-dot-swatch { background: var(--st-open); }
+.skilltree-play .is-accepted.stp-tl-dot,
+.skilltree-play .is-accepted.stp-dot-swatch { background: var(--st-gold); }
+.skilltree-play .is-declined.stp-tl-dot { background: transparent; border: 2px solid var(--st-error); }
+.skilltree-play .is-spend.is-upcoming.stp-tl-dot { background: transparent; border: 2px solid var(--st-gold); }
+
+/* --- narrow screens ------------------------------------------------------------------------ */
+
+@media (max-width: 767px) {
+  .skilltree-play .stp-header { gap: 10px 16px; padding: 12px 12px; }
+  .skilltree-play .stp-main { gap: 20px; padding: 20px 12px 0; }
+  .skilltree-play .stp-refresh { margin: 8px 12px 0; }
+  .skilltree-play .stp-h1 { font-size: 24px; }
+  .skilltree-play .stp-primary { flex-basis: 100%; }
+  .skilltree-play .stp-options { grid-template-columns: minmax(0, 1fr); }
+  .skilltree-play .stp-player-title { flex: 1 1 100%; order: 5; }
+  .skilltree-play .stp-player .stp-primary { margin: 0 -12px; }
+  .skilltree-play .stp-player .stp-stage { border-radius: 0; }
+  .skilltree-play .stp-player .stp-timeline { padding: 0 12px; }
+  .skilltree-play .stp-summary-title { font-size: 22px; }
+  .skilltree-play .stp-overlay { padding: 12px; }
+}
+
+@media (max-width: 575px) {
+  .skilltree-play { padding-bottom: 5rem; /* stash moves its navbar to the bottom here */ }
+  .skilltree-play .stp-streak { order: 4; }
+  .skilltree-play .stp-stop { flex: 1 1 auto; }
+  /* the summary can be taller than a 16:9 stage on a phone: let it grow */
+  .skilltree-play .stp-player .stp-stage:has(.stp-overlay.is-dark) { aspect-ratio: auto; min-height: 56vw; }
+  .skilltree-play .stp-stage:has(.stp-overlay.is-dark) .stp-video { position: absolute; inset: 0; }
+  .skilltree-play .stp-stage:has(.stp-overlay.is-dark) .stp-overlay { position: relative; }
+}

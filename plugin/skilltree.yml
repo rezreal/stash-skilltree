@@ -10,6 +10,7 @@ ui:
     - skilltree.js
   css:
     - skilltree.css
+    - skilltree-play.css
 
 settings:
   defaultNeed:

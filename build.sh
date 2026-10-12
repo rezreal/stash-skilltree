@@ -32,6 +32,7 @@ members = [
     (f"{ROOT}/plugin/{ID}.yml", f"{ID}.yml"),
     (f"{ROOT}/plugin/{ID}.js",  f"{ID}.js"),
     (f"{ROOT}/plugin/{ID}.css", f"{ID}.css"),
+    (f"{ROOT}/plugin/{ID}-play.css", f"{ID}-play.css"),
     (f"{ROOT}/README.md",       "README.md"),
 ]
 

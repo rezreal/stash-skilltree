@@ -1,0 +1,445 @@
+// /skilltree/play: pick a performer, then choose the next clip from
+// one or two suggestions (continue / explore / earn).
+import type { ChangeEvent } from "react";
+import type { Id } from "../core/types.ts";
+import { parseNodeKey, topicDepth } from "../core/index.ts";
+import { stashUrl } from "../stash/client.ts";
+import { payForNode, policyForScene, startPerformers, suggest } from "../play/index.ts";
+import type { Streak, Suggestion, SuggestionResult } from "../play/types.ts";
+import { router } from "./api.ts";
+import {
+  AUTHOR_ROUTE,
+  Balance,
+  CoinIcon,
+  DataGate,
+  LockIcon,
+  RefreshLine,
+  TreeIcon,
+  errorText,
+  playerRoute,
+} from "./common.tsx";
+import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
+import { loadCurrentPerformer, saveCurrentPerformer } from "./storage.ts";
+import { usePlayData, type PlayData } from "./usePlayData.ts";
+import {
+  KIND_LABEL,
+  blockedText,
+  checkChips,
+  costBadge,
+  depthRows,
+  earnText,
+  ledgerAmount,
+  ledgerLabel,
+  reasonsText,
+  recentEntries,
+  watchButtonLabel,
+} from "./view.ts";
+
+export function ChoiceScreen() {
+  const { state, reload } = usePlayData();
+  return (
+    <DataGate state={state} onRetry={() => void reload()}>
+      {() =>
+        state.status === "ready" ? (
+          <ChoiceView
+            data={state.data}
+            refreshing={state.refreshing}
+            refreshError={state.refreshError}
+            reload={reload}
+          />
+        ) : null
+      }
+    </DataGate>
+  );
+}
+
+interface ChoiceViewProps {
+  data: PlayData;
+  refreshing?: string;
+  refreshError?: string;
+  reload: () => Promise<void>;
+}
+
+function ChoiceView(props: ChoiceViewProps) {
+  const { data, reload } = props;
+  const [stored, setStored] = React.useState<Id | undefined>(() => loadCurrentPerformer());
+  const performerId = stored !== undefined && data.graph.performers.has(stored) ? stored : undefined;
+  const choosePerformer = React.useCallback((id: Id | undefined) => {
+    saveCurrentPerformer(id);
+    setStored(id);
+    window.scrollTo?.(0, 0);
+  }, []);
+
+  const baseInput = React.useMemo(
+    () => ({
+      graph: data.graph,
+      progress: data.progress,
+      visibility: data.visibility,
+      library: data.library,
+      policyTags: data.policyTags,
+      ledger: data.ledger,
+      streak: data.streak,
+      edges: data.edges,
+    }),
+    [data],
+  );
+  const result = React.useMemo(
+    () => (performerId !== undefined ? suggest({ ...baseInput, performerId, max: 2 }) : undefined),
+    [baseInput, performerId],
+  );
+
+  return (
+    <div className="skilltree-play">
+      <PlayHeader balance={data.ledger.balance} streak={data.streak} />
+      <RefreshLine refreshing={props.refreshing} refreshError={props.refreshError} onRetry={() => void reload()} />
+      <main className="stp-main">
+        <section className="stp-primary" aria-label={performerId ? "Suggestions" : "Start"}>
+          {performerId === undefined || result === undefined ? (
+            <StartView data={data} baseInput={baseInput} onPick={choosePerformer} />
+          ) : (
+            <NextView
+              data={data}
+              performerId={performerId}
+              result={result}
+              reload={reload}
+              onPick={choosePerformer}
+            />
+          )}
+        </section>
+        <Sidebar data={data} options={result?.options ?? []} />
+      </main>
+    </div>
+  );
+}
+
+function PlayHeader(props: { balance: number; streak: Streak }) {
+  const { Link } = router();
+  const { streak } = props;
+  return (
+    <header className="stp-header">
+      <div className="stp-brand">
+        <span className="stp-brand-icon">
+          <TreeIcon />
+        </span>
+        Skilltree
+      </div>
+      <nav className="stp-nav" aria-label="Skilltree">
+        <span className="stp-nav-item is-active" aria-current="page">
+          Play
+        </span>
+        <Link to={AUTHOR_ROUTE} className="stp-nav-item">
+          Tree
+        </Link>
+      </nav>
+      <div className="stp-spacer" />
+      <div className={`stp-streak${streak.activeToday ? " is-active" : ""}`} title={streak.activeToday ? "You watched today" : "Watch a clip today to keep the streak"}>
+        <span className="stp-dot" aria-hidden="true" />
+        {streak.days > 0 ? `Streak · ${plural(streak.days, "day")}` : "No streak yet"}
+        {streak.bonus > 1 ? <span className="stp-mono"> {formatFactor(streak.bonus)}</span> : null}
+      </div>
+      <Balance balance={props.balance} />
+    </header>
+  );
+}
+
+// --- start: pick a performer ------------------------------------------------------
+
+type BaseInput = Omit<Parameters<typeof suggest>[0], "performerId" | "max">;
+
+function StartView(props: { data: PlayData; baseInput: BaseInput; onPick: (id: Id) => void }) {
+  const { data } = props;
+  const { Link } = router();
+  const [query, setQuery] = React.useState("");
+  const starts = React.useMemo(() => startPerformers(props.baseInput), [props.baseInput]);
+  const q = query.trim().toLowerCase();
+  const name = (id: Id) => data.graph.performers.get(id)?.name ?? `Performer ${id}`;
+  const shown = starts.filter((s) => q === "" || name(s.performerId).toLowerCase().includes(q));
+
+  return (
+    <>
+      <div className="stp-heading-row">
+        <h1 className="stp-h1">Who do you start with?</h1>
+      </div>
+      <p className="stp-lead">
+        Pick a performer. Suggestions follow their scenes in date order; levels you reach count for every performer.
+      </p>
+      {starts.length === 0 ? (
+        <div className="stp-notice">
+          <span>
+            There are no entry scenes yet. Give tags <code>st.kind=interest</code>, a topic and level 0 in the{" "}
+            <Link to={AUTHOR_ROUTE}>tree</Link> to begin.
+          </span>
+        </div>
+      ) : (
+        <>
+          <input
+            type="search"
+            className="stp-search"
+            placeholder="Search performers"
+            aria-label="Search performers"
+            value={query}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+          />
+          {shown.length === 0 ? (
+            <p className="stp-muted">No performer matches “{query}”.</p>
+          ) : (
+            <div className="stp-performer-grid">
+              {shown.map((s) => (
+                <button key={s.performerId} type="button" className="stp-performer-card" onClick={() => props.onPick(s.performerId)}>
+                  <span className="stp-performer-name">{name(s.performerId)}</span>
+                  <span className="stp-chips">
+                    {s.topics.map((t) => (
+                      <span key={t} className="stp-chip">
+                        {topicLabel(t)}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="stp-small stp-muted">
+                    {plural(s.entryScenes, "entry scene")}
+                    {s.firstDate ? ` · from ${s.firstDate}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+// --- what next ---------------------------------------------------------------------
+
+interface NextViewProps {
+  data: PlayData;
+  performerId: Id;
+  result: SuggestionResult;
+  reload: () => Promise<void>;
+  onPick: (id: Id | undefined) => void;
+}
+
+function NextView(props: NextViewProps) {
+  const { data, performerId, result } = props;
+  const name = (id: Id) => data.graph.performers.get(id)?.name ?? `Performer ${id}`;
+
+  return (
+    <>
+      <div className="stp-heading-row">
+        <h1 className="stp-h1">What next?</h1>
+        <span className="stp-pill">with {name(performerId)}</span>
+        <button type="button" className="stp-link-btn" onClick={() => props.onPick(undefined)}>
+          All performers
+        </button>
+      </div>
+
+      {result.blocked && (
+        <div className="stp-notice" role="note">
+          <span className="stp-notice-icon">
+            <LockIcon />
+          </span>
+          <span>{blockedText(result.blocked)}</span>
+        </div>
+      )}
+
+      {result.options.length === 0 ? (
+        <p className="stp-muted">
+          Nothing to suggest with {name(performerId)} right now. Switch performer below or open the tree to see what is
+          ahead.
+        </p>
+      ) : (
+        <div className="stp-options">
+          {result.options.map((o, i) => (
+            <SuggestionCard key={`${o.sceneId}-${o.node}`} data={data} option={o} num={i + 1} reload={props.reload} />
+          ))}
+        </div>
+      )}
+
+      {result.switches.length > 0 && (
+        <div className="stp-switch">
+          <div className="stp-switch-head">
+            <h2 className="stp-h2">Or switch performer</h2>
+            <span className="stp-small stp-muted">Ranked by overlap with the topics you are in</span>
+          </div>
+          <div className="stp-switch-grid">
+            {result.switches.map((s) => (
+              <button key={s.performerId} type="button" className="stp-switch-card" onClick={() => props.onPick(s.performerId)}>
+                <span className="stp-performer-name">{name(s.performerId)}</span>
+                {s.sharedTopics.length > 0 && (
+                  <span className="stp-small stp-muted">Shares {s.sharedTopics.map(topicLabel).join(", ")}</span>
+                )}
+                <span className="stp-small stp-orange">{plural(s.openScenes, "open scene")}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number; reload: () => Promise<void> }) {
+  const { data, option: o } = props;
+  const { Link, useHistory } = router();
+  const history = useHistory();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | undefined>(undefined);
+  const [thumbOk, setThumbOk] = React.useState(true);
+
+  const scene = data.graph.scenes.get(o.sceneId);
+  const node = data.graph.nodes.get(o.node);
+  const policy = React.useMemo(() => (scene ? policyForScene(scene, data.policyTags) : undefined), [scene, data.policyTags]);
+  const chips = scene && policy ? checkChips(policy, scene.markers) : [];
+  const badge = costBadge(o);
+  const reasons = reasonsText(o.reasons);
+  const cantPay = o.price > data.ledger.balance;
+
+  const payAndWatch = async () => {
+    if (!node || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await payForNode(data.client, node.tagIds, o.price, new Date().toISOString());
+      await props.reload();
+      history.push(playerRoute(o.sceneId));
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <article className={`stp-card is-${o.kind}`}>
+      <div className="stp-thumb">
+        {thumbOk ? (
+          <img src={stashUrl(`scene/${o.sceneId}/screenshot`)} alt="" loading="lazy" onError={() => setThumbOk(false)} />
+        ) : null}
+        <span className={`stp-kind is-${o.kind}`}>
+          {props.num} · {KIND_LABEL[o.kind]}
+        </span>
+        {badge && (
+          <span className="stp-cost">
+            <CoinIcon size={14} strokeWidth={2.4} />
+            {badge}
+          </span>
+        )}
+        {scene && <span className="stp-duration stp-mono">{formatDuration(scene.durationSec)}</span>}
+      </div>
+      <div className="stp-card-body">
+        <div className="stp-card-titles">
+          <div className="stp-small stp-mono stp-muted">
+            {nodeLabel(o.node)} · {dateLabel(scene?.date)}
+          </div>
+          <h2 className="stp-card-title">{scene?.title || `Scene ${o.sceneId}`}</h2>
+        </div>
+        {chips.length > 0 && (
+          <div className="stp-chips">
+            {chips.map((c) => (
+              <span key={c} className="stp-chip">
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {reasons && <p className="stp-reasons">{reasons}</p>}
+        <div className="stp-earns">
+          <CoinIcon size={14} strokeWidth={2.4} />
+          {earnText(o)}
+        </div>
+        <div className="stp-grow" />
+        {error && (
+          <p className="stp-error stp-small" role="alert">
+            Could not pay: {error}
+          </p>
+        )}
+        {o.price > 0 ? (
+          <button
+            type="button"
+            className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}
+            disabled={busy || cantPay || !node}
+            onClick={() => void payAndWatch()}
+          >
+            {busy ? "Paying…" : cantPay ? `Needs ${o.price} stashcoins` : watchButtonLabel(o)}
+          </button>
+        ) : (
+          <Link to={playerRoute(o.sceneId)} className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}>
+            {watchButtonLabel(o)}
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
+
+// --- sidebar -------------------------------------------------------------------------
+
+function Sidebar(props: { data: PlayData; options: Suggestion[] }) {
+  const { data } = props;
+  const { Link } = router();
+  const rows = React.useMemo(
+    () => depthRows(data.graph, data.progress, data.visibility, (t) => topicDepth(data.graph, data.progress, t)),
+    [data],
+  );
+  const recent = recentEntries(data.ledger.entries);
+  const hintFor = (topic: string) => {
+    const nums = props.options
+      .map((o, i) => (parseNodeKey(o.node)?.topic === topic ? String(i + 1) : undefined))
+      .filter((n) => n !== undefined);
+    return nums.length > 0 ? `← ${nums.join(" · ")}` : "";
+  };
+
+  return (
+    <aside className="stp-side" aria-label="Your progress">
+      <div className="stp-panel">
+        <div className="stp-panel-head">
+          <h2 className="stp-h3">Your depth</h2>
+          <Link to={AUTHOR_ROUTE} className="stp-small stp-orange">
+            Open tree
+          </Link>
+        </div>
+        {rows.length === 0 ? (
+          <p className="stp-muted stp-small">No topics yet.</p>
+        ) : (
+          rows.map((r) => (
+            <div key={r.topic} className="stp-depth-row">
+              <div className="stp-depth-head">
+                <span>
+                  {topicLabel(r.topic)} <span className="stp-muted">· depth {r.depth}</span>
+                </span>
+                <span className="stp-orange stp-strong">{hintFor(r.topic)}</span>
+              </div>
+              <div className="stp-segs" style={{ gridTemplateColumns: `repeat(${Math.max(5, r.segments.length)}, minmax(0, 1fr))` }}>
+                {r.segments.map((s) => (
+                  <div key={s.key} className={`stp-seg is-${s.state}`} title={`${nodeLabel(s.key)}: ${s.state}`} />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+        <div className="stp-legend">
+          <span><span className="stp-seg-swatch is-complete" />done</span>
+          <span><span className="stp-seg-swatch is-open" />open</span>
+          <span><span className="stp-seg-swatch is-locked" />locked</span>
+        </div>
+      </div>
+
+      <div className="stp-panel">
+        <h2 className="stp-h3">Recent coins</h2>
+        {recent.length === 0 ? (
+          <p className="stp-muted stp-small">Nothing yet. Completed clips earn stashcoins.</p>
+        ) : (
+          <ul className="stp-ledger">
+            {recent.map((e, i) => {
+              const amount = ledgerAmount(e);
+              return (
+                <li key={`${e.at}-${i}`}>
+                  <span className="stp-ledger-label">{ledgerLabel(e, data.graph.scenes)}</span>
+                  <span className={`stp-mono ${amount >= 0 ? "stp-blue" : "stp-orange"}`}>{formatSignedCoins(amount)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </aside>
+  );
+}
