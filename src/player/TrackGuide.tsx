@@ -4,13 +4,28 @@
 // faint line at the user's max depth; and a strip at the bottom with the
 // next 3 s of the script, the "now" line and the current position.
 //
+// With `glow` > 0 the video's edges light up during scored sections: strong
+// green while the user is on the target, yellow turning red the further off
+// (trackView.ts glowMismatch; the error is smoothed so colors don't flicker).
+//
 // Self-contained like FlashOverlay: it needs the video container and the
 // video time as functions plus the track handle (useTrackSession), and is
 // portalled into the container so it stays visible in fullscreen (the
 // container must be positioned). rAF-driven, pointer-events none; it never
 // handles keys, so Stop/Esc stay the player's.
 import type * as ReactTypes from "react";
-import { guideView, limitsLine, PREVIEW_H, PREVIEW_W, previewY, scoreLine, type GuideView } from "./trackView.ts";
+import {
+  glowColor,
+  glowMismatch,
+  guideView,
+  limitsLine,
+  PREVIEW_H,
+  PREVIEW_W,
+  previewY,
+  scoreLine,
+  smoothError,
+  type GuideView,
+} from "./trackView.ts";
 import type { TrackHandle } from "./useTrack.ts";
 import { useTicker } from "./useTrack.ts";
 
@@ -28,10 +43,12 @@ export interface TrackGuideProps {
   getVideoTime: () => number | undefined;
   /** undefined renders nothing */
   track: TrackHandle | undefined;
+  /** match glow strength 0..1 (trackGlow setting); 0 or unset = no glow */
+  glow?: number;
 }
 
 /** a key that changes only when something visible changes (positions rounded to 0.5) */
-function viewKey(v: GuideView, live: boolean): string {
+function viewKey(v: GuideView, live: boolean, mismatch: number | undefined): string {
   const r = (n: number | undefined) => (n === undefined ? "-" : Math.round(n * 2) / 2);
   return [
     r(v.targetTop),
@@ -44,13 +61,14 @@ function viewKey(v: GuideView, live: boolean): string {
     v.previewPoints,
     r(v.currentY),
     live ? 1 : 0,
+    mismatch === undefined ? "-" : Math.round(mismatch * 20),
   ].join("|");
 }
 
 export function TrackGuide(props: TrackGuideProps) {
   const { track } = props;
   const [container, setContainer] = React.useState<HTMLElement | null>(null);
-  const [state, setState] = React.useState<{ view: GuideView; live: boolean } | undefined>(undefined);
+  const [state, setState] = React.useState<{ view: GuideView; live: boolean; mismatch: number | undefined } | undefined>(undefined);
   const getters = React.useRef(props);
   getters.current = props;
 
@@ -62,7 +80,12 @@ export function TrackGuide(props: TrackGuideProps) {
     let raf = 0;
     let lastKey = "";
     let lastEl: HTMLElement | null = null;
+    let err: number | undefined;
+    let lastMs = performance.now();
     const frame = () => {
+      const nowMs = performance.now();
+      const dt = nowMs - lastMs;
+      lastMs = nowMs;
       const el = getters.current.getContainer();
       if (el !== lastEl) {
         lastEl = el;
@@ -75,12 +98,20 @@ export function TrackGuide(props: TrackGuideProps) {
           setState(undefined);
         }
       } else {
-        const view = guideView(track.guide(t), track.limits);
+        const g = track.guide(t);
+        const view = guideView(g, track.limits);
         const live = track.live();
-        const key = viewKey(view, live);
+        let mismatch: number | undefined;
+        if (live && track.calibrated && g.current !== undefined && (getters.current.glow ?? 0) > 0) {
+          err = smoothError(err, g.current - g.target, dt);
+          mismatch = glowMismatch(g, err);
+        } else {
+          err = undefined;
+        }
+        const key = viewKey(view, live, mismatch);
         if (key !== lastKey) {
           lastKey = key;
-          setState({ view, live });
+          setState({ view, live, mismatch });
         }
       }
       raf = window.requestAnimationFrame(frame);
@@ -90,7 +121,16 @@ export function TrackGuide(props: TrackGuideProps) {
   }, [track]);
 
   if (!track || !container || !state) return null;
-  const layer = <GuideLayer view={state.view} live={state.live} calibrated={track.calibrated} maxDepth={track.limits.maxDepth} />;
+  const layer = (
+    <GuideLayer
+      view={state.view}
+      live={state.live}
+      calibrated={track.calibrated}
+      maxDepth={track.limits.maxDepth}
+      mismatch={state.mismatch}
+      glow={props.glow ?? 0}
+    />
+  );
   const dom = reactDom();
   return dom ? dom.createPortal(layer, container) : layer;
 }
@@ -103,11 +143,16 @@ function Arrow(props: { up: boolean }) {
   );
 }
 
-function GuideLayer(props: { view: GuideView; live: boolean; calibrated: boolean; maxDepth: number }) {
-  const { view: v, live, calibrated, maxDepth } = props;
+function GuideLayer(props: { view: GuideView; live: boolean; calibrated: boolean; maxDepth: number; mismatch: number | undefined; glow: number }) {
+  const { view: v, live, calibrated, maxDepth, mismatch, glow } = props;
   const limitY = previewY(maxDepth, PREVIEW_H);
+  const glowStyle =
+    glow > 0 && mismatch !== undefined
+      ? ({ opacity: glow, "--stp-glow": glowColor(mismatch) } as ReactTypes.CSSProperties)
+      : undefined;
   return (
     <div className={`stp-track${v.unscored ? " is-unscored" : ""}`}>
+      {glow > 0 && <div className={`stp-track-glow${mismatch === 0 ? " is-match" : ""}`} style={glowStyle} aria-hidden="true" />}
       <div className="stp-track-gauge" role="img" aria-label={v.aria}>
         <span className="stp-track-end">OUT</span>
         <div className="stp-track-rail">

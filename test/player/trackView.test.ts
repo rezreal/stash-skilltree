@@ -26,6 +26,10 @@ import {
   tracePolylines,
   validRangeText,
   sensorChipView,
+  glowColor,
+  glowMismatch,
+  smoothError,
+  trackGlowIntensity,
 } from "../../src/player/trackView.ts";
 import type { GuideFrame, TrackScore } from "../../src/track/types.ts";
 
@@ -370,5 +374,40 @@ describe("sensorChipView", () => {
     assert.equal(sensorChipView({ connection: "connected" }, { configured: true, calibrated: false }).label, "Sensor · calibrate");
     assert.equal(sensorChipView({ connection: "connecting", message: "Reconnecting…" }, on).title, "Reconnecting…");
     assert.equal(sensorChipView({ connection: "error", message: "x" }, on).tone, "red");
+  });
+});
+
+describe("match glow", () => {
+  const stroke = { direction: "in" as const, section: { kind: "stroke" as const, start: 0, end: 1 } };
+  const hold = { direction: "hold" as const, section: { kind: "hold" as const, start: 0, end: 1, depth: 50 } };
+
+  it("is 0 on target, ramps to 1 when far off, per section kind", () => {
+    assert.equal(glowMismatch(stroke, 10), 0);
+    assert.equal(glowMismatch(stroke, -30), 0.5);
+    assert.equal(glowMismatch(stroke, 80), 1);
+    assert.equal(glowMismatch(hold, 8), 0);
+    assert.ok(glowMismatch(hold, 12)! > 0);
+  });
+
+  it("judges nothing without a reading, at rest or in unscored sections", () => {
+    assert.equal(glowMismatch(stroke, undefined), undefined);
+    assert.equal(glowMismatch({ direction: "idle", section: { kind: "idle", start: 0, end: 1 } }, 5), undefined);
+    assert.equal(glowMismatch({ direction: "in", section: { kind: "stroke", start: 0, end: 1, unscored: true } }, 5), undefined);
+    assert.equal(glowMismatch({ direction: "in" }, 5), undefined);
+  });
+
+  it("is green on target, yellow just off, red when far off", () => {
+    assert.match(glowColor(0), /^hsl\(130 /);
+    assert.match(glowColor(0.01), /^hsl\(54 /);
+    assert.match(glowColor(1), /^hsl\(0 /);
+  });
+
+  it("smooths the error and reads the setting", () => {
+    assert.equal(smoothError(undefined, 20, 16), 20);
+    const s = smoothError(0, 100, 250);
+    assert.ok(s > 60 && s < 66, String(s));
+    assert.equal(trackGlowIntensity(undefined), 0.7);
+    assert.equal(trackGlowIntensity("0"), 0);
+    assert.equal(trackGlowIntensity(150), 1);
   });
 });

@@ -228,6 +228,21 @@ export function ensureSensorConnected(): void {
   });
 }
 
+/**
+ * Call from the click that starts a track clip (Watch / Test): the click is
+ * the user gesture the Bluetooth picker needs, so a sensor this page hasn't
+ * met yet connects too (the picker opens, filtered by the name prefix);
+ * a known one connects silently. Skipped when auto-connect is off or the
+ * viewer pressed Disconnect.
+ */
+export function connectSensorForClip(): void {
+  const rt = runtime;
+  if (!rt || !sensorAutoConnect() || userDisconnected) return;
+  const c = rt.source.status().connection;
+  if (c === "connected" || c === "connecting") return;
+  void rt.source.connect();
+}
+
 /** connects the sensor; call it from a click (the Bluetooth picker needs a user gesture) */
 export function connectSensor(): void {
   userDisconnected = false;

@@ -578,3 +578,59 @@ export function sensorChipView(status: SensorStatus | undefined, opts: { configu
   if (c === "error") return { label: "Sensor · problem", tone: "red", action: "setup", title: status?.message ?? "The distance sensor has a problem" };
   return { label: "Sensor · connect", tone: "muted", action: "connect", title: "Connect the distance sensor" };
 }
+
+// --- match glow ------------------------------------------------------------------------------
+// The video's edges light up while a track section runs: strong green while
+// the user is on the target, yellow turning red the further off they are.
+// The guide's target is the scorer's reference (lag-compensated), so green
+// means "scoring right now".
+
+/** position error (units) that is still a match, and the error that is fully red, per section kind */
+export const GLOW_TOLERANCE: Record<"stroke" | "hold" | "ramp", { good: number; bad: number }> = {
+  // a 250 ms timing slip on a fast stroke is already ~20 units off
+  stroke: { good: 15, bad: 45 },
+  // the scorer's hold band is +-8
+  hold: { good: 8, bad: 25 },
+  ramp: { good: 8, bad: 30 },
+};
+
+/**
+ * How far off the user is, 0 (on target) .. 1 (fully off), for a position
+ * error in a section; undefined when there is nothing to judge (no reading,
+ * rest, an unscored or unknown section).
+ */
+export function glowMismatch(frame: Pick<GuideFrame, "direction" | "section">, error: number | undefined): number | undefined {
+  if (error === undefined || !Number.isFinite(error)) return undefined;
+  const s = frame.section;
+  if (!s || s.unscored || s.kind === "idle" || frame.direction === "idle") return undefined;
+  const tol = GLOW_TOLERANCE[s.kind];
+  const e = Math.abs(error);
+  if (e <= tol.good) return 0;
+  return Math.min(1, (e - tol.good) / (tol.bad - tol.good));
+}
+
+/** CSS color for a mismatch: green on target, yellow just off, red at 1 */
+export function glowColor(mismatch: number): string {
+  if (mismatch <= 0) return "hsl(130 85% 50%)";
+  const hue = Math.round(55 * (1 - Math.min(1, mismatch)));
+  return `hsl(${hue} 95% 52%)`;
+}
+
+/** time constant of the error smoothing, ms: steady colors instead of a flicker */
+export const GLOW_SMOOTH_MS = 250;
+
+/** one exponential smoothing step of the error over dtMs */
+export function smoothError(prev: number | undefined, next: number, dtMs: number, tauMs = GLOW_SMOOTH_MS): number {
+  if (prev === undefined || !Number.isFinite(prev)) return next;
+  const a = 1 - Math.exp(-Math.max(0, dtMs) / tauMs);
+  return prev + (next - prev) * a;
+}
+
+export const DEFAULT_TRACK_GLOW = 70;
+
+/** glow strength 0..1 for the trackGlow setting in percent (default 70, 0 = off) */
+export function trackGlowIntensity(setting: unknown): number {
+  const n = typeof setting === "number" ? setting : typeof setting === "string" && setting.trim() !== "" ? Number(setting) : NaN;
+  const pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : DEFAULT_TRACK_GLOW;
+  return pct / 100;
+}

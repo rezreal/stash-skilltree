@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { scene } from "../core/fixtures.ts";
-import { watchUrl } from "../../src/session/watchUrl.ts";
+import { wantsSensor, watchUrl } from "../../src/session/watchUrl.ts";
 import type { PolicyTagInput } from "../../src/play/types.ts";
 
 const tags: PolicyTagInput[] = [{ id: "loop", name: "Loop", rules: ["exposure"], minMinutes: 20 }];
@@ -18,4 +18,11 @@ test("exposure loops carry the loop flag", () => {
 test("test mode keeps the loop flag derived from the policy", () => {
   assert.equal(watchUrl("5", scene("5", []), tags, { test: true }), "/scenes/5?skilltree=test&autoplay=true");
   assert.equal(watchUrl("6", scene("6", ["loop"]), tags, { test: true }), "/scenes/6?skilltree=test-loop&autoplay=true");
+});
+
+test("only clips with the track rule want the sensor", () => {
+  const withTrack: PolicyTagInput[] = [...tags, { id: "tr", name: "Track", rules: ["track"] }];
+  assert.equal(wantsSensor(scene("7", ["tr"]), withTrack), true);
+  assert.equal(wantsSensor(scene("8", [], { interactive: true }), withTrack), false);
+  assert.equal(wantsSensor(undefined, withTrack), false);
 });

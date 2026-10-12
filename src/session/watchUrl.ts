@@ -9,6 +9,11 @@ import type { PolicyTagInput } from "../play/types.ts";
 import { isExposureOnly } from "../player/view.ts";
 import { skilltreeSceneUrl } from "../stashplayer/handoff.ts";
 
+/** The clip runs the track rule, so its Watch click should bring the distance sensor up. */
+export function wantsSensor(scene: SceneInput | undefined, policyTags: PolicyTagInput[]): boolean {
+  return scene ? policyForScene(scene, policyTags).rules.includes("track") : false;
+}
+
 /**
  * In-app path of the scene page for a Skilltree session. Autoplay: the
  * click on "Watch" is the viewer's go, and stash's autoplay waits for the

@@ -128,6 +128,15 @@ settings:
       are still shown in the guide (with a line at your limit) but never
       scored, so there is no reason to go beyond it.
     type: NUMBER
+  trackGlow:
+    displayName: Track match glow (%)
+    description: >-
+      During track clips the video's edges light up strong green while you
+      are on the target, and yellow turning red the further off you are
+      (only in scored sections, with a connected, calibrated sensor). The
+      colors ease in and out rather than flash. Strength 0-100, default 70;
+      0 turns it off.
+    type: NUMBER
   trackMaxHoldSec:
     displayName: Track max hold (seconds)
     description: >-

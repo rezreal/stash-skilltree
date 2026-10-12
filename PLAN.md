@@ -170,7 +170,13 @@ Watch policy = rules composed per scene from its tags:
   default): dropped links retry every ≤ 5 s, polled reads that fail or hang
   (2 s) three times in a row drop and re-open the link, a known sensor
   comes back when a track clip starts, and after a reload where the browser
-  lists earlier grants (`getDevices`). Disconnect stops it until Connect.
+  lists earlier grants (`getDevices`); otherwise the Watch/Test click of a
+  track clip connects it (the click is the gesture the picker needs).
+  Disconnect stops it until Connect. Match glow (`trackGlow`, default 70 %):
+  the video's edges light strong green while the position is on the
+  (lag-compensated) target, yellow turning red the further off (stroke
+  15→45, hold 8→25, ramp 8→30 units), smoothed over 250 ms; only in scored
+  sections with a live, calibrated sensor.
 
 - **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
   video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the

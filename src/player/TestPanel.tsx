@@ -17,7 +17,8 @@ import {
   type TestSearchCriteria,
   type TestSearchPage,
 } from "../stash/testSearch.ts";
-import { watchUrl } from "../session/watchUrl.ts";
+import { wantsSensor, watchUrl } from "../session/watchUrl.ts";
+import { connectSensorForClip } from "./useTrack.ts";
 import { router } from "./api.ts";
 import { errorText } from "./common.tsx";
 import { dateLabel, formatDuration, plural } from "./format.ts";
@@ -222,7 +223,10 @@ function TestResultRow(props: { data: PlayData; result: TestSceneResult }) {
       <button
         type="button"
         className="stp-btn stp-btn-sm stp-test-go"
-        onClick={() => history.push(watchUrl(scene.id, scene, data.policyTags, { test: true }))}
+        onClick={() => {
+          if (wantsSensor(scene, data.policyTags)) connectSensorForClip();
+          history.push(watchUrl(scene.id, scene, data.policyTags, { test: true }));
+        }}
       >
         Test
       </button>

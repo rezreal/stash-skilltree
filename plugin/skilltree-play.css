@@ -1368,6 +1368,28 @@
 .stp-track *::before,
 .stp-track *::after { box-sizing: border-box; }
 
+/* match glow: the video's edges light green on target, yellow to red when off. A frame plus a
+   soft inner glow, so the picture stays visible; colors ease instead of flashing. */
+.stp-track-glow {
+  --stp-glow: transparent;
+  box-shadow:
+    inset 0 0 0 6px var(--stp-glow),
+    inset 0 0 90px 24px color-mix(in srgb, var(--stp-glow) 55%, transparent);
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 300ms ease, box-shadow 200ms linear;
+}
+.stp-track-glow.is-match {
+  box-shadow:
+    inset 0 0 0 8px var(--stp-glow),
+    inset 0 0 120px 36px color-mix(in srgb, var(--stp-glow) 65%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stp-track-glow { transition: opacity 600ms ease, box-shadow 600ms linear; }
+}
+
 .stp-track-gauge {
   align-items: center;
   background: var(--stp-track-bg);

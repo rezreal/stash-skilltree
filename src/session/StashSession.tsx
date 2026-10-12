@@ -47,6 +47,7 @@ import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
 import { eyesClosedDimOpacity } from "../player/flash.ts";
+import { trackGlowIntensity } from "../player/trackView.ts";
 import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
 import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
@@ -461,7 +462,9 @@ function SessionOverlay(props: {
       />
       <GazeDot getContainer={getContainer} />
       <FlashOverlay getContainer={getContainer} getVideoTime={getVideoTime} events={snaps} intensity={flashIntensity} />
-      {!finished && track && <TrackGuide getContainer={getContainer} getVideoTime={getVideoTime} track={track} />}
+      {!finished && track && (
+        <TrackGuide getContainer={getContainer} getVideoTime={getVideoTime} track={track} glow={trackGlowIntensity(rawSettings.trackGlow)} />
+      )}
 
       <div className={`stp-sp-top${notice?.tone === "warning" ? " is-alert" : ""}`}>
         <div className="stp-sp-bar">

@@ -243,7 +243,7 @@ function StatusTab(props: { sensor: TrackSensorHandle; onTab: (t: SensorTab) => 
               comes back by itself when a track clip starts.{" "}
               {sensor.reloadReconnects
                 ? "This browser remembers the sensor, so it reconnects after a page reload without a click too."
-                : "After a page reload this browser needs one click on Connect (or enable chrome://flags/#enable-web-bluetooth-new-permissions-backend to reconnect without a click)."}
+                : "After a page reload this browser needs one click: Watch on a track clip does it (the browser's sensor list opens once), or Connect here. Enable chrome://flags/#enable-web-bluetooth-new-permissions-backend to reconnect without any click."}
             </p>
           </div>
         )}

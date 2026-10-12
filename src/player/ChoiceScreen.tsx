@@ -29,7 +29,8 @@ import {
   TreeIcon,
   errorText,
 } from "./common.tsx";
-import { watchUrl } from "../session/watchUrl.ts";
+import { wantsSensor, watchUrl } from "../session/watchUrl.ts";
+import { connectSensorForClip } from "./useTrack.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
 import { SensorStatusChip } from "./SensorStatusChip.tsx";
@@ -390,8 +391,14 @@ function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number
   const reasons = reasonsText(o.reasons);
   const cantPay = o.price > data.ledger.balance;
 
+  const sensorOnClick = () => {
+    if (wantsSensor(scene, data.policyTags)) connectSensorForClip();
+  };
+
   const payAndWatch = async () => {
     if (!node || busy) return;
+    // before the await: the picker needs the click's user activation
+    sensorOnClick();
     setBusy(true);
     setError(undefined);
     try {
@@ -458,7 +465,11 @@ function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number
             {busy ? "Paying…" : cantPay ? `Needs ${o.price} stashcoins` : watchButtonLabel(o)}
           </button>
         ) : (
-          <Link to={watchUrl(o.sceneId, scene, data.policyTags)} className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}>
+          <Link
+            to={watchUrl(o.sceneId, scene, data.policyTags)}
+            className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}
+            onClick={sensorOnClick}
+          >
             {watchButtonLabel(o)}
           </Link>
         )}
@@ -541,7 +552,13 @@ function SeriesCard(props: { data: PlayData; card: DailySeriesCard }) {
       {status.state !== "done-today" && (
         <div className="stp-series-action">
           {card.affordable ? (
-            <Link to={watchUrl(next.sceneId, scene, data.policyTags)} className="stp-btn stp-btn-orange">
+            <Link
+              to={watchUrl(next.sceneId, scene, data.policyTags)}
+              className="stp-btn stp-btn-orange"
+              onClick={() => {
+                if (wantsSensor(scene, data.policyTags)) connectSensorForClip();
+              }}
+            >
               Watch
             </Link>
           ) : (
