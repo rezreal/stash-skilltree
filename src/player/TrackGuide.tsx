@@ -45,6 +45,8 @@ export interface TrackGuideProps {
   track: TrackHandle | undefined;
   /** match glow strength 0..1 (trackGlow setting); 0 or unset = no glow */
   glow?: number;
+  /** the smoothed mismatch (0 on target .. 1 off, undefined = nothing to judge), when it changes */
+  onMatch?: (mismatch: number | undefined) => void;
 }
 
 /** a key that changes only when something visible changes (positions rounded to 0.5) */
@@ -82,6 +84,7 @@ export function TrackGuide(props: TrackGuideProps) {
     let lastEl: HTMLElement | null = null;
     let err: number | undefined;
     let lastMs = performance.now();
+    let reported: number | undefined | null = null;
     const frame = () => {
       const nowMs = performance.now();
       const dt = nowMs - lastMs;
@@ -93,6 +96,10 @@ export function TrackGuide(props: TrackGuideProps) {
       }
       const t = getters.current.getVideoTime();
       if (t === undefined || !Number.isFinite(t)) {
+        if (reported !== undefined) {
+          reported = undefined;
+          getters.current.onMatch?.(undefined);
+        }
         if (lastKey !== "") {
           lastKey = "";
           setState(undefined);
@@ -102,11 +109,17 @@ export function TrackGuide(props: TrackGuideProps) {
         const view = guideView(g, track.limits);
         const live = track.live();
         let mismatch: number | undefined;
-        if (live && track.calibrated && g.current !== undefined && (getters.current.glow ?? 0) > 0) {
+        const judging = (getters.current.glow ?? 0) > 0 || getters.current.onMatch !== undefined;
+        if (live && track.calibrated && g.current !== undefined && judging) {
           err = smoothError(err, g.current - g.target, dt);
           mismatch = glowMismatch(g, err);
         } else {
           err = undefined;
+        }
+        const step = mismatch === undefined ? undefined : Math.round(mismatch * 20) / 20;
+        if (step !== reported) {
+          reported = step;
+          getters.current.onMatch?.(step);
         }
         const key = viewKey(view, live, mismatch);
         if (key !== lastKey) {

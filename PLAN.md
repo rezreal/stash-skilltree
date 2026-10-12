@@ -203,6 +203,11 @@ Watch policy = rules composed per scene from its tags:
   (lag-compensated) target, yellow turning red the further off (stroke
   15→45, hold 8→25, ramp 8→30 units), smoothed over 250 ms; only in scored
   sections with a live, calibrated sensor.
+  Lovense gating (`lovenseGate`, default on): with the separate Lovense Sync
+  plugin (repo stash-lovense: Web Bluetooth vibrators driven by the
+  funscript) the session sends `window` event `lovense:gain` {source:
+  "skilltree", gain} = 1 − mismatch in 0.05 steps (1 when nothing is
+  judged), and null when the clip ends; Lovense Sync multiplies all gains.
 
 - **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
   video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the

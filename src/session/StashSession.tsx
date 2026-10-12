@@ -54,6 +54,7 @@ import { eyesClosedDimOpacity } from "../player/flash.ts";
 import { FocusBlur } from "../player/FocusBlur.tsx";
 import { focusBlurPx, wantsFocusBlur } from "../player/focusBlur.ts";
 import { trackGlowIntensity } from "../player/trackView.ts";
+import { gainFromMismatch, lovenseGateEnabled, sendLovenseGain } from "../integrations/lovense.ts";
 import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
 import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
@@ -432,6 +433,24 @@ function SessionOverlay(props: {
     isPlaying,
   });
   trackRef.current = track;
+  // Lovense Sync (a separate plugin, if installed) runs the toy from the
+  // script; during track clips its strength follows how well the viewer is on
+  // target. The gain is withdrawn when the clip ends or the overlay goes.
+  const lovenseGate = lovenseGateEnabled(rawSettings.lovenseGate) && track !== undefined && !finished;
+  const lastGain = React.useRef<number | null>(null);
+  const onLovenseMatch = React.useCallback((mismatch: number | undefined) => {
+    const gain = gainFromMismatch(mismatch);
+    if (gain === lastGain.current) return;
+    lastGain.current = gain;
+    sendLovenseGain(gain);
+  }, []);
+  React.useEffect(() => {
+    if (!lovenseGate) return;
+    return () => {
+      lastGain.current = null;
+      sendLovenseGain(null);
+    };
+  }, [lovenseGate]);
   // only while scored (calibrated sensor sending): no sensor -> the track rule stays unscored
   React.useEffect(() => {
     if (!track || finished) return;
@@ -501,7 +520,13 @@ function SessionOverlay(props: {
       <GazeDot getContainer={getContainer} />
       <FlashOverlay getContainer={getContainer} getVideoTime={getVideoTime} events={snaps} intensity={flashIntensity} />
       {!finished && track && (
-        <TrackGuide getContainer={getContainer} getVideoTime={getVideoTime} track={track} glow={trackGlowIntensity(rawSettings.trackGlow)} />
+        <TrackGuide
+          getContainer={getContainer}
+          getVideoTime={getVideoTime}
+          track={track}
+          glow={trackGlowIntensity(rawSettings.trackGlow)}
+          {...(lovenseGate ? { onMatch: onLovenseMatch } : {})}
+        />
       )}
 
       <div className={`stp-sp-top${notice?.tone === "warning" ? " is-alert" : ""}`}>

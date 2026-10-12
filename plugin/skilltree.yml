@@ -147,6 +147,16 @@ settings:
       colors ease in and out rather than flash. Strength 0-100, default 70;
       0 turns it off.
     type: NUMBER
+  lovenseGate:
+    displayName: Lovense follows how well you track
+    description: >-
+      With the Lovense Sync plugin installed and a toy connected, the toy
+      runs from the clip's funscript. During track clips this makes its
+      strength follow you: full while you are on the target (the green
+      glow), fading to off the further off you are. Without a sensor reading
+      the toy simply follows the script. On by default; turn off for plain
+      script sync.
+    type: BOOLEAN
   trackMaxHoldSec:
     displayName: Track max hold (seconds)
     description: >-
