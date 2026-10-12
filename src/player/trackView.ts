@@ -63,9 +63,18 @@ export function trackSettings(raw: Record<string, unknown>): TrackSettings {
     problems.push(`The characteristic UUID “${characteristic}” is not valid.`);
   }
   const namePrefix = str(raw.sensorNamePrefix);
+  const validMin = num(raw.sensorValidMin);
+  const validMax = num(raw.sensorValidMax);
+  if (validMin !== undefined && validMax !== undefined && validMin >= validMax) {
+    problems.push("Valid minimum must be below the valid maximum; ignoring both.");
+  }
+  const validRange = validMin !== undefined && validMax !== undefined && validMin >= validMax ? {} : {
+    ...(validMin !== undefined ? { validMin } : {}),
+    ...(validMax !== undefined ? { validMax } : {}),
+  };
   const config: BleSensorConfig | undefined =
     service && characteristic
-      ? { service, characteristic, format, offset, scale, ...(namePrefix ? { namePrefix } : {}) }
+      ? { service, characteristic, format, offset, scale, ...(namePrefix ? { namePrefix } : {}), ...validRange }
       : undefined;
 
   const depthRaw = num(raw.trackMaxDepth);
@@ -78,7 +87,9 @@ export function trackSettings(raw: Record<string, unknown>): TrackSettings {
 
 /** a stable key for a config, to tell when the source must be recreated */
 export function configKey(c: BleSensorConfig | undefined): string {
-  return c ? [c.service, c.characteristic, c.format, c.offset, c.scale, c.namePrefix ?? ""].join("|") : "";
+  return c
+    ? [c.service, c.characteristic, c.format, c.offset, c.scale, c.namePrefix ?? "", c.validMin ?? "", c.validMax ?? ""].join("|")
+    : "";
 }
 
 // --- the guide ----------------------------------------------------------------------
@@ -283,7 +294,7 @@ export interface Capture {
 
 /** median of the samples in [fromT, toT]; undefined when there are too few */
 export function captureFrom(samples: DistanceSample[], fromT: number, toT: number, minSamples = CAPTURE_MIN_SAMPLES): Capture | undefined {
-  const vals = samples.filter((s) => s.t >= fromT && s.t <= toT).map((s) => s.raw);
+  const vals = samples.filter((s) => s.t >= fromT && s.t <= toT && !s.noTarget).map((s) => s.raw);
   if (vals.length < minSamples) return undefined;
   const value = median(vals)!;
   return { value, samples: vals.length, spread: Math.max(...vals) - Math.min(...vals) };

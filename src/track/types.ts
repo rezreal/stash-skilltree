@@ -15,6 +15,8 @@ export interface DistanceSample {
   t: number;
   /** raw distance in the sensor's unit (mm for most sensors) */
   raw: number;
+  /** outside the sensor's valid range (sensorValidMin/Max): it sees no target */
+  noTarget?: boolean;
 }
 
 export type SensorConnection = "disconnected" | "connecting" | "connected" | "error";
@@ -42,6 +44,10 @@ export interface BleSensorConfig {
   scale: number;
   /** optional name prefix filter for the device chooser */
   namePrefix?: string;
+  /** raw readings below this mean the sensor sees no target */
+  validMin?: number;
+  /** raw readings above this mean the sensor sees no target */
+  validMax?: number;
 }
 
 export interface DistanceSource {

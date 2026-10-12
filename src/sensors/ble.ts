@@ -282,7 +282,8 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     }
     badValues = 0;
     rate.add(t);
-    samples.emit({ t, raw });
+    const noTarget = (config.validMin !== undefined && raw < config.validMin) || (config.validMax !== undefined && raw > config.validMax);
+    samples.emit(noTarget ? { t, raw, noTarget: true } : { t, raw });
     if (t - lastStatusEmit >= 1000) setStatus(st);
   }
 

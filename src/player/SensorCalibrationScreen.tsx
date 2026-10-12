@@ -133,6 +133,7 @@ function ConnectionPanel(props: { sensor: TrackSensorHandle }) {
           <span className="stp-muted">Raw reading</span>
           <span className="stp-sensor-value" aria-live="off">
             {fmt(sample?.raw)}
+            {sample?.noTarget ? " · no target" : ""}
           </span>
         </div>
       )}
@@ -218,7 +219,7 @@ function CalibrationPanel(props: { sensor: TrackSensorHandle }) {
   const problem = captureProblem(rest, deep) ?? candidateError;
   const mapping = candidate ?? sensor.calibration;
   const sample = sensor.latest();
-  const position = sample && mapping ? toPosition(sample.raw, mapping) : undefined;
+  const position = sample && mapping ? (sample.noTarget ? 0 : toPosition(sample.raw, mapping)) : undefined;
   const progress = capturing ? Math.min(1, (performance.now() - capturing.start) / CAPTURE_MS) : 0;
 
   const save = () => {

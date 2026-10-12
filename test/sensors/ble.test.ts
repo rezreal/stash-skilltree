@@ -284,3 +284,13 @@ describe("pickKnownDevice", () => {
     assert.equal(pickKnownDevice([a, b], undefined, undefined), undefined);
   });
 });
+
+describe("valid range", () => {
+  it("flags readings outside sensorValidMin/Max as no target", async () => {
+    const t = setup({ config: { validMin: 31, format: "uint8" } });
+    await t.src.connect();
+    t.ch.notify(new Uint8Array([20]));
+    t.ch.notify(new Uint8Array([120]));
+    assert.deepEqual(t.samples.map((s) => [s.raw, s.noTarget === true]), [[20, true], [120, false]]);
+  });
+});

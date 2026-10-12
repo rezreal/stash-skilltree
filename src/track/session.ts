@@ -4,7 +4,8 @@
 // Pure apart from its own state; time is injected.
 
 import type { Action, Funscript } from "../funscript/parse.ts";
-import { createDriftTracker, toPosition } from "./calibration.ts";
+import { createDriftTracker } from "./calibration.ts";
+import { createPositionFilter } from "./filter.ts";
 import type { DriftOptions } from "./calibration.ts";
 import { guideFrame } from "./guide.ts";
 import { DEFAULT_LAG_MS, estimateLag } from "./lag.ts";
@@ -75,6 +76,7 @@ export function createTrackSession(opts: TrackSessionOptions): TrackSession {
   const actions = Array.isArray(opts.script) ? opts.script : scriptActions(opts.script);
   const sections = segment(actions, opts.sectionParams, opts.limits ?? DEFAULT_LIMITS);
   const fixedLag = opts.lagMs !== undefined && Number.isFinite(opts.lagMs);
+  const filter = createPositionFilter();
   const scorerOpts: Parameters<typeof createTrackScorer>[0] = { actions, sections, lagMs: fixedLag ? (opts.lagMs as number) : DEFAULT_LAG_MS };
   if (opts.sensorRateHz !== undefined) scorerOpts.sensorRateHz = opts.sensorRateHz;
   if (opts.scoreParams) scorerOpts.params = opts.scoreParams;
@@ -145,7 +147,7 @@ export function createTrackSession(opts: TrackSessionOptions): TrackSession {
       const sec = sectionAt(sections, te);
       cal = drift.push(raw, tMs, cal, advancing && sec?.kind === "idle" ? positionAt(actions, te) : undefined);
 
-      const pos = toPosition(raw, cal);
+      const pos = filter.push(raw, cal);
       lastPos = pos;
       lastArrival = tMs;
       scorer.push({ scriptMs, pos });

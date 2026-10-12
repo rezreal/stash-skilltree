@@ -21,8 +21,8 @@ import {
   createTrackSession,
   parseTrackCalibration,
   scriptActions,
+  createPositionFilter,
   serializeTrackCalibration,
-  toPosition,
   type TrackSession,
 } from "../track/index.ts";
 import type {
@@ -101,6 +101,9 @@ interface Runtime {
 
 let runtime: Runtime | undefined;
 let latest: DistanceSample | undefined;
+/** the live position, filtered like the session's (lost target stays out, lone spikes dropped) */
+const liveFilter = createPositionFilter();
+let livePosition: number | undefined;
 
 const sampleListeners = new Set<(s: DistanceSample) => void>();
 const changeListeners = new Set<() => void>();
@@ -144,6 +147,8 @@ function configure(settings: TrackSettings): void {
     });
     const offSample = source.onSample((s) => {
       latest = s;
+      const cal = currentTrackCalibration();
+      livePosition = cal ? liveFilter.push(s.noTarget ? Number.NaN : s.raw, cal) : undefined;
       emitSample(s);
     });
     rt.stop = () => {
@@ -183,8 +188,7 @@ export function latestSample(): DistanceSample | undefined {
 
 /** the latest reading mapped through the stored calibration (no drift), 0..100 */
 export function latestPosition(): number | undefined {
-  const cal = currentTrackCalibration();
-  return latest && cal ? toPosition(latest.raw, cal) : undefined;
+  return latest ? livePosition : undefined;
 }
 
 export function sensorStatusNow(): SensorStatus | undefined {
@@ -376,7 +380,7 @@ export function useTrackSession(
       if (isPlaying && !isPlaying()) return;
       const t = vt();
       if (t === undefined || !Number.isFinite(t)) return;
-      track.feed(s.raw, s.t, t);
+      track.feed(s.noTarget ? Number.NaN : s.raw, s.t, t);
     });
     return () => {
       off();

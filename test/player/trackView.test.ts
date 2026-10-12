@@ -224,3 +224,24 @@ describe("saving the discovered sensor", () => {
     );
   });
 });
+
+it("valid range: parsed from settings, contradictions ignored", () => {
+  const base = { sensorService: "0xffe0", sensorCharacteristic: "0xffe1" };
+  const t = trackSettings({ ...base, sensorValidMin: 31 });
+  assert.equal(t.config?.validMin, 31);
+  assert.equal(t.config?.validMax, undefined);
+  const bad = trackSettings({ ...base, sensorValidMin: 50, sensorValidMax: 10 });
+  assert.equal(bad.config?.validMin, undefined);
+  assert.ok(bad.problems.some((p) => /Valid minimum/.test(p)));
+  assert.notEqual(configKey(t.config), configKey(trackSettings(base).config));
+});
+
+it("captures skip no-target readings", () => {
+  const samples = [
+    { t: 0, raw: 100 }, { t: 10, raw: 5, noTarget: true }, { t: 20, raw: 102 },
+    { t: 30, raw: 101 }, { t: 40, raw: 0, noTarget: true }, { t: 50, raw: 99 },
+  ];
+  const c = captureFrom(samples, 0, 60, 3);
+  assert.equal(c?.value, 100.5);
+  assert.equal(c?.samples, 4);
+});

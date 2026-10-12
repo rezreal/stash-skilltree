@@ -90,6 +90,19 @@ settings:
       sensor calibration at /skilltree/sensor maps your rest and deepest
       positions to 0 and 100.
     type: NUMBER
+  sensorValidMin:
+    displayName: Distance sensor valid minimum
+    description: >-
+      Optional. Raw readings below this mean the sensor sees nothing (out of
+      range); they read as fully out instead of a position. For the
+      Reach-Trainer 31: its readings from 0 to 30 mean "no target".
+    type: NUMBER
+  sensorValidMax:
+    displayName: Distance sensor valid maximum
+    description: >-
+      Optional. Raw readings above this mean the sensor sees nothing; they read
+      as fully out.
+    type: NUMBER
   sensorNamePrefix:
     displayName: Distance sensor name filter
     description: >-
