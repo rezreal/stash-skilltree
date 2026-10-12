@@ -1,4 +1,4 @@
-// The /plugin/skilltree page: loads the library, derives graph, progress,
+// The /skilltree page: loads the library, derives graph, progress,
 // fog, layout and lint, and lays out tree, panels and table. In author view
 // a Setup section configures the tags the tree is built from.
 import type { ChangeEvent } from "react";
