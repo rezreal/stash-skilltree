@@ -105,18 +105,22 @@ export function applyValidRange(s: DistanceSample, range: Pick<BleSensorConfig, 
 
 const clampPos = (p: number) => (p < 0 ? 0 : p > 100 ? 100 : p);
 
-/** CSS top (%) on the vertical gauge: IN (100) at the top, OUT (0) at the bottom */
+/**
+ * CSS top (%) on the vertical gauge: OUT (0) at the top, IN (100) at the
+ * bottom, so going deeper moves down. Display only: positions keep 0 = out,
+ * 100 = deepest everywhere else.
+ */
 export function gaugeTop(pos: number): number {
-  return 100 - clampPos(pos);
+  return clampPos(pos);
 }
 
 export const PREVIEW_W = 300;
 export const PREVIEW_H = 60;
 export const PREVIEW_MS = 3000;
 
-/** y in the preview strip for a position (100 at the top) */
+/** y in the preview strip for a position (0 = out at the top, 100 = in at the bottom) */
 export function previewY(pos: number, height = PREVIEW_H): number {
-  return Math.round((height - (clampPos(pos) / 100) * height) * 10) / 10;
+  return Math.round((clampPos(pos) / 100) * height * 10) / 10;
 }
 
 /** SVG polyline points of the next PREVIEW_MS ([msFromNow, pos] pairs) in a width × height box */
@@ -169,25 +173,26 @@ export function guideView(frame: GuideFrame, limits: TrackLimits): GuideView {
   switch (frame.direction) {
     case "in":
       label = "moving in";
-      arrow = "up";
+      arrow = "down";
       break;
     case "out":
       label = "moving out";
-      arrow = "down";
+      arrow = "up";
       break;
     case "hold": {
       // a pause inside a stroke reads "hold" too, but only a hold section has a duration to show
       const total = section?.kind === "hold" ? section.end - section.start : 0;
       const done = frame.holdProgress !== undefined ? frame.holdProgress * total : 0;
       label = total > 0 ? `hold ${seconds(done)} / ${seconds(total)} s` : "hold";
-      band = { top: gaugeTop(target + BAND_HALF), height: Math.min(target + BAND_HALF, 100) - Math.max(target - BAND_HALF, 0) };
+      band = { top: gaugeTop(target - BAND_HALF), height: Math.min(target + BAND_HALF, 100) - Math.max(target - BAND_HALF, 0) };
       break;
     }
     default:
       label = "rest";
   }
   if (unscored) label += " · not scored";
-  const arrowOffset = arrow === "up" ? 8 : arrow === "down" ? -8 : 0;
+  // ahead of the target in the direction of travel: deeper is lower on screen
+  const arrowOffset = frame.direction === "in" ? 8 : frame.direction === "out" ? -8 : 0;
   const view: GuideView = {
     targetTop: gaugeTop(target),
     arrow,
@@ -523,8 +528,8 @@ export const TRACE_W = 600;
 export const TRACE_H = 120;
 
 /**
- * SVG polylines for the last `windowMs` of positions (0..100, 100 at the
- * top), oldest at the left. A missing position (no target, uncalibrated)
+ * SVG polylines for the last `windowMs` of positions (0..100, 0 = out at the
+ * top like the guide), oldest at the left. A missing position (no target, uncalibrated)
  * breaks the line, so a lost target shows as a gap.
  */
 export function tracePolylines(

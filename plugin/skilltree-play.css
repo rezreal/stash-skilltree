@@ -1539,9 +1539,10 @@
   position: relative;
 }
 .skilltree-play .stp-sensor-meter-fill {
+  /* fills down from OUT at the top, like the on-video guide */
   background: rgba(91, 157, 240, 0.25);
-  border-top: 3px solid var(--st-complete);
-  bottom: 0;
+  border-bottom: 3px solid var(--st-complete);
+  top: 0;
   left: 0;
   position: absolute;
   right: 0;

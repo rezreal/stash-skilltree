@@ -85,12 +85,12 @@ describe("trackSettings", () => {
 });
 
 describe("guide geometry", () => {
-  it("puts IN at the top", () => {
-    assert.equal(gaugeTop(100), 0);
-    assert.equal(gaugeTop(0), 100);
-    assert.equal(gaugeTop(130), 0);
-    assert.equal(previewY(100), 0);
-    assert.equal(previewY(0), 60);
+  it("puts OUT at the top and IN at the bottom", () => {
+    assert.equal(gaugeTop(100), 100);
+    assert.equal(gaugeTop(0), 0);
+    assert.equal(gaugeTop(130), 100);
+    assert.equal(previewY(100), 60);
+    assert.equal(previewY(0), 0);
     assert.equal(previewY(50), 30);
   });
 
@@ -102,7 +102,7 @@ describe("guide geometry", () => {
         [3000, 50],
         [4000, 50],
       ]),
-      "0,60 150,0 300,30 300,30",
+      "0,0 150,60 300,30 300,30",
     );
     assert.equal(previewPoints([]), "");
   });
@@ -112,17 +112,17 @@ describe("guide geometry", () => {
 
   it("shows direction arrows ahead of the target", () => {
     const v = guideView(frame({ target: 62, current: 54, direction: "in" }), limits);
-    assert.equal(v.targetTop, 38);
-    assert.equal(v.arrow, "up");
-    assert.equal(v.arrowTop, 30);
-    assert.equal(v.currentTop, 46);
+    assert.equal(v.targetTop, 62);
+    assert.equal(v.arrow, "down");
+    assert.equal(v.arrowTop, 70);
+    assert.equal(v.currentTop, 54);
     assert.equal(v.currentY, previewY(54));
     assert.equal(v.label, "moving in");
-    assert.equal(v.limitTop, 15);
+    assert.equal(v.limitTop, 85);
     assert.match(v.aria, /target 62, you 54, moving in/);
     const out = guideView(frame({ target: 30, direction: "out" }), limits);
-    assert.equal(out.arrow, "down");
-    assert.equal(out.arrowTop, 78);
+    assert.equal(out.arrow, "up");
+    assert.equal(out.arrowTop, 22);
     assert.equal(out.currentTop, undefined);
     assert.match(out.aria, /no sensor reading/);
   });
@@ -138,11 +138,11 @@ describe("guide geometry", () => {
       limits,
     );
     assert.equal(v.arrow, undefined);
-    assert.deepEqual(v.band, { top: 22, height: 16 });
+    assert.deepEqual(v.band, { top: 62, height: 16 });
     assert.equal(v.label, "hold 2.4 / 5.0 s");
     assert.equal(v.section, "hold");
     const edge = guideView(frame({ target: 96, direction: "hold" }), limits);
-    assert.deepEqual(edge.band, { top: 0, height: 12 });
+    assert.deepEqual(edge.band, { top: 88, height: 12 });
   });
 
   it("marks unscored sections and rest", () => {
@@ -354,7 +354,7 @@ describe("live trace", () => {
       { t: 15000, pos: 50 },
     ];
     const lines = tracePolylines(pts, 15000, 10000, 100, 100);
-    assert.deepEqual(lines, ["0,100 25,0", "40,50 100,50"]);
+    assert.deepEqual(lines, ["0,0 25,100", "40,50 100,50"]);
   });
 });
 
