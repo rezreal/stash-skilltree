@@ -195,8 +195,9 @@ parameter properties) so Node can run tests directly; imports use explicit
    completion write-back, choice screen with suggestions, coins.
 3. **Eye tracker** — Tobii 4C / ET5 / IS5 over WebUSB through the vendored
    tobiifree SDK (vendor/tobiifree), device calibration plus an affine
-   correction, attention from gaze. WebXR gaze as the alternative where a
-   browser exposes it; a mouse stand-in for development.
+   correction, attention from gaze; a mouse stand-in for development.
+   WebXR (video in a headset, head gaze, eye gaze where exposed) is
+   deferred.
    Then move playback onto stash's own ScenePlayer (patched, overlays inside
    the player container) so transcoding, Handy sync and markers keep working.
 4. **Prompts** — markers, local STT, MediaPipe (webcam actions, gaze targets
