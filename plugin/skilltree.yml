@@ -26,3 +26,12 @@ settings:
       the daily earn cap and daily series. Default 4: a clip finished at
       02:30 still counts for the evening before. 0 = midnight.
     type: NUMBER
+  gazeSource:
+    displayName: Eye tracker
+    description: >-
+      Where gaze comes from for the attention check: off (default; attention
+      is judged from window focus and activity), tobii (Tobii 4C / ET5 over
+      WebUSB in Chrome or Edge; on Windows stop the Tobii services first) or
+      mouse (the pointer stands in for gaze, for testing). Calibrate at
+      /skilltree/calibrate.
+    type: STRING

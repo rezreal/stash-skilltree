@@ -9,7 +9,6 @@ import {
   createSession,
   exposureTarget,
   exposureTotal,
-  fallbackAttending,
   isTerminal,
   policyForScene,
   saveExposure,
@@ -19,7 +18,6 @@ import {
 } from "../play/index.ts";
 import type { Ledger, SessionCommit, SessionState, SpendEvent, Streak, WatchPolicy } from "../play/types.ts";
 import { router } from "./api.ts";
-import { createAttentionAdapter } from "./attentionAdapter.ts";
 import { Balance, CoinIcon, DataGate, PLAY_ROUTE, RefreshLine, errorText } from "./common.tsx";
 import {
   dateLabel,
@@ -32,9 +30,13 @@ import {
   formatSignedCoins,
   nodeLabel,
 } from "./format.ts";
+import { GazeDot } from "./GazeDot.tsx";
+import { graceText, pauseReasonText } from "./gazeView.ts";
 import { HoldButton } from "./HoldButton.tsx";
 import { missedSpends, pendingSpend, spendPrompts, spentInSession, type SpendPrompt } from "./markers.ts";
+import { SensorsPanel } from "./SensorsPanel.tsx";
 import { timelineDots, timelineSegments } from "./timeline.ts";
+import { useAttentionSource } from "./useAttentionSource.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import {
   abortReasonText,
@@ -163,7 +165,6 @@ function PlayerSession(props: SessionProps) {
   const [videoTime, setVideoTime] = React.useState(0);
   const [furthest, setFurthest] = React.useState(0);
   const [duration, setDuration] = React.useState(scene.durationSec);
-  const [attending, setAttending] = React.useState(true);
   const [openSpend, setOpenSpend] = React.useState<OpenSpend | undefined>(undefined);
   const openSpendRef = React.useRef(openSpend);
   openSpendRef.current = openSpend;
@@ -173,6 +174,9 @@ function PlayerSession(props: SessionProps) {
   const [, forceTick] = React.useState(0);
 
   const balance = start.ledger.balance - spentInSession(session.spends);
+  // gaze over the stage while a tracker is connected, focus + activity otherwise
+  const attention = useAttentionSource(() => containerRef.current, data.idleSec);
+  const readAttention = attention.read;
 
   const pauseVideo = React.useCallback(() => {
     const v = videoRef.current;
@@ -224,20 +228,18 @@ function PlayerSession(props: SessionProps) {
 
   // the session clock: attention, video time, spend prompts
   React.useEffect(() => {
-    const adapter = createAttentionAdapter();
     const id = window.setInterval(() => {
       const v = videoRef.current;
       const s = sessionRef.current;
       if (!v || isFinished(s)) return;
       const nowMs = Date.now();
-      const att = fallbackAttending({ ...adapter.read(), nowMs, idleSec: data.idleSec });
+      const att = readAttention(nowMs).attending;
       const playing = !v.paused && !v.ended;
       const audible = !v.muted && v.volume > 0;
       const t = v.currentTime;
       dispatch({ type: "tick", nowMs, videoTime: t, attending: att, playing, audible });
       setVideoTime(t);
       setFurthest((f) => Math.max(f, t));
-      setAttending(att);
       forceTick((n) => (n + 1) % 1_000_000);
 
       // decidedRef also holds decisions the reducer hasn't rendered yet
@@ -257,11 +259,8 @@ function PlayerSession(props: SessionProps) {
         }
       }
     }, TICK_MS);
-    return () => {
-      window.clearInterval(id);
-      adapter.cleanup();
-    };
-  }, [data.idleSec, spends, decideSpend, pauseVideo]);
+    return () => window.clearInterval(id);
+  }, [readAttention, spends, decideSpend, pauseVideo]);
 
   // the session asks to pause (inattention) or resume
   React.useEffect(() => {
@@ -420,6 +419,7 @@ function PlayerSession(props: SessionProps) {
     .filter((s) => s.length > 0)
     .join(" · ");
   const showInattention = session.phase === "paused" && session.pausedBy === "inattention" && !openSpend;
+  const pauseText = pauseReasonText(attention.reading);
   const abortIn =
     session.pausedSinceMs !== undefined ? policy.abortSec - (Date.now() - session.pausedSinceMs) / 1000 : policy.abortSec;
   const effectiveDuration = duration > 0 ? duration : scene.durationSec;
@@ -492,6 +492,7 @@ function PlayerSession(props: SessionProps) {
                 )}
               </svg>
             </button>
+            <GazeDot getContainer={() => containerRef.current} />
 
             {session.phase === "ready" && !videoError && (
               <div className="stp-hint-banner" role="status">
@@ -500,7 +501,7 @@ function PlayerSession(props: SessionProps) {
             )}
             {session.phase === "grace" && !openSpend && (
               <div className="stp-hint-banner is-warning" role="status">
-                Look back at the video
+                {graceText(attention.reading)}
               </div>
             )}
 
@@ -510,8 +511,8 @@ function PlayerSession(props: SessionProps) {
                   <rect x="6" y="5" width="4" height="14" rx="1" />
                   <rect x="14" y="5" width="4" height="14" rx="1" />
                 </svg>
-                <div className="stp-overlay-title">Paused: you looked away</div>
-                <div className="stp-soft">Come back to the video to continue.</div>
+                <div className="stp-overlay-title">{pauseText.title}</div>
+                <div className="stp-soft">{pauseText.hint}</div>
                 <div className="stp-small stp-mono stp-orange">
                   aborts in {formatCountdown(abortIn)} · this attempt won’t count
                 </div>
@@ -589,13 +590,7 @@ function PlayerSession(props: SessionProps) {
             previousExposureSec={previousExposure(scene)}
           />
 
-          <div className="stp-panel">
-            <h2 className="stp-caps">Sensors</h2>
-            <div className="stp-row">
-              <span>Attention: fallback (focus + activity)</span>
-              <span className={attending ? "stp-blue" : "stp-orange"}>{attending ? "with you" : "away"}</span>
-            </div>
-          </div>
+          <SensorsPanel reading={attention.reading} />
         </aside>
       </main>
     </div>

@@ -21,6 +21,7 @@ import {
   playerRoute,
 } from "./common.tsx";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
+import { GazeStatusChip } from "./GazeStatusChip.tsx";
 import { loadCurrentPerformer, saveCurrentPerformer } from "./storage.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import {
@@ -155,6 +156,7 @@ function PlayHeader(props: { balance: number; streak: Streak }) {
         </Link>
       </nav>
       <div className="stp-spacer" />
+      <GazeStatusChip />
       <div className={`stp-streak${streak.activeToday ? " is-active" : ""}`} title={streak.activeToday ? "You watched today" : "Watch a clip today to keep the streak"}>
         <span className="stp-dot" aria-hidden="true" />
         {streak.days > 0 ? `Streak · ${plural(streak.days, "day")}` : "No streak yet"}

@@ -9,6 +9,9 @@ import { PLAY_ROUTE, ROUTE } from "../ui/register.tsx";
 export const AUTHOR_ROUTE = ROUTE;
 export { PLAY_ROUTE };
 
+/** the gaze calibration; outside /play, registered by register.tsx */
+export const CALIBRATE_ROUTE = `${ROUTE}/calibrate`;
+
 export const playerRoute = (sceneId: string) => `${PLAY_ROUTE}/${encodeURIComponent(sceneId)}`;
 
 export function CoinIcon(props: { size?: number; strokeWidth?: number }) {

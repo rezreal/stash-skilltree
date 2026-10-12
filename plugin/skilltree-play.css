@@ -869,6 +869,180 @@
 .skilltree-play .is-declined.stp-tl-dot { background: transparent; border: 2px solid var(--st-error); }
 .skilltree-play .is-spend.is-upcoming.stp-tl-dot { background: transparent; border: 2px solid var(--st-gold); }
 
+/* --- eye tracker: header chip, sensors panel, gaze dot ------------------------------------- */
+
+.skilltree-play .stp-sensor-wrap { position: relative; }
+
+.skilltree-play .stp-sensor-chip {
+  align-items: center;
+  background: none;
+  border: 1px solid var(--st-border);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.skilltree-play .stp-sensor-chip:hover { border-color: var(--stp-line); text-decoration: none; }
+.skilltree-play .stp-sensor-chip:focus-visible { outline: 2px solid var(--st-text); outline-offset: 2px; }
+.skilltree-play .stp-sensor-chip .stp-dot { background: currentColor; }
+.skilltree-play .stp-sensor-chip.stp-tone-muted .stp-dot { background: var(--stp-line); }
+
+.skilltree-play .stp-sensor-pop {
+  background: var(--stp-card-2);
+  border: 1px solid var(--stp-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 14px 16px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 340px;
+  z-index: 20;
+}
+
+.skilltree-play .stp-sensor-pop p { margin: 0; }
+.skilltree-play .stp-sensor-pop .stp-btn { align-self: flex-start; }
+
+.skilltree-play .stp-sensor-block { border-top: 1px solid var(--st-border); padding-top: 10px; }
+.skilltree-play .stp-sensor-block .stp-btn { align-self: flex-start; }
+.skilltree-play .stp-sensor-hint { margin: 0; }
+.skilltree-play .stp-self-start { align-self: flex-start; }
+
+.skilltree-play .stp-toggle {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  margin: 0;
+  min-height: 32px;
+}
+
+.skilltree-play .stp-toggle input { accent-color: var(--st-open); height: 16px; margin: 0; width: 16px; }
+
+.skilltree-play .stp-gaze-dot {
+  background: rgba(240, 160, 75, 0.35);
+  border: 2px solid var(--st-open);
+  border-radius: 50%;
+  height: 22px;
+  left: -11px;
+  pointer-events: none;
+  position: absolute;
+  top: -11px;
+  width: 22px;
+  will-change: transform;
+  z-index: 5;
+}
+
+.skilltree-play .stp-gaze-dot.is-lost { border-style: dashed; opacity: 0.45; }
+
+/* --- calibration: a full-viewport dark screen ----------------------------------------------- */
+
+.skilltree-play .stp-calib {
+  align-items: center;
+  background: #000;
+  color: var(--st-text);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+  position: fixed;
+  z-index: 2000; /* above stash's navbar */
+}
+
+.skilltree-play .stp-calib.is-recording { cursor: none; }
+.skilltree-play .stp-calib.is-recording.is-mouse { cursor: crosshair; }
+
+.skilltree-play .stp-calib-card {
+  background: var(--stp-card-2);
+  border: 1px solid var(--st-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 100%;
+  max-width: 560px;
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+.skilltree-play .stp-calib-card p { margin: 0; }
+.skilltree-play .stp-calib-head { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+.skilltree-play .stp-calib-actions { justify-content: flex-start; }
+
+.skilltree-play .stp-calib-dot {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+}
+
+.skilltree-play .stp-calib-ring,
+.skilltree-play .stp-calib-core {
+  border-radius: 50%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.skilltree-play .stp-calib-ring {
+  animation-fill-mode: forwards;
+  animation-name: stp-calib-shrink;
+  animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1);
+  background: var(--st-open);
+  height: 44px;
+  width: 44px;
+}
+
+.skilltree-play .stp-calib-core { background: #fff; height: 6px; width: 6px; }
+
+@keyframes stp-calib-shrink {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0.85; transform: translate(-50%, -50%) scale(0.22); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skilltree-play .stp-calib-ring { animation: none; transform: translate(-50%, -50%) scale(0.4); }
+}
+
+.skilltree-play .stp-calib-progress {
+  align-items: center;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  width: min(320px, calc(100% - 32px));
+}
+
+.skilltree-play .stp-calib-progress .stp-bar { width: 100%; }
+.skilltree-play .stp-calib-progress .stp-bar > div { background: var(--st-open); }
+
+.skilltree-play .stp-calib-wait { align-items: center; color: var(--stp-soft); display: flex; }
+
+.skilltree-play .stp-calib-plot { inset: 0; pointer-events: none; position: absolute; z-index: 1; }
+.skilltree-play .stp-calib-target { fill: none; stroke: var(--st-muted); stroke-width: 2; }
+.skilltree-play .stp-calib-measured { fill: var(--st-open); }
+.skilltree-play .stp-calib-miss { stroke: var(--st-open); stroke-opacity: 0.6; stroke-width: 1.5; }
+.skilltree-play .stp-calib-label { fill: var(--st-muted); font-family: var(--stp-mono); font-size: 12px; }
+
 /* --- narrow screens ------------------------------------------------------------------------ */
 
 @media (max-width: 767px) {

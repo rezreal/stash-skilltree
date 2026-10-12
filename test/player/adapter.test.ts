@@ -1,7 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ACTIVITY_EVENTS, createAttentionAdapter, type AttentionEnv } from "../../src/player/attentionAdapter.ts";
-import { loadCurrentPerformer, saveCurrentPerformer } from "../../src/player/storage.ts";
+import {
+  CALIBRATION_KEY,
+  loadCalibrationText,
+  loadCurrentPerformer,
+  loadShowGaze,
+  saveCalibrationText,
+  saveCurrentPerformer,
+  saveShowGaze,
+} from "../../src/player/storage.ts";
 
 function fakeEnv() {
   const listeners = new Map<string, Set<() => void>>();
@@ -91,4 +99,43 @@ test("current performer storage is optional and never throws", () => {
   assert.equal(loadCurrentPerformer(broken), undefined);
   assert.doesNotThrow(() => saveCurrentPerformer("1", broken));
   assert.equal(loadCurrentPerformer(undefined), undefined);
+});
+
+test("calibration text and the show-gaze toggle are stored per viewer, blocked storage is harmless", () => {
+  const data = new Map<string, string>();
+  const store = {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, v),
+    removeItem: (k: string) => void data.delete(k),
+  };
+  assert.equal(loadCalibrationText(store), undefined);
+  assert.equal(saveCalibrationText('{"v":1}', store), true);
+  assert.equal(data.get(CALIBRATION_KEY), '{"v":1}');
+  assert.equal(CALIBRATION_KEY, "skilltree.calibration");
+  assert.equal(loadCalibrationText(store), '{"v":1}');
+  assert.equal(saveCalibrationText(undefined, store), true);
+  assert.equal(loadCalibrationText(store), undefined);
+
+  assert.equal(loadShowGaze(store), false);
+  saveShowGaze(true, store);
+  assert.equal(loadShowGaze(store), true);
+  saveShowGaze(false, store);
+  assert.equal(loadShowGaze(store), false);
+
+  const broken = {
+    getItem: (): string | null => {
+      throw new Error("blocked");
+    },
+    setItem: () => {
+      throw new Error("blocked");
+    },
+    removeItem: () => {
+      throw new Error("blocked");
+    },
+  };
+  assert.equal(loadCalibrationText(broken), undefined);
+  assert.equal(saveCalibrationText("x", broken), false);
+  assert.equal(saveCalibrationText("x", undefined), false);
+  assert.equal(loadShowGaze(broken), false);
+  assert.doesNotThrow(() => saveShowGaze(true, broken));
 });
