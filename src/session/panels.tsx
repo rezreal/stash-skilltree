@@ -1,5 +1,6 @@
 // Status pieces of the session overlay: the "Counts when" panel (copied
-// from src/player/PlayerScreen.tsx, which is going away), the slim
+// from src/player/PlayerScreen.tsx, which is going away; plus the track
+// rule's row), the slim
 // timeline above stash's control bar and useRecentChange.
 import type { SceneInput } from "../core/types.ts";
 import type { SessionState, WatchPolicy } from "../play/types.ts";
@@ -42,6 +43,23 @@ export function CountsWhen(props: { session: SessionState; policy: WatchPolicy; 
             </span>
           </div>
           {bar(need > 0 ? passed / need : 1)}
+        </div>
+      )}
+      {policy.rules.includes("track") && (
+        <div className="stp-col stp-gap-sm">
+          <div className="stp-row">
+            <span>Track followed</span>
+            {session.track !== undefined ? (
+              <span className="stp-mono">
+                {formatPercent(session.track)} <span className="stp-muted">/ {formatPercent(policy.trackMin)}</span>
+              </span>
+            ) : (
+              <span className="stp-muted" title="Without distance sensor readings the track rule doesn't count for or against the clip">
+                not scored
+              </span>
+            )}
+          </div>
+          {session.track !== undefined && bar(policy.trackMin > 0 ? session.track / policy.trackMin : 1)}
         </div>
       )}
       {policy.rules.includes("exposure") && (

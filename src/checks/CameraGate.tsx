@@ -21,10 +21,14 @@ export interface GateResult {
 
 const POLL_MS = 200;
 
-type PermissionGuess = "granted" | "denied" | "prompt" | "unknown";
+export type PermissionGuess = "granted" | "denied" | "prompt" | "unknown";
 
-/** camera permission without prompting (Permissions API; Firefox may not know "camera") */
-function useCameraPermission(): PermissionGuess {
+/**
+ * Camera permission without prompting (Permissions API; Firefox may not know
+ * "camera": "unknown"). Also used by the session to start presence silently
+ * when the webcam is not required but already allowed.
+ */
+export function useCameraPermission(): PermissionGuess {
   const [state, setState] = React.useState<PermissionGuess>("unknown");
   React.useEffect(() => {
     let alive = true;

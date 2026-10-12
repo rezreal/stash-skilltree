@@ -8,24 +8,51 @@
 //   banner (state, notices, coins, score chip -> sensors panel, Stop), the
 //   overlays, a slim timeline above the control bar, the gaze dot, snap
 //   flashes and the gaze callout. The pause lock follows the policy.
+// - Live checks (src/checks) and the track rule (src/player/useTrack.ts),
+//   decisions in ./checksWiring.ts: the camera gate before the session when
+//   the webcam is required, presence AND gaze as the tick's attention (gaze
+//   suspended during gaze prompts), prompt checks on the video clock, the
+//   distance-sensor guide over the video and its score fed to the session.
+// Resources: the webcam is reference counted by the checks module and turns
+// off ~1 s after the session ends or the overlay unmounts (leaving the scene
+// page); usePromptChecks frees the microphone and the speech / vision models
+// when the session ends or unmounts; the distance sensor stays connected
+// (shared across pages), only this clip's subscription ends.
 import type { ReactNode } from "react";
 import type { SceneInput } from "../core/types.ts";
+import { CameraGate, useCameraPermission } from "../checks/CameraGate.tsx";
+import { ChecksSensorRows } from "../checks/ChecksSensorRows.tsx";
+import { PromptBanner } from "../checks/PromptBanner.tsx";
+import { checksSettings } from "../checks/settings.ts";
+import { usePromptChecks, type PromptChecks } from "../checks/usePromptChecks.ts";
+import { useViewerPresence, type ViewerPresence } from "../checks/useViewerPresence.ts";
 import { isTerminal } from "../play/index.ts";
 import { router } from "../player/api.ts";
 import { CoinIcon, PLAY_ROUTE } from "../player/common.tsx";
 import { FlashOverlay } from "../player/FlashOverlay.tsx";
 import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
-import { graceText, pauseReasonText } from "../player/gazeView.ts";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
+import { TrackGuide } from "../player/TrackGuide.tsx";
 import { usePlayData, type PlayData } from "../player/usePlayData.ts";
 import { useSnapEvents, useSnapFlashIntensity } from "../player/useSnapEvents.ts";
+import { useTrackSession, type TrackHandle } from "../player/useTrack.ts";
 import { phaseView, previousExposure } from "../player/view.ts";
 import { OverlayInteractive } from "../stashplayer/OverlayHost.tsx";
 import type { StashPlayerContext } from "../stashplayer/patch.tsx";
 import { lockUserPause } from "../stashplayer/pauseLock.ts";
 import { lockPlaybackRate } from "../stashplayer/rateLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
+import { usePluginSettings } from "../ui/pluginApi.ts";
+import {
+  attentionTexts,
+  needsCameraGate,
+  presenceWanted,
+  sessionAdjuster,
+  sessionAttending,
+  TRACK_REPORT_MS,
+  trackScoreToReport,
+} from "./checksWiring.ts";
 import { bannerNotice, findTreeScene, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
 import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog } from "./overlays.tsx";
@@ -52,12 +79,13 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
   const { state, reload } = usePlayData();
   const [attempt, setAttempt] = React.useState(0);
   const [dismissed, setDismissed] = React.useState(false);
-  // TODO(checks): the pre-session gate. Start false when the webcam is
-  // required and render src/checks' <CameraGate onReady={() => setGatePassed(true)} />
-  // where marked below; playback is held until it passes.
-  const [gatePassed] = React.useState(true);
+  // the camera gate: only when the webcam is required (default); playback is
+  // held until a person is in view of the running camera
+  const webcamRequired = checksSettings(usePluginSettings()).webcamRequired;
+  const [gatePassed, setGatePassed] = React.useState(false);
   const scene = state.status === "ready" ? findTreeScene(state.data, sceneId) : undefined;
-  const waiting = state.status === "loading" || (!!scene && !gatePassed);
+  const gate = !!scene && needsCameraGate(webcamRequired, gatePassed);
+  const waiting = state.status === "loading" || gate;
 
   // the session can't watch yet: hold playback until the library (and the gate) are there
   React.useEffect(() => {
@@ -82,6 +110,8 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
     } catch {
       // no player: the new session starts wherever the video is
     }
+    // the ended session turned the camera off: the gate checks it again
+    setGatePassed(false);
     setAttempt((n) => n + 1);
   }, [handle]);
 
@@ -115,9 +145,13 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
       </Root>
     );
   }
-  if (!gatePassed) {
-    // TODO(checks): <CameraGate ... /> goes here
-    return <Root />;
+  if (gate) {
+    // takes its own clicks (.stc-gate sets pointer-events: auto)
+    return (
+      <Root>
+        <CameraGate required onReady={() => setGatePassed(true)} />
+      </Root>
+    );
   }
   return (
     <Root>
@@ -158,8 +192,44 @@ function SessionOverlay(props: {
   onRetry: () => void;
 }) {
   const { handle, data } = props;
-  const s = useSkilltreeSession({ scene: props.scene, handle, data, reload: props.reload });
+  const settings = checksSettings(usePluginSettings());
+  const required = settings.webcamRequired;
+  const permission = useCameraPermission();
+
+  // the session reads these on its ticks and at the clip's end; they are
+  // created after it (they depend on its phase and callbacks)
+  const viewerRef = React.useRef<ViewerPresence | undefined>(undefined);
+  const checksRef = React.useRef<PromptChecks | undefined>(undefined);
+  const trackRef = React.useRef<TrackHandle | undefined>(undefined);
+  const requiredRef = React.useRef(required);
+  requiredRef.current = required;
+  const adjustAttention = React.useMemo(
+    () =>
+      sessionAdjuster(() => ({
+        presence: viewerRef.current?.present(),
+        required: requiredRef.current,
+        gazePromptActive: checksRef.current?.gazePromptActive ?? false,
+      })),
+    [],
+  );
+  const lastTrackRef = React.useRef<number | undefined>(undefined);
+  const reportTrackRef = React.useRef<(score: number) => void>(() => undefined);
+  const flushTrack = React.useCallback(() => {
+    const score = trackScoreToReport(trackRef.current, lastTrackRef.current);
+    if (score === undefined) return;
+    lastTrackRef.current = score;
+    reportTrackRef.current(score);
+  }, []);
+  // the clip ended: open prompt windows report, the final track score goes in
+  const beforeEnd = React.useCallback(() => {
+    checksRef.current?.finish();
+    flushTrack();
+  }, [flushTrack]);
+
+  const s = useSkilltreeSession({ scene: props.scene, handle, data, reload: props.reload, adjustAttention, beforeEnd });
   const { session, policy, scene, openSpend, attention, exposureOnly } = s;
+  reportTrackRef.current = s.reportTrack;
+  const finished = isTerminal(session);
   const snaps = useSnapEvents(scene.id, scene.interactive);
   const flashIntensity = useSnapFlashIntensity();
   const [panelOpen, setPanelOpen] = React.useState(false);
@@ -172,34 +242,63 @@ function SessionOverlay(props: {
 
   const getContainer = React.useCallback(() => handle.container(), [handle]);
   const getVideoTime = React.useCallback(() => (handle.video() ? handle.currentTime() : undefined), [handle]);
+  const getVideo = React.useCallback(() => handle.video(), [handle]);
 
-  const finished = isTerminal(session);
+  // --- checks: webcam presence + prompt checks ---
+  const viewer = useViewerPresence({ enabled: presenceWanted({ required, permission, finished }) });
+  viewerRef.current = viewer;
+  // no getVideoBox: the hook measures the <video> itself
+  const checks = usePromptChecks({
+    scene,
+    enabled: settings.promptsEnabled && !finished,
+    getVideoTime,
+    getVideo,
+    viewer,
+    onResult: s.reportPrompt,
+    onSeek: s.seek,
+  });
+  checksRef.current = checks;
+
+  // --- track: the distance-sensor guide and its score ---
+  const runningRef = React.useRef(!finished);
+  runningRef.current = !finished;
+  const isPlaying = React.useCallback(() => runningRef.current && !handle.paused() && !handle.ended(), [handle]);
+  const { track } = useTrackSession(scene.id, getVideoTime, {
+    enabled: policy.rules.includes("track") || scene.interactive,
+    isPlaying,
+  });
+  trackRef.current = track;
+  // only while scored (calibrated sensor sending): no sensor -> the track rule stays unscored
+  React.useEffect(() => {
+    if (!track || finished) return;
+    const id = window.setInterval(flushTrack, TRACK_REPORT_MS);
+    return () => window.clearInterval(id);
+  }, [track, finished, flushTrack]);
+
+  const presence = viewer.present();
+  const texts = attentionTexts(attention.reading, presence, required);
+  const attendingNow = sessionAttending(attention.reading, presence, { required, gazePromptActive: checks.gazePromptActive });
+
   const phase = phaseView(session.phase, policy, viewPauseCause(!!openSpend, session.pausedBy));
   const pauseAttemptRecent = useRecentChange(session.pauseAttempts, 4000);
   const notice = bannerNotice({
     phase: session.phase,
     spendOpen: !!openSpend,
     pauseAttemptRecent,
-    graceText: graceText(attention.reading),
+    graceText: texts.grace,
     exposureOnly,
   });
-  const chip = scoreChipView(session, policy, attention.reading.attending);
+  const chip = scoreChipView(session, policy, attendingNow);
 
   const showInattention = session.phase === "paused" && session.pausedBy === "inattention" && !openSpend;
   const graceWarning = session.phase === "grace" && !openSpend;
   const callout = useGazeCallout(showInattention || graceWarning, getContainer);
-  const pauseText = pauseReasonText(attention.reading);
+  const pauseText = texts.pause;
   const abortIn =
     session.pausedSinceMs !== undefined ? policy.abortSec - (Date.now() - session.pausedSinceMs) / 1000 : policy.abortSec;
 
-  // TODO(checks): integration points for src/checks -
-  // - attention: pass adjustAttention (combineAttention with useViewerPresence)
-  //   and beforeEnd (usePromptChecks' finish()) to useSkilltreeSession above;
-  // - usePromptChecks({ ..., getVideoTime, getVideo: handle.video,
-  //   getVideoBox: getContainer, onResult: s.reportPrompt, onSeek: s.seek });
-  // - promptBanner: <PromptBanner .../>; sensorRows: <ChecksSensorRows .../>.
-  const promptBanner: ReactNode = null;
-  const sensorRows: ReactNode = null;
+  const promptBanner: ReactNode = checks.specs.length > 0 ? <PromptBanner checks={checks} /> : null;
+  const sensorRows: ReactNode = <ChecksSensorRows viewer={viewer} status={checks.status} />;
 
   const stopLabel = exposureOnly ? "Stop & save" : "Stop";
   const loopSaveShown = exposureOnly && s.save.status !== "idle" && session.phase !== "complete";
@@ -208,6 +307,7 @@ function SessionOverlay(props: {
     <>
       <GazeDot getContainer={getContainer} />
       <FlashOverlay getContainer={getContainer} getVideoTime={getVideoTime} events={snaps} intensity={flashIntensity} />
+      {!finished && track && <TrackGuide getContainer={getContainer} getVideoTime={getVideoTime} track={track} />}
 
       <div className={`stp-sp-top${notice?.tone === "warning" ? " is-alert" : ""}`}>
         <div className="stp-sp-bar">
@@ -263,7 +363,12 @@ function SessionOverlay(props: {
             </div>
             <p className="stp-small stp-muted stp-lh stp-sp-hint">{phase.hint}</p>
             <CountsWhen session={session} policy={policy} prompts={s.prompts.length} previousExposureSec={previousExposure(scene)} />
-            <SensorsPanel reading={attention.reading} snapFlashes={flashIntensity > 0 ? snaps.length : 0} />
+            <SensorsPanel
+              reading={attention.reading}
+              snapFlashes={flashIntensity > 0 ? snaps.length : 0}
+              distanceSensor={policy.rules.includes("track")}
+              track={track}
+            />
             {sensorRows}
           </OverlayInteractive>
         )}
@@ -275,7 +380,7 @@ function SessionOverlay(props: {
       {callout && (
         <GazeCallout
           state={callout}
-          title={showInattention ? pauseText.title : graceText(attention.reading)}
+          title={showInattention ? pauseText.title : texts.grace}
           detail={
             showInattention
               ? `Look back at the video · aborts in ${formatCountdown(abortIn)}`

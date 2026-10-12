@@ -33,6 +33,7 @@ members = [
     (f"{ROOT}/plugin/{ID}.js",  f"{ID}.js"),
     (f"{ROOT}/plugin/{ID}.css", f"{ID}.css"),
     (f"{ROOT}/plugin/{ID}-play.css", f"{ID}-play.css"),
+    (f"{ROOT}/plugin/{ID}-checks.css", f"{ID}-checks.css"),
     (f"{ROOT}/README.md",       "README.md"),
 ]
 

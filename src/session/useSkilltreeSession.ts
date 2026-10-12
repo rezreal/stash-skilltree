@@ -105,6 +105,8 @@ export interface SkilltreeSession {
   retryLoopSave: () => void;
   /** a prompt marker's result (prompt checks) */
   reportPrompt: (result: PromptResult) => void;
+  /** the latest overall track score 0..1 (replaces the previous one) */
+  reportTrack: (score: number) => void;
   /** jumps the player to `sec` (prompt replays); no-op without a player */
   seek: (sec: number) => void;
   videoTime: number;
@@ -390,6 +392,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
   }, [handle, exposureOnly, scene, spends, decideSpend, pauseVideo]);
 
   const reportPrompt = React.useCallback((result: PromptResult) => dispatch({ type: "prompt", result }), []);
+  const reportTrack = React.useCallback((score: number) => dispatch({ type: "track", score }), []);
   const seek = React.useCallback(
     (sec: number) => {
       try {
@@ -418,6 +421,7 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
     retrySave: () => void commit(save.status === "error" ? save.commit : undefined),
     retryLoopSave: () => void saveLoop(),
     reportPrompt,
+    reportTrack,
     seek,
     videoTime,
     furthest,
