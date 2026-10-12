@@ -19,15 +19,15 @@ function assertCovers(sections: Section[], actions: Action[]) {
 }
 
 describe("normalize", () => {
-  it("applies range and inverted, collapses equal timestamps", () => {
+  it("reads pos as depth = 100 - pos, takes inverted files as is, applies range, collapses equal timestamps", () => {
     const f = parseFunscript({ inverted: true, range: 50, actions: [{ at: 0, pos: 50 }, { at: 100, pos: 0 }, { at: 100, pos: 25 }, { at: 200, pos: 80 }] });
     assert.deepEqual(scriptActions(f), [
-      { at: 0, pos: 0 },
+      { at: 0, pos: 100 },
       { at: 100, pos: 50 },
-      { at: 200, pos: 0 },
+      { at: 200, pos: 100 },
     ]);
     const plain = parseFunscript({ actions: [{ at: 0, pos: 10 }] });
-    assert.deepEqual(scriptActions(plain), [{ at: 0, pos: 10 }]);
+    assert.deepEqual(scriptActions(plain), [{ at: 0, pos: 90 }]);
   });
 
   it("interpolates linearly and holds the edge values", () => {

@@ -155,7 +155,9 @@ Watch policy = rules composed per scene from its tags:
   `eyesClosedDim`, default 30 %, capped at 60 % so the screen still lights
   the face for the webcam; 0.9 s fade in and out): the cue to close them and
   what a peek sees. The bar and the prompt banner stay bright.
-- `track` — funscript + BLE distance sensor. Sections: stroke (range +
+- `track` — funscript + BLE distance sensor. Depth = 100 − pos (funscript
+  pos 100 = top of the stroke = out, 0 = deepest; files marked `inverted`
+  are taken as is); the guide shows IN at the top. Sections: stroke (range +
   turning-point timing), hold (time inside band; flat with depth), ramp
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
   for drift correction). Lag measured per session. User limits (max depth,

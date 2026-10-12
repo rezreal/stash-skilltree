@@ -359,9 +359,9 @@ function LivePanel(props: { sensor: TrackSensorHandle }) {
                 <line
                   className="stp-track-limit-line"
                   x1="0"
-                  y1={(sensor.limits.maxDepth / 100) * TRACE_H}
+                  y1={TRACE_H - (sensor.limits.maxDepth / 100) * TRACE_H}
                   x2={TRACE_W}
-                  y2={(sensor.limits.maxDepth / 100) * TRACE_H}
+                  y2={TRACE_H - (sensor.limits.maxDepth / 100) * TRACE_H}
                 />
               )}
               {lines.map((l, i) => (
@@ -377,20 +377,20 @@ function LivePanel(props: { sensor: TrackSensorHandle }) {
   );
 }
 
-/** a vertical 0..100 meter (0 out at the top, 100 in at the bottom, like the guide) with the max-depth line */
+/** a vertical 0..100 meter (100 at the top) with the max-depth line */
 function Meter(props: { position: number | undefined; maxDepth: number; label: string }) {
   const p = props.position;
   return (
     <div className="stp-sensor-meter" role="meter" aria-label={props.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p === undefined ? undefined : Math.round(p)}>
       <span className="stp-sensor-meter-label" style={{ top: 4 }}>
-        0 out
+        100 in
       </span>
       <span className="stp-sensor-meter-label" style={{ bottom: 4 }}>
-        100 in
+        0 rest
       </span>
       {p !== undefined && <div className="stp-sensor-meter-fill" style={{ height: `${Math.max(0, Math.min(100, p))}%` }} />}
       {props.maxDepth < 100 && (
-        <div className="stp-sensor-meter-limit" style={{ top: `${props.maxDepth}%` }} title={`Your max depth: ${props.maxDepth}`} />
+        <div className="stp-sensor-meter-limit" style={{ top: `${100 - props.maxDepth}%` }} title={`Your max depth: ${props.maxDepth}`} />
       )}
     </div>
   );

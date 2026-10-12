@@ -1,14 +1,16 @@
-// Script positions as the track rule sees them: the main axis with the
-// file's `inverted` / `range` applied, so 0 always means "no depth" (out)
-// and 100 the deepest point. Pure.
+// Script positions as the track rule sees them: depth 0 = out (no depth),
+// 100 = the deepest point. A funscript's pos is the other way round (100 =
+// top of the stroke = out, 0 = bottom = deepest), so depth = 100 - pos; a
+// file marked `inverted` already counts the other way and is taken as is.
+// `range` (full-scale value) is applied first. Pure.
 
 import type { Action, Funscript } from "../funscript/parse.ts";
 
 const clamp = (p: number) => (p < 0 ? 0 : p > 100 ? 100 : p);
 
 /**
- * The main axis with `range` (full-scale value) and `inverted` applied,
- * clamped to 0..100. Actions sharing a timestamp collapse to the last one,
+ * The main axis as depth: `range` (full-scale value) applied, clamped to
+ * 0..100, then 100 - pos unless the file is marked `inverted`. Actions sharing a timestamp collapse to the last one,
  * so the result is strictly increasing in `at`.
  */
 export function scriptActions(f: Funscript): Action[] {
@@ -16,7 +18,7 @@ export function scriptActions(f: Funscript): Action[] {
   const out: Action[] = [];
   for (const a of f.actions) {
     const p = clamp((a.pos / range) * 100);
-    const pos = f.inverted ? 100 - p : p;
+    const pos = f.inverted ? p : 100 - p;
     const last = out[out.length - 1];
     if (last && last.at === a.at) last.pos = pos;
     else out.push({ at: a.at, pos });

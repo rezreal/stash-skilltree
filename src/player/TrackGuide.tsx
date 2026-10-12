@@ -1,5 +1,5 @@
 // The on-video guide of the track rule: a vertical depth gauge at the right
-// edge (OUT at the top, IN at the bottom: deeper moves down) with the target line, a direction
+// edge (IN at the top, OUT at the bottom) with the target line, a direction
 // arrow, a hold band with progress, the user's position as a blue dot and a
 // faint line at the user's max depth; and a strip at the bottom with the
 // next 3 s of the script, the "now" line and the current position.
@@ -154,7 +154,7 @@ function GuideLayer(props: { view: GuideView; live: boolean; calibrated: boolean
     <div className={`stp-track${v.unscored ? " is-unscored" : ""}`}>
       {glow > 0 && <div className={`stp-track-glow${mismatch === 0 ? " is-match" : ""}`} style={glowStyle} aria-hidden="true" />}
       <div className="stp-track-gauge" role="img" aria-label={v.aria}>
-        <span className="stp-track-end">OUT</span>
+        <span className="stp-track-end">IN</span>
         <div className="stp-track-rail">
           <div className="stp-track-bar" />
           {maxDepth < 100 && (
@@ -169,7 +169,7 @@ function GuideLayer(props: { view: GuideView; live: boolean; calibrated: boolean
           )}
           {v.currentTop !== undefined && <div className="stp-track-current" style={{ top: `${v.currentTop}%` }} />}
         </div>
-        <span className="stp-track-end">IN</span>
+        <span className="stp-track-end">OUT</span>
         <span className="stp-track-label">{!calibrated ? `${v.label} · not scored` : live ? v.label : `${v.label} · no sensor`}</span>
       </div>
 

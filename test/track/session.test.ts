@@ -51,11 +51,13 @@ describe("track session", () => {
     assert.ok(Math.abs((s.sensorRate() ?? 0) - 25) < 1);
   });
 
-  it("reads a funscript, applying inverted", () => {
-    const f = parseFunscript({ inverted: true, actions: longScript().map((a) => ({ at: a.at, pos: 100 - a.pos })) });
+  it("reads a funscript as depth = 100 - pos, an inverted one as is", () => {
+    const f = parseFunscript({ actions: longScript().map((a) => ({ at: a.at, pos: 100 - a.pos })) });
     const s = createTrackSession({ script: f, calibration: cal });
     assert.equal(s.sections[0].kind, "idle");
     assert.equal(s.actions[0].pos, 0);
+    const inv = createTrackSession({ script: parseFunscript({ inverted: true, actions: longScript() }), calibration: cal });
+    assert.equal(inv.sections[0].kind, "idle");
   });
 
   it("applies the default limits", () => {
