@@ -232,6 +232,23 @@ export interface SuggestionResult {
   performerId?: Id;
   /** set when the best next step is not affordable */
   blocked?: { node: NodeKey; cost: number; balance: number };
+  /** set when the best continue clip for the performer waits for performer chronology */
+  chronology?: ChronologyWait;
+}
+
+/**
+ * Why the best continue clip is held back: a performer's clips are watched in
+ * date order (src/play/chronology.ts), so it waits for earlier clips.
+ */
+export interface ChronologyWait {
+  /** the held-back clip (best continue candidate ignoring chronology) */
+  sceneId: Id;
+  /** performer whose date order holds it back: the current one if they do, else another performer of the clip */
+  performerId: Id;
+  /** that performer's next clips in line (earliest uncompleted date), by id */
+  nextSceneIds: Id[];
+  /** none of them counts for an open or complete node: stalled until other levels open */
+  locked: boolean;
 }
 
 // --- daily series ---------------------------------------------------------------

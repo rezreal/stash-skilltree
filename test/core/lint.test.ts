@@ -149,6 +149,38 @@ test("scene-no-date is one aggregated info", () => {
   assert.match(nd[0].message, /^2 scene/);
 });
 
+test("chronology-stall: a performer whose clip in line can never open", () => {
+  const lib = library({
+    interestTags: [interest("a", "a", 0), interest("b", "b", 0, { requires: "zzz:0" })],
+    performers: [{ id: "p1", name: "Ann" }, { id: "p2", name: "Bea" }, { id: "p3", name: "Cat" }],
+    scenes: [
+      // Ann: next in line sits in unreachable b:0, a later clip waits forever
+      scene("ann-b", ["b"], { performerIds: ["p1"], date: "2023-01-01" }),
+      scene("ann-a", ["a"], { performerIds: ["p1"], date: "2023-06-01" }),
+      // Bea: one of two same-date clips is stuck; the later clip still waits
+      scene("bea-a", ["a"], { performerIds: ["p2"], date: "2023-01-01" }),
+      scene("bea-b", ["b"], { performerIds: ["p2"], date: "2023-01-01" }),
+      scene("bea-later", ["a"], { performerIds: ["p2"], date: "2023-02-01" }),
+      // Cat: the stuck clip is the last one, or already watched, or undated
+      scene("cat-a", ["a"], { performerIds: ["p3"], date: "2023-01-01" }),
+      scene("cat-b", ["b"], { performerIds: ["p3"], date: "2023-06-01" }),
+      scene("cat-done", ["b"], { performerIds: ["p3"], date: "2022-01-01", completedAt: "2024-01-01T00:00:00Z" }),
+      scene("cat-undated", ["b"], { performerIds: ["p3"], date: undefined }),
+    ],
+  });
+  const stalls = lint(lib).filter((i) => i.code === "chronology-stall");
+  assert.deepEqual(
+    stalls.map((i) => [i.severity, i.sceneId, i.node]),
+    [
+      ["warning", "ann-b", "b:0"],
+      ["warning", "bea-b", "b:0"],
+    ],
+  );
+  assert.match(stalls[0].message, /^Ann can never get past 2023-01-01: "ann-b".*1 later clip/);
+  // a reachable tree has no stalls
+  assert.deepEqual(lint(quick({ "a:0": { performer: "p" }, "a:1": { performer: "p" } })), []);
+});
+
 test("sorted errors first, then warnings, then info", () => {
   const lib = quick({ "a:0": { scenes: 0 }, "b:1": { scenes: 1 } });
   lib.scenes[0].date = undefined;

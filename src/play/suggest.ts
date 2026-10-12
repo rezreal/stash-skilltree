@@ -1,5 +1,10 @@
 // Suggestions for the choice screen: continue / explore / earn, performer
 // switches and the start screen. Pure; inputs come from core + economy.
+//
+// Hard filters on every clip offered (AND): trigger pairs (installed before
+// used), daily series (only the next part of a series not done today) and
+// performer chronology (a performer's clips in date order, see
+// chronology.ts). Repeats of completed clips pass chronology.
 
 import type {
   Graph,
@@ -17,7 +22,9 @@ import { groupSatisfied, parseNodeKey, topicDepth } from "../core/index.ts";
 import { effortScore, estimateEarn, repeatFactor, spendCost, promptCount } from "./economy.ts";
 import { policyForScene } from "./policy.ts";
 import { blockedSeriesScenes, seriesStatus } from "./series.ts";
+import { chronology, type Chronology } from "./chronology.ts";
 import type {
+  ChronologyWait,
   Ledger,
   PerformerSwitch,
   PolicyTagInput,
@@ -74,6 +81,8 @@ interface Candidate {
   price: number;
   spendCost: number;
   completed: boolean;
+  /** allowed by performer chronology (completed scenes always are) */
+  inLine: boolean;
 }
 
 /**
@@ -125,10 +134,13 @@ function triggerOf(edges: TriggerEdge[], graph: Graph, sceneId: Id): string | un
 }
 
 /**
- * Parts of daily series never come up as normal suggestions, except the next
- * part of a series that is not done for today (blockedSeriesScenes).
+ * Clips in open, complete and gate nodes that pass the trigger and series
+ * filters. Parts of daily series never come up as normal suggestions, except
+ * the next part of a series that is not done for today (blockedSeriesScenes).
+ * Chronology is not filtered here but flagged (`inLine`), so suggest can tell
+ * why its best clip is held back; every offer takes only `inLine` candidates.
  */
-function allCandidates(input: SuggestInput): Candidate[] {
+function allCandidates(input: SuggestInput, chrono: Chronology): Candidate[] {
   const { graph, progress, visibility } = input;
   const triggerOk = triggerAllowed(graph, input.edges);
   const series = input.library.series ?? [];
@@ -151,7 +163,15 @@ function allCandidates(input: SuggestInput): Candidate[] {
     for (const id of node.sceneIds) {
       const scene = graph.scenes.get(id);
       if (!scene || !allowed(id)) continue;
-      out.push({ scene, node, state, price, spendCost: spendCost(scene), completed: scene.completedAt !== undefined });
+      out.push({
+        scene,
+        node,
+        state,
+        price,
+        spendCost: spendCost(scene),
+        completed: scene.completedAt !== undefined,
+        inLine: chrono.allowed(id),
+      });
     }
   }
   return out;
@@ -286,7 +306,9 @@ export function suggest(input: SuggestInput): SuggestionResult {
   const { graph, progress, ledger, streak, edges } = input;
   const max = Math.max(0, Math.floor(input.max ?? 2));
   const balance = ledger.balance;
-  const cands = allCandidates(input);
+  const chrono = chronology(input.library);
+  const every = allCandidates(input, chrono);
+  const cands = every.filter((c) => c.inLine);
   const performerId = input.performerId ?? busiestPerformer(cands, balance);
   const forP = (c: Candidate) => hasPerformer(c.scene, performerId);
 
@@ -341,6 +363,8 @@ export function suggest(input: SuggestInput): SuggestionResult {
     blocked = { ...contPick.blocked, balance };
     contSlot = "earn";
   }
+  const chronologyWait =
+    performerId !== undefined ? chronologyReason(every, chrono, graph, progress, performerId, continueOrder) : undefined;
 
   // explore: a topic the performer has not completed anything in
   const doneTopics = completedTopics(graph, performerId);
@@ -427,12 +451,55 @@ export function suggest(input: SuggestInput): SuggestionResult {
   };
   if (performerId !== undefined) result.performerId = performerId;
   if (blocked) result.blocked = blocked;
+  if (chronologyWait) result.chronology = chronologyWait;
   return result;
 }
 
+/** Does the scene count for an open or complete node, or for no node at all (outside the tree)? */
+function inReachedNode(graph: Graph, progress: Progress, sceneId: Id): boolean {
+  const nodes = graph.sceneNodes.get(sceneId) ?? [];
+  return nodes.length === 0 || nodes.some((k) => {
+    const st = progress.get(k)?.state;
+    return st === "open" || st === "complete";
+  });
+}
+
 /**
- * Other performers with open, affordable, new scenes, ranked by the number of
- * topics shared with the current performer's open nodes, then by count, then id.
+ * When the performer's best continue clip, ranked without chronology (and
+ * without affordability), is held back by performer chronology: which
+ * performer it waits for and that performer's next clips in line. Locked when
+ * none of those counts for an open or complete node.
+ */
+function chronologyReason(
+  every: Candidate[],
+  chrono: Chronology,
+  graph: Graph,
+  progress: Progress,
+  performerId: Id,
+  continueOrder: (a: Candidate, b: Candidate) => number,
+): ChronologyWait | undefined {
+  const pool = every.filter((c) => fresh(c) && c.scene.performerIds.includes(performerId));
+  if (pool.length === 0) return undefined;
+  pool.sort((a, b) => continueOrder(a, b) || compareScenes(a.scene, b.scene));
+  const best = pool[0];
+  if (best.inLine) return undefined;
+  const blockers = chrono.blockers(best.scene.id);
+  const who = blockers.includes(performerId) ? performerId : blockers[0];
+  if (who === undefined) return undefined;
+  const next = chrono.nextInLine(who);
+  return {
+    sceneId: best.scene.id,
+    performerId: who,
+    nextSceneIds: next.map((s) => s.id),
+    locked: !next.some((s) => inReachedNode(graph, progress, s.id)),
+  };
+}
+
+/**
+ * Other performers with open, affordable, new scenes they can watch now
+ * (chronology: next in line for every performer of the clip, or undated),
+ * ranked by the number of topics shared with the current performer's open
+ * nodes, then by count, then id.
  */
 function performerSwitches(cands: Candidate[], graph: Graph, balance: number, current: Id | undefined): PerformerSwitch[] {
   const open = cands.filter((c) => fresh(c) && c.state === "open" && affordable(c, balance));
@@ -473,12 +540,14 @@ export interface StartPerformer {
 
 /**
  * Start screen: performers with new, affordable scenes in open level-0
- * nodes; most entry scenes first, then most topics, earliest date, id.
+ * nodes that chronology lets them watch now (next in line for every
+ * performer of the clip, or undated); most entry scenes first, then most
+ * topics, earliest date, id.
  */
 export function startPerformers(input: Omit<SuggestInput, "performerId" | "max">): StartPerformer[] {
   const balance = input.ledger.balance;
-  const entry = allCandidates(input).filter(
-    (c) => fresh(c) && c.state === "open" && c.node.level === 0 && affordable(c, balance),
+  const entry = allCandidates(input, chronology(input.library)).filter(
+    (c) => c.inLine && fresh(c) && c.state === "open" && c.node.level === 0 && affordable(c, balance),
   );
   const per = new Map<Id, Candidate[]>();
   for (const c of entry) {
@@ -532,10 +601,15 @@ const CARD_ORDER: Record<SeriesStatus["state"], number> = {
 /**
  * A series part is reachable when the tree lets it be played: it counts for
  * no node at all (a series outside the tree), or for at least one node that
- * is open or complete, and every trigger it uses has been installed.
+ * is open or complete, every trigger it uses has been installed, and it is
+ * next in line for each of its performers (chronology over graph.scenes).
  */
 export function seriesPartReachable(graph: Graph, progress: Progress, edges: TriggerEdge[], sceneId: Id): boolean {
-  if (!triggerAllowed(graph, edges)(sceneId)) return false;
+  return chronology(graph).allowed(sceneId) && treeReaches(graph, progress, triggerAllowed(graph, edges), sceneId);
+}
+
+function treeReaches(graph: Graph, progress: Progress, triggerOk: (id: Id) => boolean, sceneId: Id): boolean {
+  if (!triggerOk(sceneId)) return false;
   const nodes = graph.sceneNodes.get(sceneId) ?? [];
   if (nodes.length === 0) return true;
   return nodes.some((k) => progress.get(k)?.state !== "locked");
@@ -543,9 +617,11 @@ export function seriesPartReachable(graph: Graph, progress: Progress, edges: Tri
 
 /**
  * One card per daily series that has a next part (everything but finished),
- * due first, then broken, not started, done for today; then by name. Given
- * the graph, series whose next part the tree does not reach yet are left
- * out, like any other clip behind the fog.
+ * due first, then broken, not started, done for today; then by name. Series
+ * whose next part is not next in line for each of its performers
+ * (chronology over library.scenes) are left out; given the graph, so are
+ * series whose next part the tree does not reach yet, like any other clip
+ * behind the fog.
  */
 export function dailySeriesCards(input: {
   library: LibraryInput;
@@ -558,14 +634,16 @@ export function dailySeriesCards(input: {
   if (series.length === 0) return [];
   const scenes = new Map<Id, SceneInput>(input.library.scenes.map((s) => [s.id, s]));
   const now = input.now ?? new Date();
+  const chrono = chronology(input.library);
+  const reach = input.reach;
+  const triggerOk = reach ? triggerAllowed(reach.graph, reach.edges) : undefined;
   const out: DailySeriesCard[] = [];
   for (const s of series) {
     const status = seriesStatus(s, scenes, now, input.dayStartHour);
     if (status.state === "finished" || !status.nextPart) continue;
     const scene = scenes.get(status.nextPart.sceneId);
-    if (!scene) continue;
-    const reach = input.reach;
-    if (reach && !seriesPartReachable(reach.graph, reach.progress, reach.edges, scene.id)) continue;
+    if (!scene || !chrono.allowed(scene.id)) continue;
+    if (reach && triggerOk && !treeReaches(reach.graph, reach.progress, triggerOk, scene.id)) continue;
     const cost = spendCost(scene);
     out.push({ series: s, status, spendCost: cost, affordable: cost <= input.ledger.balance });
   }

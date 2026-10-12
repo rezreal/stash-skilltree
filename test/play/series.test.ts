@@ -15,7 +15,7 @@ import {
   seriesForScene,
   seriesStatus,
 } from "../../src/play/series.ts";
-import { dailySeriesCards, suggest } from "../../src/play/suggest.ts";
+import { dailySeriesCards, seriesPartReachable, suggest } from "../../src/play/suggest.ts";
 
 /** ISO string of a local date/time in May 2024. */
 const may = (d: number, h = 12, min = 0) => new Date(2024, 4, d, h, min).toISOString();
@@ -376,10 +376,53 @@ describe("suggestions and daily series", () => {
     ids = suggested(seriesLibrary([9, undefined, undefined]));
     assert.ok(ids.includes("s2"));
     assert.ok(!ids.includes("s3"));
-    // done today: nothing of the series, even as a repeat earn clip
+    // done today: nothing of the series, even as a repeat earn clip; and
+    // nothing later of P either: part 3 (2024-01-03) is P's next clip in line,
+    // so "other" (2024-02-01) waits until it is watched tomorrow
     ids = suggested(seriesLibrary([9, 10, undefined]));
     assert.ok(!ids.some((id) => id.startsWith("s")));
-    assert.ok(ids.includes("other"));
+    assert.ok(!ids.includes("other"));
+    // an undated clip is outside the chronology and still comes up
+    const lib = seriesLibrary([9, 10, undefined]);
+    lib.scenes = lib.scenes.map((sc) => (sc.id === "other" ? { ...sc, date: undefined } : sc));
+    assert.ok(suggested(lib).includes("other"));
+  });
+
+  it("a series part waits for its performers' earlier clips (chronology)", () => {
+    // not started: part 1 is dated 2024-01-01, but P has an unwatched clip from 2023
+    const lib = seriesLibrary([undefined, undefined, undefined]);
+    lib.scenes.push(scene("early", ["t0"], { performerIds: ["P"], date: "2023-12-01" }));
+    const ids = suggested(lib);
+    assert.ok(ids.includes("early"));
+    assert.ok(!ids.includes("s1"));
+    const graph = buildGraph(lib);
+    const reach = { graph, progress: computeProgress(graph), edges: triggerEdges(lib) };
+    const ledger = computeLedger(lib);
+    const cards = (l: LibraryInput, r?: typeof reach) =>
+      dailySeriesCards({ library: l, ledger, now: NOW, reach: r }).map((c) => c.series.groupId);
+    assert.deepEqual(cards(lib), []);
+    assert.deepEqual(cards(lib, reach), []);
+    assert.equal(seriesPartReachable(graph, reach.progress, reach.edges, "s1"), false);
+    // watched: part 1 is next in line again
+    const after = { ...lib, scenes: lib.scenes.map((sc) => (sc.id === "early" ? { ...sc, completedAt: may(1) } : sc)) };
+    const g2 = buildGraph(after);
+    assert.deepEqual(cards(after), ["g"]);
+    assert.equal(seriesPartReachable(g2, computeProgress(g2), triggerEdges(after), "s1"), true);
+    assert.ok(suggested(after).includes("s1"));
+  });
+
+  it("a shared series part waits until it is next in line for every performer", () => {
+    // part 1 with P and Q; Q has an earlier unwatched clip
+    const lib = seriesLibrary([undefined, undefined, undefined]);
+    lib.performers.push(performer("Q"));
+    lib.scenes = lib.scenes.map((sc) => (sc.id === "s1" ? { ...sc, performerIds: ["P", "Q"] } : sc));
+    lib.scenes.push(scene("q-early", ["t0"], { performerIds: ["Q"], date: "2023-12-01" }));
+    const ledger = computeLedger(lib);
+    assert.deepEqual(dailySeriesCards({ library: lib, ledger, now: NOW }), []);
+    // P is stalled on s1: the reason names Q and Q's next clip
+    const r = suggestFor(lib);
+    assert.ok(!r.options.some((o) => o.sceneId === "s1"));
+    assert.deepEqual(r.chronology, { sceneId: "s1", performerId: "Q", nextSceneIds: ["q-early"], locked: false });
   });
 
   it("dailySeriesCards: one card per unfinished series, due first, with affordability", () => {

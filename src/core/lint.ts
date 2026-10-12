@@ -1,6 +1,6 @@
 // Author-facing checks on the graph and the raw library input.
 
-import type { Graph, LibraryInput, LintIssue, NodeKey, Severity } from "./types.ts";
+import type { Graph, LibraryInput, LintIssue, NodeKey, SceneInput, Severity } from "./types.ts";
 import { nodeKey } from "./requirements.ts";
 import { compareNodeKeys } from "./graph.ts";
 import { triggerScenes } from "./triggers.ts";
@@ -97,6 +97,57 @@ export function requirementCycles(graph: Graph): NodeKey[][] {
     }
   }
   return sccs;
+}
+
+/**
+ * Performer chronology (src/play/chronology.ts): a performer's clips are
+ * watched in date order, so an unwatched dated clip that counts only for
+ * unreachable nodes can never be watched and holds back every later clip of
+ * its performers for good. One warning per performer with such a clip and at
+ * least one later unwatched clip, naming the earliest one. This covers a
+ * performer whose next clips in line all sit in unreachable nodes, and also
+ * one where just one of several same-date clips does. Undated clips are
+ * outside the chronology; clips of no node (series outside the tree) never
+ * stall. Knock-on stalls through shared clips are not followed.
+ */
+function chronologyStalls(graph: Graph, reached: Set<NodeKey>, input?: LibraryInput): LintIssue[] {
+  const stuck = (id: string) => {
+    const nodes = graph.sceneNodes.get(id) ?? [];
+    return nodes.length > 0 && nodes.every((k) => !reached.has(k));
+  };
+  /** performer -> earliest stuck clip */
+  const first = new Map<string, SceneInput>();
+  const pending: SceneInput[] = [];
+  for (const s of graph.scenes.values()) {
+    if (s.completedAt !== undefined || !s.date) continue;
+    pending.push(s);
+    if (!stuck(s.id)) continue;
+    for (const p of s.performerIds) {
+      const f = first.get(p);
+      if (!f || s.date < f.date! || (s.date === f.date && s.id < f.id)) first.set(p, s);
+    }
+  }
+  const nameOf = (p: string) => graph.performers.get(p)?.name ?? input?.performers.find((x) => x.id === p)?.name ?? p;
+  const out: { name: string; p: string; issue: LintIssue }[] = [];
+  for (const [p, s] of first) {
+    const later = pending.filter((x) => x.performerIds.includes(p) && x.date! > s.date!).length;
+    if (later === 0) continue;
+    const name = nameOf(p);
+    const node = graph.sceneNodes.get(s.id)![0];
+    out.push({
+      name,
+      p,
+      issue: {
+        severity: "warning",
+        code: "chronology-stall",
+        message: `${name} can never get past ${s.date}: "${s.title}" counts only for unreachable levels, so ${later} later clip(s) of theirs stay blocked by performer chronology`,
+        node,
+        sceneId: s.id,
+      },
+    });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name) || (a.p < b.p ? -1 : a.p > b.p ? 1 : 0));
+  return out.map((x) => x.issue);
 }
 
 export function lintGraph(graph: Graph, input?: LibraryInput): LintIssue[] {
@@ -206,13 +257,15 @@ export function lintGraph(graph: Graph, input?: LibraryInput): LintIssue[] {
     }
   }
 
+  issues.push(...chronologyStalls(graph, reached, input));
+
   let undated = 0;
   for (const s of graph.scenes.values()) if (!s.date) undated++;
   if (undated > 0) {
     issues.push({
       severity: "info",
       code: "scene-no-date",
-      message: `${undated} scene(s) have no date; performer chronology cannot order them`,
+      message: `${undated} scene(s) have no date; they are outside performer chronology (neither wait nor hold clips back)`,
     });
   }
 

@@ -73,8 +73,24 @@ marker window (`seconds`..`end_seconds`) is when compliance is checked.
 - **Node state**: `locked` (requirements unmet) → `open` → `complete`
   (completed scenes ≥ need).
 - **Levels are global**: they measure the user, not a performer. Performer
-  chronology (scene date) only orders suggestions; trigger installed → used is
-  hard.
+  chronology and trigger installed → used are both hard.
+- **Performer chronology** (hard, `src/play/chronology.ts`): a performer's
+  clips are watched in date order across *all* their clips the plugin knows
+  (tree scenes and series parts, not per topic). A clip may be offered only
+  if, for each of its performers, every other clip of that performer with a
+  strictly earlier date is completed — so a clip with several performers
+  waits until it is next in line for every one of them. Same-date clips don't
+  order each other. Undated clips are outside the chronology: they neither
+  block nor are blocked (lint reports them). Completed clips stay allowed
+  (repeats to earn were watched in their turn). It applies wherever a clip
+  can be offered, ANDed with triggers and the daily-series rule: continue /
+  explore / earn, performer switches and the start screen (a performer is
+  listed only with a clip in line in an open node), and series cards (a
+  series part waits like any clip; since parts count, a daily part that is
+  next in line holds the performer's later clips until it is watched). When
+  the performer's best continue clip is held back, the suggestion result
+  says which performer it waits for, their next clips in line, and whether
+  all of those are in locked levels (stalled until other levels open).
 - **Fog of war**: visible = complete ∪ open ∪ *ahead*. Ahead = locked nodes
   that would open if every currently open node completed. OR alternatives
   stay hidden until their own nodes are visible. *Gate* = a node whose only
@@ -99,7 +115,9 @@ marker window (`seconds`..`end_seconds`) is when compliance is checked.
 - **Lint** (author view): unreachable nodes (reachability fixpoint, costs
   treated as payable) = error; cycles only through one alternative = warning;
   unknown topic/level refs; level gaps; nodes without scenes; need > scene
-  count; trigger used but never installed; malformed `st.*` values.
+  count; trigger used but never installed; malformed `st.*` values;
+  chronology stall = warning (a performer's unwatched dated clip counts only
+  for unreachable nodes, so their later clips can never come up).
 
 ## Watching
 
