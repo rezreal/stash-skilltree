@@ -18,7 +18,8 @@
 //   Opt-in: the viewer's own camera as a picture-in-picture (CameraPip).
 // - Live checks (src/checks) and the track rule (src/player/useTrack.ts),
 //   decisions in ./checksWiring.ts: the camera gate before the session when
-//   the webcam is required, presence AND gaze as the tick's attention (an
+//   the webcam is required, then the mic gate for clips with repeat prompts
+//   (speech recognition on), presence AND gaze as the tick's attention (an
 //   active gaze prompt replaces the gaze-on-video target: "close your eyes"
 //   pauses while the eyes are open), prompt checks on the video clock, the
 //   distance-sensor guide over the video and its score fed to the session.
@@ -36,6 +37,7 @@ import type { ReactNode } from "react";
 import type { SceneInput } from "../core/types.ts";
 import { CameraGate, useCameraPermission } from "../checks/CameraGate.tsx";
 import { ChecksSensorRows } from "../checks/ChecksSensorRows.tsx";
+import { MicGate } from "../checks/MicGate.tsx";
 import { PromptBanner } from "../checks/PromptBanner.tsx";
 import { checksSettings, parseBool } from "../checks/settings.ts";
 import { useGazeRegions } from "../checks/useGazeRegions.ts";
@@ -71,6 +73,7 @@ import { loadSceneById } from "../stash/testSearch.ts";
 import type { StashClient } from "../stash/client.ts";
 import {
   attentionTexts,
+  clipNeedsMic,
   needsCameraGate,
   presenceWanted,
   sessionAdjuster,
@@ -143,7 +146,8 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
   const pluginSettings = usePluginSettings();
   // the camera gate: only when the webcam is required (default); playback is
   // held until a person is in view of the running camera
-  const webcamRequired = checksSettings(pluginSettings).webcamRequired;
+  const checkSettings = checksSettings(pluginSettings);
+  const webcamRequired = checkSettings.webcamRequired;
   // ranked clips start fullscreen while the Watch click still counts (the gate shows in it too)
   const autoFullscreen = wantsAutoFullscreen(props.ctx, parseBool(pluginSettings.autoFullscreen, true));
   const fullscreenTried = React.useRef(false);
@@ -153,6 +157,8 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
     void enterFullscreen(handle);
   }, [handle, autoFullscreen]);
   const [gatePassed, setGatePassed] = React.useState(false);
+  // then the mic gate, for clips with repeat prompts
+  const [micPassed, setMicPassed] = React.useState(false);
   const treeScene = state.status === "ready" ? findTreeScene(state.data, sceneId) : undefined;
   // test mode: any scene; one outside the library is loaded on demand
   const onDemand = useOnDemandScene(
@@ -161,10 +167,11 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
   );
   const scene = treeScene ?? (onDemand.state.status === "ready" ? onDemand.state.scene : undefined);
   const gate = !!scene && needsCameraGate(webcamRequired, gatePassed);
+  const micGate = !!scene && !gate && !micPassed && clipNeedsMic(scene.markers, checkSettings);
   const sceneLoading = test && !scene && (onDemand.state.status === "loading" || onDemand.state.status === "idle");
-  const waiting = state.status === "loading" || sceneLoading || gate;
+  const waiting = state.status === "loading" || sceneLoading || gate || micGate;
 
-  // the session can't watch yet: hold playback until the library (and the gate) are there
+  // the session can't watch yet: hold playback until the library (and the gates) are there
   React.useEffect(() => {
     if (!waiting) return;
     let held = false;
@@ -189,6 +196,7 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
     }
     // the ended session turned the camera off: the gate checks it again
     setGatePassed(false);
+    setMicPassed(false);
     setAttempt((n) => n + 1);
   }, [handle]);
 
@@ -256,6 +264,13 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
     return (
       <Root>
         <CameraGate required onReady={() => setGatePassed(true)} />
+      </Root>
+    );
+  }
+  if (micGate) {
+    return (
+      <Root>
+        <MicGate onReady={() => setMicPassed(true)} />
       </Root>
     );
   }

@@ -8,6 +8,9 @@
 //   it there is no gate: presence starts silently when the site already has
 //   camera permission (never a browser prompt mid-clip), otherwise the
 //   session runs without presence and webcam action prompts aren't checked.
+// - Microphone: a clip with repeat prompts gets the mic gate (after the
+//   camera gate) whenever speech recognition is on; there is no way past it
+//   without the mic other than switching speech recognition off.
 // - Attention per tick = present AND (gaze or the focus/activity stand-in).
 //   While a gaze prompt's window is active the prompt REPLACES the gaze
 //   part (PLAN: prompts): attending = following the prompt (gaze inside the
@@ -23,6 +26,8 @@
 import { attentionWithPresence } from "../checks/adjust.ts";
 import { combineAttention, presencePauseText, presenceReasonText } from "../checks/attention.ts";
 import { promptAttentionText } from "../checks/wording.ts";
+import type { MarkerInput } from "../core/types.ts";
+import { promptSpecs } from "../prompts/specs.ts";
 import type { PromptSpec } from "../prompts/types.ts";
 import { graceText, pauseReasonText, type AttentionReading, type PauseText } from "../player/gazeView.ts";
 
@@ -35,6 +40,20 @@ export type CameraPermission = "granted" | "denied" | "prompt" | "unknown";
 /** The camera gate stands before the session: required and not passed yet. */
 export function needsCameraGate(required: boolean, gatePassed: boolean): boolean {
   return required && !gatePassed;
+}
+
+/**
+ * The clip has repeat prompts that will be checked (prompts and speech
+ * recognition on): the mic gate asks for the microphone before it starts,
+ * so the browser never prompts mid-clip and a missing mic can't quietly
+ * drop the prompts.
+ */
+export function clipNeedsMic(
+  markers: readonly MarkerInput[],
+  settings: { promptsEnabled: boolean; speechEnabled: boolean },
+): boolean {
+  if (!settings.promptsEnabled || !settings.speechEnabled) return false;
+  return promptSpecs([...markers]).some((s) => s.check === "repeat");
 }
 
 /**

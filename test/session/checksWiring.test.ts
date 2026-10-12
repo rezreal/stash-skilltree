@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   attentionTexts,
+  clipNeedsMic,
   needsCameraGate,
   presenceWanted,
   sessionAdjuster,
@@ -35,6 +36,19 @@ describe("camera gate and presence", () => {
     assert.equal(needsCameraGate(true, false), true);
     assert.equal(needsCameraGate(true, true), false);
     assert.equal(needsCameraGate(false, false), false);
+  });
+
+  it("the mic gate is for clips with checked repeat prompts", () => {
+    const on = { promptsEnabled: true, speechEnabled: true };
+    const repeat = { id: "1", title: "I listen", seconds: 10, check: "repeat" as const };
+    const gaze = { id: "2", title: "", seconds: 20, check: "gaze" as const, target: "eyes" };
+    assert.equal(clipNeedsMic([repeat, gaze], on), true);
+    assert.equal(clipNeedsMic([gaze], on), false);
+    assert.equal(clipNeedsMic([], on), false);
+    // an empty phrase is no repeat prompt
+    assert.equal(clipNeedsMic([{ ...repeat, title: "  " }], on), false);
+    assert.equal(clipNeedsMic([repeat], { ...on, speechEnabled: false }), false);
+    assert.equal(clipNeedsMic([repeat], { ...on, promptsEnabled: false }), false);
   });
 
   it("presence runs for the whole session when required, silently with permission otherwise", () => {

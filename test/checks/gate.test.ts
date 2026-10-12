@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { cameraErrorHelp, cameraRow, createSteadyPresence, gatePhase, isNoCamera, micRow, visionRow } from "../../src/checks/gate.ts";
+import { cameraErrorHelp, cameraRow, createSteadyPresence, gatePhase, isNoCamera, micErrorHelp, micRow, visionRow } from "../../src/checks/gate.ts";
 
 describe("cameraErrorHelp", () => {
   it("explains every code", () => {
@@ -19,6 +19,19 @@ describe("cameraErrorHelp", () => {
     assert.equal(isNoCamera("permission-denied"), true);
     assert.equal(isNoCamera("device-busy"), false);
     assert.equal(isNoCamera("assets-missing"), false);
+  });
+});
+
+describe("micErrorHelp", () => {
+  it("explains every code, and how to watch without a mic where retrying can't help", () => {
+    assert.match(micErrorHelp("insecure-context").hint, /https/);
+    assert.match(micErrorHelp("insecure-context").hint, /turn off speech recognition/);
+    assert.equal(micErrorHelp("insecure-context").retry, false);
+    assert.match(micErrorHelp("permission-denied").title, /denied/);
+    assert.equal(micErrorHelp("permission-denied").retry, true);
+    assert.match(micErrorHelp("no-device").hint, /turn off speech recognition/);
+    assert.match(micErrorHelp("device-busy").hint, /Another app/);
+    assert.match(micErrorHelp("unknown", "boom").hint, /boom/);
   });
 });
 

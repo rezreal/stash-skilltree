@@ -23,4 +23,5 @@ export * from "./usePromptChecks.ts";
 export * from "./useGazeRegions.ts";
 export * from "./PromptBanner.tsx";
 export * from "./CameraGate.tsx";
+export * from "./MicGate.tsx";
 export * from "./ChecksSensorRows.tsx";

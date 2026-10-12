@@ -53,6 +53,42 @@ export function cameraErrorHelp(code: PerceptionErrorCode | undefined, message?:
   }
 }
 
+const SPEECH_OFF = "To watch without a microphone, turn off speech recognition in the Skilltree plugin settings.";
+
+/** What went wrong with the microphone (the mic gate), by PerceptionError code. */
+export function micErrorHelp(code: PerceptionErrorCode | undefined, message?: string): ErrorHelp {
+  switch (code) {
+    case "insecure-context":
+      return {
+        title: "The microphone needs a secure page",
+        hint: `Browsers only allow the microphone over https (or http://localhost). Open stash through https. ${SPEECH_OFF}`,
+        retry: false,
+      };
+    case "unsupported":
+      return {
+        title: "This browser can't use the microphone",
+        hint: `Try a current Chrome, Edge or Firefox. ${SPEECH_OFF}`,
+        retry: false,
+      };
+    case "permission-denied":
+      return {
+        title: "Microphone access was denied",
+        hint: "Allow the microphone for this site (the icon in the address bar, or the site settings), then try again.",
+        retry: true,
+      };
+    case "no-device":
+      return { title: "No microphone found", hint: `Connect a microphone or headset and try again. ${SPEECH_OFF}`, retry: true };
+    case "device-busy":
+      return {
+        title: "The microphone is busy",
+        hint: "Another app or tab may be using it. Close it and try again.",
+        retry: true,
+      };
+    default:
+      return { title: "The microphone could not be started", hint: message ?? "Try again.", retry: true };
+  }
+}
+
 /** Codes meaning "there is no camera to use" (the gate may go on without one when not required). */
 export function isNoCamera(code: PerceptionErrorCode | undefined): boolean {
   return code === "insecure-context" || code === "unsupported" || code === "permission-denied" || code === "no-device";
