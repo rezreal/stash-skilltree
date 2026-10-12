@@ -13,6 +13,7 @@ import {
   plural,
   topicLabel,
 } from "../../src/player/format.ts";
+import { initials } from "../../src/player/format.ts";
 
 test("formatDuration pads minutes and seconds, adds hours when needed", () => {
   assert.equal(formatDuration(0), "00:00");
@@ -62,4 +63,11 @@ test("labels", () => {
   assert.equal(dateLabel("2018-04-12"), "2018-04-12");
   assert.equal(plural(1, "open scene"), "1 open scene");
   assert.equal(plural(3, "open scene"), "3 open scenes");
+});
+
+test("initials", () => {
+  assert.equal(initials("Ann Example"), "AE");
+  assert.equal(initials("Mona"), "MO");
+  assert.equal(initials("  "), "?");
+  assert.equal(initials("A B C"), "AC");
 });

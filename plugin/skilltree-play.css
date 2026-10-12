@@ -355,6 +355,30 @@
 
 .skilltree-play .stp-performer-name { font-weight: 600; }
 
+.skilltree-play .stp-performer-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.skilltree-play .stp-avatar {
+  background: var(--stp-card);
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.skilltree-play .stp-avatar-initials {
+  align-items: center;
+  color: var(--st-muted);
+  display: inline-flex;
+  font-size: 0.85em;
+  font-weight: 600;
+  justify-content: center;
+}
+
 /* --- suggestion cards -------------------------------------------------------- */
 
 .skilltree-play .stp-options {

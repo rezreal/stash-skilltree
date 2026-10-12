@@ -22,6 +22,7 @@ import {
 import { watchUrl } from "../session/watchUrl.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
+import { PerformerAvatar } from "./PerformerAvatar.tsx";
 import { loadCurrentPerformer, saveCurrentPerformer } from "./storage.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import { fogDepthRows } from "../ui/fogView.ts";
@@ -218,7 +219,10 @@ function StartView(props: {
             <div className="stp-performer-grid">
               {shown.map((s) => (
                 <button key={s.performerId} type="button" className="stp-performer-card" onClick={() => props.onPick(s.performerId)}>
-                  <span className="stp-performer-name">{name(s.performerId)}</span>
+                  <span className="stp-performer-head">
+                    <PerformerAvatar performerId={s.performerId} name={name(s.performerId)} size={52} />
+                    <span className="stp-performer-name">{name(s.performerId)}</span>
+                  </span>
                   <span className="stp-chips">
                     {s.topics.map((t) => (
                       <span key={t} className="stp-chip">
@@ -309,7 +313,10 @@ function NextView(props: NextViewProps) {
           <div className="stp-switch-grid">
             {result.switches.map((s) => (
               <button key={s.performerId} type="button" className="stp-switch-card" onClick={() => props.onPick(s.performerId)}>
-                <span className="stp-performer-name">{name(s.performerId)}</span>
+                <span className="stp-performer-head">
+                  <PerformerAvatar performerId={s.performerId} name={name(s.performerId)} size={40} />
+                  <span className="stp-performer-name">{name(s.performerId)}</span>
+                </span>
                 {s.sharedTopics.length > 0 && (
                   <span className="stp-small stp-muted">Shares {s.sharedTopics.map(topicLabel).join(", ")}</span>
                 )}
