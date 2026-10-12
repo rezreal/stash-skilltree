@@ -3,6 +3,7 @@
 // (loops are the exception: stopping one saves its exposure minutes).
 import type { Graph, NodeKey, Progress, SceneInput, Visibility } from "../core/types.ts";
 import { stashUrl } from "../stash/client.ts";
+import { skilltreeSceneUrl } from "../stashplayer/handoff.ts";
 import {
   buildCommit,
   commitSession,
@@ -60,7 +61,16 @@ const TICK_MS = 250;
 
 const isFinished = isTerminal;
 
+/** the old route now hands over to stash's scene page (src/session/); this file goes away */
 export function PlayerScreen() {
+  const { useParams, useHistory } = router();
+  const { sceneId } = useParams<{ sceneId: string }>();
+  const history = useHistory();
+  React.useEffect(() => history.replace(skilltreeSceneUrl(sceneId, { autoplay: true })), [history, sceneId]);
+  return null;
+}
+
+export function LegacyPlayerScreen() {
   const { useParams } = router();
   const { sceneId } = useParams<{ sceneId: string }>();
   const { state, reload } = usePlayData();

@@ -48,7 +48,20 @@ export function OverlayHost(props: { handle: VideoHandle; className?: string; ch
     const offContainer = handle.onContainerChange(place);
     // video.js sets root.player during creation; catch it once media starts loading
     const offLoad = handle.onEvent("loadstart", guard);
+    // Space is the exception: stash's onKeyDownCapture on .VideoPlayer
+    // (ScenePlayer.tsx; the host sits inside it) toggles playback and stops
+    // the event before any overlay handler sees it. Stopped here, at the
+    // window, it never gets there; the default action (activating a focused
+    // button or checkbox) still happens. React doesn't see it either, so
+    // overlay controls use Enter for key-driven actions.
+    const onSpace = (e: KeyboardEvent) => {
+      if (e.key !== " " && e.code !== "Space") return;
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (inOverlay(e.target)) e.stopPropagation();
+    };
+    window.addEventListener("keydown", onSpace, true);
     return () => {
+      window.removeEventListener("keydown", onSpace, true);
       offContainer();
       offLoad();
       restoreHotkeys?.();

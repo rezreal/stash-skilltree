@@ -18,18 +18,18 @@ import {
   RefreshLine,
   TreeIcon,
   errorText,
-  playerRoute,
 } from "./common.tsx";
+import { watchUrl } from "../session/watchUrl.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
 import { loadCurrentPerformer, saveCurrentPerformer } from "./storage.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
+import { fogDepthRows } from "../ui/fogView.ts";
 import {
   KIND_LABEL,
   blockedText,
   checkChips,
   costBadge,
-  depthRows,
   earnText,
   ledgerAmount,
   ledgerLabel,
@@ -334,7 +334,7 @@ function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number
     try {
       await payForNode(data.client, node.tagIds, o.price, new Date().toISOString());
       await props.reload();
-      history.push(playerRoute(o.sceneId));
+      history.push(watchUrl(o.sceneId, scene, data.policyTags));
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
@@ -395,7 +395,7 @@ function SuggestionCard(props: { data: PlayData; option: Suggestion; num: number
             {busy ? "Paying…" : cantPay ? `Needs ${o.price} stashcoins` : watchButtonLabel(o)}
           </button>
         ) : (
-          <Link to={playerRoute(o.sceneId)} className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}>
+          <Link to={watchUrl(o.sceneId, scene, data.policyTags)} className={`stp-btn stp-btn-${o.kind === "earn" ? "gold" : "orange"}`}>
             {watchButtonLabel(o)}
           </Link>
         )}
@@ -478,7 +478,7 @@ function SeriesCard(props: { data: PlayData; card: DailySeriesCard }) {
       {status.state !== "done-today" && (
         <div className="stp-series-action">
           {card.affordable ? (
-            <Link to={playerRoute(next.sceneId)} className="stp-btn stp-btn-orange">
+            <Link to={watchUrl(next.sceneId, scene, data.policyTags)} className="stp-btn stp-btn-orange">
               Watch
             </Link>
           ) : (
@@ -498,7 +498,8 @@ function Sidebar(props: { data: PlayData; options: Suggestion[] }) {
   const { data } = props;
   const { Link } = router();
   const rows = React.useMemo(
-    () => depthRows(data.graph, data.progress, data.visibility, (t) => topicDepth(data.graph, data.progress, t)),
+    // only topics the player has entered, levels up to the reached one + 1
+    () => fogDepthRows(data.graph, data.progress, data.visibility, (t) => topicDepth(data.graph, data.progress, t)),
     [data],
   );
   const recent = recentEntries(data.ledger.entries);
@@ -531,7 +532,7 @@ function Sidebar(props: { data: PlayData; options: Suggestion[] }) {
               </div>
               <div className="stp-segs" style={{ gridTemplateColumns: `repeat(${Math.max(5, r.segments.length)}, minmax(0, 1fr))` }}>
                 {r.segments.map((s) => (
-                  <div key={s.key} className={`stp-seg is-${s.state}`} title={`${nodeLabel(s.key)}: ${s.state}`} />
+                  <div key={s.key} className={`stp-seg is-${s.state}`} title={s.state === "locked" ? "Next level: locked" : `${nodeLabel(s.key)}: ${s.state}`} />
                 ))}
               </div>
             </div>

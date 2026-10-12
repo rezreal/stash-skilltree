@@ -96,10 +96,10 @@ const commit: SessionCommit = {
 };
 
 describe("commitSession", () => {
-  it("writes the scene fields, then adds a play", async () => {
+  it("writes the scene fields and nothing else (stash's player counts the play)", async () => {
     const { client, calls } = fakeClient();
     await commitSession(client, commit);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
     assert.match(calls[0].query, /sceneUpdate\(input: \$input\)/);
     assert.deepEqual(calls[0].variables, {
       input: {
@@ -114,18 +114,10 @@ describe("commitSession", () => {
         },
       },
     });
-    assert.match(calls[1].query, /sceneAddPlay\(id: \$id, times: \$times\)/);
-    assert.deepEqual(calls[1].variables, { id: "7", times: ["2024-05-01T12:00:00Z"] });
+    assert.ok(calls.every((c) => !/sceneAddPlay/.test(c.query)));
   });
 
-  it("a failing play history is not fatal, a failing update is", async () => {
-    const ok = fakeClient((c) => {
-      if (/sceneAddPlay/.test(c.query)) throw new Error("nope");
-      return {};
-    });
-    await commitSession(ok.client, commit);
-    assert.equal(ok.calls.length, 2);
-
+  it("a failing update is fatal", async () => {
     const bad = fakeClient(() => {
       throw new Error("down");
     });

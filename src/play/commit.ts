@@ -6,12 +6,7 @@ import type { Id, SceneInput } from "../core/types.ts";
 import type { StashClient } from "../stash/client.ts";
 import { fieldNumber } from "../stash/fields.ts";
 import { rewardFor } from "./economy.ts";
-import {
-  FIND_TAG_FIELDS,
-  SCENE_ADD_PLAY,
-  SCENE_UPDATE_FIELDS,
-  TAG_UPDATE_PAID,
-} from "./queries.ts";
+import { FIND_TAG_FIELDS, SCENE_UPDATE_FIELDS, TAG_UPDATE_PAID } from "./queries.ts";
 import type { FindTagFieldsResult } from "./queries.ts";
 import { dayOfIso, localDayOf } from "./series.ts";
 import { sessionQuality } from "./session.ts";
@@ -73,9 +68,10 @@ export function buildCommit(
 
 /**
  * One sceneUpdate with custom_fields.partial (st.completed_at = this, the
- * latest, completion; cumulative st.completions / st.earned / st.spent),
- * then sceneAddPlay so stash's play history stays in step. The play history
- * is a courtesy: if it fails the commit still stands.
+ * latest, completion; cumulative st.completions / st.earned / st.spent).
+ * No play is added: playback runs on stash's own scene player, whose
+ * activity tracking already counts the play (sceneIncrementPlayCount, per
+ * the user's minimumPlayPercent); a sceneAddPlay here would count it twice.
  */
 export async function commitSession(client: StashClient, commit: SessionCommit): Promise<void> {
   await client.gql(SCENE_UPDATE_FIELDS, {
@@ -91,11 +87,6 @@ export async function commitSession(client: StashClient, commit: SessionCommit):
       },
     },
   });
-  try {
-    await client.gql(SCENE_ADD_PLAY, { id: commit.sceneId, times: [commit.completedAt] });
-  } catch {
-    // non-fatal
-  }
 }
 
 /** Stores a loop's total exposure (stored + this session), whole seconds. */
