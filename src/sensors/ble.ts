@@ -45,7 +45,12 @@ export interface BleSourceOptions {
 }
 
 export const SENSOR_DEVICE_KEY = "skilltree.sensorDevice";
-export const DEFAULT_RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
+// capped at a few seconds: a sensor switched back on should be picked up quickly
+export const DEFAULT_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
+/** a read that takes longer than this counts as failed (a hung GATT read) */
+export const READ_TIMEOUT_MS = 2000;
+/** consecutive failed reads before the link is dropped and reconnected */
+export const READ_FAILS_RECONNECT = 3;
 /** consecutive notifications that don't decode before the status says so */
 const BAD_VALUES_WARN = 10;
 
@@ -179,6 +184,11 @@ export function pickKnownDevice<D extends { id: string; name?: string | null }>(
   return devices.length === 1 ? devices[0] : undefined;
 }
 
+/** The browser can list devices granted on earlier visits, so a reload reconnects without a click. */
+export function canAutoConnect(bt: Bluetooth | undefined = navigatorBluetooth()): boolean {
+  return bt !== undefined && typeof bt.getDevices === "function";
+}
+
 /** True when a sensor was granted on an earlier visit, so connect() needs no click. */
 export async function sensorDevicePermitted(
   config: Pick<BleSensorConfig, "namePrefix">,
@@ -236,6 +246,8 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
   let attempt = 0;
   let badValues = 0;
   let lastStatusEmit = -Infinity;
+  /** the sensor connected since connect() was called: a retry is a reconnect, not a first wait */
+  let everConnected = false;
 
   function deviceName(): string | undefined {
     return device?.name || undefined;
@@ -315,31 +327,87 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     if (stop && !wasPolling) c.stopNotifications().catch(() => undefined);
   }
 
+  function readWithTimeout(ch: BluetoothRemoteGATTCharacteristic): Promise<DataView> {
+    return new Promise<DataView>((resolve, reject) => {
+      let done = false;
+      const timer = timers.setTimeout(() => {
+        if (done) return;
+        done = true;
+        reject(new Error(`no answer within ${READ_TIMEOUT_MS / 1000} s`));
+      }, READ_TIMEOUT_MS);
+      ch.readValue().then(
+        (dv) => {
+          if (done) return;
+          done = true;
+          timers.clearTimeout(timer);
+          resolve(dv);
+        },
+        (e: unknown) => {
+          if (done) return;
+          done = true;
+          timers.clearTimeout(timer);
+          reject(e);
+        },
+      );
+    });
+  }
+
   /**
    * For sensors whose value can only be read: read again as soon as the last
-   * read returns, at most every POLL_MS. Reads never overlap. A failing read
-   * ends the loop; the GATT disconnect handling takes it from there.
+   * read returns, at most every POLL_MS. Reads never overlap. A failed or
+   * hung read is retried; after READ_FAILS_RECONNECT in a row the link is
+   * dropped and reconnected (a GATT link can stay "connected" while every
+   * read fails).
    */
   function startPolling(ch: BluetoothRemoteGATTCharacteristic): void {
     const mine = ++pollGen;
     polling = true;
     const loop = async (): Promise<void> => {
+      let fails = 0;
       while (mine === pollGen) {
         const began = now();
         try {
-          const dv = await ch.readValue();
+          const dv = await readWithTimeout(ch);
           if (mine !== pollGen) return;
+          if (fails > 0 && st.message?.startsWith("Reading the sensor failed")) {
+            const { message: _m, ...rest } = st;
+            setStatus(rest);
+          }
+          fails = 0;
           handleValue(dv);
         } catch (e) {
           if (mine !== pollGen) return;
-          setStatus({ ...st, message: `Reading the sensor failed: ${errMessage(e)}` });
-          return;
+          fails++;
+          if (fails >= READ_FAILS_RECONNECT) {
+            relink(`Reading the sensor failed: ${errMessage(e)}`);
+            return;
+          }
+          setStatus({ ...st, message: `Reading the sensor failed: ${errMessage(e)}. Retrying…` });
         }
         const wait = Math.max(0, POLL_MS - (now() - began));
         if (wait > 0) await new Promise<void>((resolve) => timers.setTimeout(resolve, wait));
       }
     };
     void loop();
+  }
+
+  /** drops a link that stopped delivering and reconnects (while wanted) */
+  function relink(reason: string): void {
+    detachCharacteristic(false);
+    rate.reset();
+    const d = device;
+    if (d) d.removeEventListener("gattserverdisconnected", onGattDisconnected);
+    try {
+      if (d?.gatt?.connected) d.gatt.disconnect();
+    } catch {
+      // already gone
+    }
+    if (d) d.addEventListener("gattserverdisconnected", onGattDisconnected);
+    if (!wanted) {
+      fail(reason);
+      return;
+    }
+    scheduleReconnect(reason);
   }
 
   function teardown(): void {
@@ -356,18 +424,20 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
     rate.reset();
   }
 
-  function scheduleReconnect(): void {
+  function scheduleReconnect(reason?: string): void {
     if (retryTimer !== undefined) return;
     const delay = delays[Math.min(attempt, delays.length - 1)]!;
     attempt++;
     const name = deviceName();
+    const secs = Math.round(delay / 1000) || 1;
     setStatus({
       connection: "connecting",
       ...(name ? { device: name } : {}),
-      message:
-        attempt === 1
-          ? "The sensor disconnected. Reconnecting…"
-          : `The sensor is still away. Reconnect attempt ${attempt} in ${Math.round(delay / 1000) || 1} s…`,
+      message: !everConnected
+        ? `Waiting for the sensor${name ? ` “${name}”` : ""}: switch it on and keep it close. Trying again in ${secs} s…`
+        : attempt === 1
+          ? `${reason ? `${reason}. ` : "The sensor disconnected. "}Reconnecting…`
+          : `The sensor is still away. Reconnect attempt ${attempt} in ${secs} s…`,
     });
     retryTimer = timers.setTimeout(() => {
       retryTimer = undefined;
@@ -494,13 +564,14 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
       if (!ok || gen !== generation) return;
       attempt = 0;
       badValues = 0;
+      everConnected = true;
       setStatus({ connection: "connected", ...(dev.name ? { device: dev.name } : {}) });
     } catch (e) {
       if (gen !== generation) return;
       const failure = e instanceof Failure ? e : new Failure(`The sensor failed: ${errMessage(e)}`, true);
       detachCharacteristic(false);
-      if (failure.retry && wanted && device && reconnecting) {
-        // still away: keep trying while wanted
+      if (failure.retry && wanted && device) {
+        // known sensor, just not reachable (off, out of range): keep trying while wanted
         scheduleReconnect();
         return;
       }
@@ -522,6 +593,7 @@ export function createBleDistanceSource(config: BleSensorConfig, opts: BleSource
       if (st.connection === "connected" && characteristic) return Promise.resolve();
       if (pending) return pending;
       wanted = true;
+      everConnected = false;
       // a reconnect is waiting: try right away
       if (retryTimer !== undefined) {
         timers.clearTimeout(retryTimer);

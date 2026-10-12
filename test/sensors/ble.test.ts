@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createBleDistanceSource,
   POLL_MS,
+  READ_TIMEOUT_MS,
   MSG_INSECURE,
   MSG_NEEDS_CLICK,
   MSG_NO_ADAPTER,
@@ -252,6 +253,64 @@ describe("createBleDistanceSource", () => {
       t.clock.advance(POLL_MS);
     }
     assert.equal(t.samples.length, n, "polling stops on disconnect");
+  });
+
+  it("keeps waiting for a known sensor that is switched off, and connects once it is on", async () => {
+    const { clock, dev, src } = setup();
+    dev.gatt.connectError = domError("NetworkError", "Connection attempt failed.");
+    await src.connect();
+    assert.equal(src.status().connection, "connecting");
+    assert.match(src.status().message ?? "", /Waiting for the sensor “VL53 Reach”.*switch it on/);
+    clock.advance(500);
+    await flush();
+    assert.equal(dev.gatt.connects, 2);
+    dev.gatt.connectError = undefined;
+    clock.advance(1000);
+    await flush();
+    assert.equal(src.status().connection, "connected");
+  });
+
+  it("reconnects when polled reads keep failing on a link that stays up", async () => {
+    const t = setup({ notify: false, read: true });
+    t.ch.readResult = new DataView(new Uint8Array([0x2c, 0x01]).buffer);
+    await t.src.connect();
+    const tick = async () => {
+      await new Promise((r) => setImmediate(r));
+      t.clock.advance(POLL_MS);
+    };
+    await tick();
+    t.ch.readResult = domError("NetworkError", "GATT operation failed for unknown reason.");
+    for (let i = 0; i < 3 && !/Retrying/.test(t.src.status().message ?? ""); i++) await tick();
+    assert.match(t.src.status().message ?? "", /Retrying/);
+    assert.equal(t.src.status().connection, "connected", "one failed read doesn't drop the link");
+    for (let i = 0; i < 6 && t.src.status().connection === "connected"; i++) await tick();
+    assert.equal(t.src.status().connection, "connecting", "the link is dropped after repeated failures");
+    assert.match(t.src.status().message ?? "", /Reading the sensor failed.*Reconnecting/);
+    assert.equal(t.dev.gatt.connected, false);
+    t.ch.readResult = new DataView(new Uint8Array([0x2c, 0x01]).buffer);
+    t.clock.advance(500);
+    await flush();
+    assert.equal(t.src.status().connection, "connected");
+    assert.equal(t.dev.gatt.connects, 2);
+    const n = t.samples.length;
+    await tick();
+    await tick();
+    assert.ok(t.samples.length > n, "polling runs again after the reconnect");
+    t.src.disconnect();
+  });
+
+  it("treats a read that never answers as failed", async () => {
+    const t = setup({ notify: false, read: true });
+    t.ch.readResult = new DataView(new Uint8Array([0x2c, 0x01]).buffer);
+    await t.src.connect();
+    await new Promise((r) => setImmediate(r));
+    t.ch.readValue = () => new Promise<DataView>(() => undefined);
+    t.clock.advance(POLL_MS);
+    await flush();
+    t.clock.advance(READ_TIMEOUT_MS);
+    await flush();
+    assert.match(t.src.status().message ?? "", /no answer within 2 s/);
+    t.src.disconnect();
   });
 
   it("explains missing configuration, bad UUIDs and no Web Bluetooth", async () => {

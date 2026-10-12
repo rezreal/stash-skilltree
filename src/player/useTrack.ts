@@ -11,12 +11,19 @@
 // scriptActions), feeds it every sensor sample with the video time at
 // arrival, and hands out guide()/score() for the overlay and the panel.
 //
+// Auto-connect (on by default, per browser): a sensor that connected before
+// on this page reconnects by itself when a track clip starts, and on a fresh
+// page load a sensor granted earlier connects without a click where the
+// browser lists earlier grants (navigator.bluetooth.getDevices). Pressing
+// Disconnect stops that until the next Connect. Dropped links are retried by
+// the source itself (src/sensors/ble.ts).
+//
 // The sensor is optional: without a calibration (or without a connected
 // sensor) the clip still plays and the guide still shows the target, but the
 // track rule is not scored (TrackHandle.scored() is false).
 import type { Funscript } from "../funscript/parse.ts";
 import { loadFunscript } from "../funscript/load.ts";
-import { bluetoothAvailable, createBleDistanceSource, sensorDevicePermitted } from "../sensors/ble.ts";
+import { bluetoothAvailable, canAutoConnect, createBleDistanceSource, sensorDevicePermitted } from "../sensors/ble.ts";
 import {
   createTrackSession,
   parseTrackCalibration,
@@ -27,6 +34,7 @@ import {
 } from "../track/index.ts";
 import type {
   Action,
+  BleSensorConfig,
   DistanceSample,
   DistanceSource,
   GuideFrame,
@@ -39,12 +47,13 @@ import type {
 import { usePluginSettings } from "../ui/pluginApi.ts";
 import { ROUTE } from "../ui/register.tsx";
 import type { StorageLike } from "./storage.ts";
-import { configKey, trackSettings, type TrackSettings } from "./trackView.ts";
+import { applyValidRange, configKey, trackSettings, type TrackSettings } from "./trackView.ts";
 
 /** the sensor setup and calibration page; registered by register.tsx */
 export const SENSOR_ROUTE = `${ROUTE}/sensor`;
 
 export const TRACK_CALIBRATION_KEY = "skilltree.trackCalibration";
+export const SENSOR_AUTO_KEY = "skilltree.sensorAutoConnect";
 
 // --- calibration storage -------------------------------------------------------------
 
@@ -90,10 +99,37 @@ export function setTrackCalibration(c: TrackCalibration | undefined): boolean {
   return stored;
 }
 
+// --- auto-connect preference ------------------------------------------------------------
+
+let autoConnect: boolean | undefined;
+
+export function sensorAutoConnect(): boolean {
+  if (autoConnect === undefined) {
+    try {
+      autoConnect = storage()?.getItem(SENSOR_AUTO_KEY) !== "0";
+    } catch {
+      autoConnect = true;
+    }
+  }
+  return autoConnect;
+}
+
+export function setSensorAutoConnect(on: boolean): void {
+  autoConnect = on;
+  try {
+    storage()?.setItem(SENSOR_AUTO_KEY, on ? "1" : "0");
+  } catch {
+    // applies until the page is reloaded
+  }
+  emitChange();
+  if (on) ensureSensorConnected();
+}
+
 // --- the shared sensor ----------------------------------------------------------------
 
 interface Runtime {
   key: string;
+  config: BleSensorConfig;
   source: DistanceSource;
   status: SensorStatus;
   stop: () => void;
@@ -101,6 +137,12 @@ interface Runtime {
 
 let runtime: Runtime | undefined;
 let latest: DistanceSample | undefined;
+/** the valid range from the settings, applied to every sample (changing it keeps the connection) */
+let validRange: Pick<BleSensorConfig, "validMin" | "validMax"> | undefined;
+/** the current source reached the sensor once: connect() reuses the device without a picker */
+let connectedOnce = false;
+/** the viewer pressed Disconnect: no auto-connect until they press Connect */
+let userDisconnected = false;
 /** the live position, filtered like the session's (lost target stays out, lone spikes dropped) */
 const liveFilter = createPositionFilter();
 let livePosition: number | undefined;
@@ -134,18 +176,21 @@ function configure(settings: TrackSettings): void {
   runtime?.stop();
   runtime = undefined;
   latest = undefined;
+  connectedOnce = false;
   const config = settings.config;
   if (config) {
     const source = createBleDistanceSource(config);
-    const rt: Runtime = { key, source, status: source.status(), stop: () => undefined };
+    const rt: Runtime = { key, config, source, status: source.status(), stop: () => undefined };
     const offStatus = source.onStatus((s) => {
       const changed = s.connection !== rt.status.connection || s.message !== rt.status.message || s.device !== rt.status.device;
       rt.status = s;
+      if (s.connection === "connected") connectedOnce = true;
       if (s.connection !== "connected") latest = undefined;
       // rate-only updates arrive every second; listeners re-read on their own ticks
       if (changed) emitChange();
     });
-    const offSample = source.onSample((s) => {
+    const offSample = source.onSample((rawSample) => {
+      const s = applyValidRange(rawSample, validRange);
       latest = s;
       const cal = currentTrackCalibration();
       livePosition = cal ? liveFilter.push(s.noTarget ? Number.NaN : s.raw, cal) : undefined;
@@ -157,20 +202,40 @@ function configure(settings: TrackSettings): void {
       source.disconnect();
     };
     runtime = rt;
-    // a sensor granted on an earlier visit connects without a click
-    void sensorDevicePermitted(config).then((ok) => {
-      if (ok && runtime === rt && rt.status.connection === "disconnected") void source.connect();
-    });
+    ensureSensorConnected();
   }
   emitChange();
 }
 
+/**
+ * Connects without a click when that is possible and wanted: auto-connect is
+ * on, the viewer didn't press Disconnect, and either this source reached the
+ * sensor before (the device is known) or the browser lists an earlier grant.
+ */
+export function ensureSensorConnected(): void {
+  const rt = runtime;
+  if (!rt || !sensorAutoConnect() || userDisconnected) return;
+  const c = rt.source.status().connection;
+  if (c === "connected" || c === "connecting") return;
+  if (connectedOnce) {
+    void rt.source.connect();
+    return;
+  }
+  void sensorDevicePermitted(rt.config).then((ok) => {
+    if (ok && runtime === rt && rt.source.status().connection !== "connected" && rt.source.status().connection !== "connecting") {
+      void rt.source.connect();
+    }
+  });
+}
+
 /** connects the sensor; call it from a click (the Bluetooth picker needs a user gesture) */
 export function connectSensor(): void {
+  userDisconnected = false;
   void runtime?.source.connect();
 }
 
 export function disconnectSensor(): void {
+  userDisconnected = true;
   runtime?.source.disconnect();
 }
 
@@ -206,6 +271,11 @@ export interface TrackSensorHandle {
   calibration: TrackCalibration | undefined;
   calibrated: boolean;
   limits: TrackLimits;
+  /** connect by itself when possible (per-browser preference, default on) */
+  autoConnect: boolean;
+  setAutoConnect: (on: boolean) => void;
+  /** the browser lists earlier grants, so a reload reconnects without a click */
+  reloadReconnects: boolean;
   connect: () => void;
   disconnect: () => void;
   subscribe: (cb: (s: DistanceSample) => void) => () => void;
@@ -219,6 +289,7 @@ export function useTrackSensor(): TrackSensorHandle {
   const raw = usePluginSettings();
   const settings = trackSettings(raw);
   const key = configKey(settings.config);
+  validRange = settings.config;
   React.useEffect(() => configure(settings), [key]);
   const [, setVersion] = React.useState(0);
   React.useEffect(() => {
@@ -238,6 +309,9 @@ export function useTrackSensor(): TrackSensorHandle {
     calibration: cal,
     calibrated: cal !== undefined,
     limits: settings.limits,
+    autoConnect: sensorAutoConnect(),
+    setAutoConnect: setSensorAutoConnect,
+    reloadReconnects: canAutoConnect(),
     connect: connectSensor,
     disconnect: disconnectSensor,
     subscribe: subscribeSensor,
@@ -371,6 +445,11 @@ export function useTrackSession(
       },
     };
   }, [actions, calKey, maxDepth, maxHoldSec]);
+
+  // a track clip starts: bring a known sensor back without a click
+  React.useEffect(() => {
+    if (track) ensureSensorConnected();
+  }, [track]);
 
   React.useEffect(() => {
     // uncalibrated: the guide shows the script, nothing is fed or scored

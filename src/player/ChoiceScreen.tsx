@@ -24,6 +24,7 @@ import {
 import { watchUrl } from "../session/watchUrl.ts";
 import { dateLabel, formatDuration, formatFactor, formatSignedCoins, nodeLabel, plural, topicLabel } from "./format.ts";
 import { GazeStatusChip } from "./GazeStatusChip.tsx";
+import { SensorStatusChip } from "./SensorStatusChip.tsx";
 import { PerformerAvatar } from "./PerformerAvatar.tsx";
 import { loadCurrentPerformer, loadTestMode, saveCurrentPerformer, saveTestMode } from "./storage.ts";
 import { TestPanel } from "./TestPanel.tsx";
@@ -180,6 +181,7 @@ function PlayHeader(props: { balance: number; streak: Streak; testMode: boolean;
         Test mode
       </label>
       <GazeStatusChip />
+      <SensorStatusChip />
       <div className={`stp-streak${streak.activeToday ? " is-active" : ""}`} title={streak.activeToday ? "You watched today" : "Watch a clip today to keep the streak"}>
         <span className="stp-dot" aria-hidden="true" />
         {streak.days > 0 ? `Streak · ${plural(streak.days, "day")}` : "No streak yet"}

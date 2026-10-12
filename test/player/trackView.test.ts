@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   captureFrom,
   captureProblem,
+  applyValidRange,
   configKey,
   gaugeTop,
   guideView,
@@ -15,6 +16,16 @@ import {
   sensorRowView,
   settingsLines,
   trackSettings,
+  mergeSettings,
+  parseRangeForm,
+  parseSensorTab,
+  rangeFormFrom,
+  rawVerdict,
+  readinessView,
+  sensorMenuView,
+  tracePolylines,
+  validRangeText,
+  sensorChipView,
 } from "../../src/player/trackView.ts";
 import type { GuideFrame, TrackScore } from "../../src/track/types.ts";
 
@@ -233,7 +244,15 @@ it("valid range: parsed from settings, contradictions ignored", () => {
   const bad = trackSettings({ ...base, sensorValidMin: 50, sensorValidMax: 10 });
   assert.equal(bad.config?.validMin, undefined);
   assert.ok(bad.problems.some((p) => /Valid minimum/.test(p)));
-  assert.notEqual(configKey(t.config), configKey(trackSettings(base).config));
+  // the range is applied per sample, so changing it keeps the connection
+  assert.equal(configKey(t.config), configKey(trackSettings(base).config));
+});
+
+it("applyValidRange flags readings by the current range", () => {
+  assert.deepEqual(applyValidRange({ t: 1, raw: 20 }, { validMin: 31 }), { t: 1, raw: 20, noTarget: true });
+  assert.deepEqual(applyValidRange({ t: 1, raw: 20, noTarget: true }, {}), { t: 1, raw: 20 });
+  const same = { t: 1, raw: 200 };
+  assert.equal(applyValidRange(same, { validMin: 31 }), same);
 });
 
 it("captures skip no-target readings", () => {
@@ -244,4 +263,112 @@ it("captures skip no-target readings", () => {
   const c = captureFrom(samples, 0, 60, 3);
   assert.equal(c?.value, 100.5);
   assert.equal(c?.samples, 4);
+});
+
+describe("sensor menu", () => {
+  const base = {
+    configured: true,
+    status: { connection: "connected" as const, device: "Reach-Trainer" },
+    calibration: { rawAtZero: 300, rawAtFull: 60 },
+    config: { service: "s", characteristic: "c", format: "uint16le" as const, offset: 0, scale: 1, validMin: 31 },
+    limits: { maxDepth: 100, maxHoldSec: 8 },
+  };
+
+  it("reads the tab from ?tab= and falls back to status", () => {
+    assert.equal(parseSensorTab("?tab=calibrate"), "calibrate");
+    assert.equal(parseSensorTab("?x=1&tab=range"), "range");
+    assert.equal(parseSensorTab("?tab=bogus"), "status");
+    assert.equal(parseSensorTab(""), "status");
+  });
+
+  it("badges each item with its state", () => {
+    const items = sensorMenuView(base);
+    assert.deepEqual(
+      items.map((i) => [i.id, i.badge, i.tone]),
+      [
+        ["status", "connected", "blue"],
+        ["calibrate", "saved", "blue"],
+        ["range", "no depth limit", "muted"],
+        ["device", "Reach-Trainer", "muted"],
+      ],
+    );
+    const fresh = sensorMenuView({ ...base, configured: false, status: undefined, calibration: undefined, config: undefined });
+    assert.deepEqual(
+      fresh.map((i) => i.badge),
+      ["not set up", "—", "no depth limit", "set up"],
+    );
+    const err = sensorMenuView({ ...base, status: { connection: "error", message: "x" }, calibration: undefined, limits: { maxDepth: 60, maxHoldSec: 8 } });
+    assert.equal(err[0]!.tone, "red");
+    assert.equal(err[1]!.badge, "needed");
+    assert.equal(err[2]!.badge, "depth 60");
+  });
+
+  it("lists what is missing before interactive clips are scored", () => {
+    const ready = readinessView({ configured: true, connected: true, calibrated: true });
+    assert.ok(ready.ready);
+    assert.match(ready.summary, /^Ready/);
+    const notCal = readinessView({ configured: true, connected: true, calibrated: false });
+    assert.equal(notCal.ready, false);
+    assert.match(notCal.summary, /isn't scored until: rest and deepest positions calibrated/);
+    assert.equal(notCal.steps.find((s) => !s.done)!.tab, "calibrate");
+  });
+
+  it("explains raw readings and the valid range", () => {
+    assert.equal(rawVerdict(20, { validMin: 31 }), "no target (below 31)");
+    assert.equal(rawVerdict(5000, { validMax: 4000 }), "no target (above 4000)");
+    assert.equal(rawVerdict(200, { validMin: 31 }), "in range");
+    assert.equal(rawVerdict(undefined, undefined), "no reading");
+    assert.equal(validRangeText({ validMin: 31 }), "≥ 31");
+    assert.equal(validRangeText({ validMin: 31, validMax: 4000 }), "31 – 4000");
+    assert.equal(validRangeText(undefined), "all readings");
+  });
+});
+
+describe("range & limits form", () => {
+  it("round-trips the settings and removes empty fields", () => {
+    const form = rangeFormFrom({ sensorValidMin: 31, trackMaxDepth: "80", other: 1 });
+    assert.deepEqual(form, { validMin: "31", validMax: "", maxDepth: "80", maxHoldSec: "" });
+    const { patch, problems } = parseRangeForm({ ...form, maxHoldSec: "6,5" });
+    assert.deepEqual(problems, []);
+    assert.deepEqual(patch, { sensorValidMin: 31, sensorValidMax: undefined, trackMaxDepth: 80, trackMaxHoldSec: 6.5 });
+    const merged = mergeSettings({ sensorValidMax: 900, gaze: "tobii" }, patch!);
+    assert.deepEqual(merged, { gaze: "tobii", sensorValidMin: 31, trackMaxDepth: 80, trackMaxHoldSec: 6.5 });
+  });
+
+  it("refuses contradictory or out-of-range values", () => {
+    const r = parseRangeForm({ validMin: "50", validMax: "40", maxDepth: "120", maxHoldSec: "0" });
+    assert.equal(r.patch, undefined);
+    assert.equal(r.problems.length, 3);
+    assert.match(parseRangeForm({ validMin: "abc", validMax: "", maxDepth: "", maxHoldSec: "" }).problems[0]!, /not a number/);
+  });
+});
+
+describe("live trace", () => {
+  it("draws the last window left to right and breaks at lost readings", () => {
+    const pts = [
+      { t: 0, pos: 50 }, // too old
+      { t: 5000, pos: 0 },
+      { t: 7500, pos: 100 },
+      { t: 8000, pos: undefined },
+      { t: 9000, pos: 50 },
+      { t: 15000, pos: 50 },
+    ];
+    const lines = tracePolylines(pts, 15000, 10000, 100, 100);
+    assert.deepEqual(lines, ["0,100 25,0", "40,50 100,50"]);
+  });
+});
+
+describe("sensorChipView", () => {
+  it("offers the next useful action", () => {
+    const on = { configured: true, calibrated: true };
+    assert.equal(sensorChipView(undefined, { configured: false, calibrated: false }).action, "setup");
+    assert.equal(sensorChipView({ connection: "disconnected" }, on).action, "connect");
+    assert.deepEqual(
+      [sensorChipView({ connection: "connected" }, on).tone, sensorChipView({ connection: "connected" }, on).action],
+      ["blue", "open"],
+    );
+    assert.equal(sensorChipView({ connection: "connected" }, { configured: true, calibrated: false }).label, "Sensor · calibrate");
+    assert.equal(sensorChipView({ connection: "connecting", message: "Reconnecting…" }, on).title, "Reconnecting…");
+    assert.equal(sensorChipView({ connection: "error", message: "x" }, on).tone, "red");
+  });
 });

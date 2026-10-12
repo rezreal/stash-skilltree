@@ -85,11 +85,20 @@ export function trackSettings(raw: Record<string, unknown>): TrackSettings {
   return { config, limits: { maxDepth, maxHoldSec }, problems };
 }
 
-/** a stable key for a config, to tell when the source must be recreated */
+/**
+ * A stable key for a config, to tell when the source must be recreated. The
+ * valid range is left out: it is applied to each sample (applyValidRange),
+ * so changing it keeps the connection.
+ */
 export function configKey(c: BleSensorConfig | undefined): string {
-  return c
-    ? [c.service, c.characteristic, c.format, c.offset, c.scale, c.namePrefix ?? "", c.validMin ?? "", c.validMax ?? ""].join("|")
-    : "";
+  return c ? [c.service, c.characteristic, c.format, c.offset, c.scale, c.namePrefix ?? ""].join("|") : "";
+}
+
+/** the sample flagged by the current valid range (raw outside it = no target) */
+export function applyValidRange(s: DistanceSample, range: Pick<BleSensorConfig, "validMin" | "validMax"> | undefined): DistanceSample {
+  const out = (range?.validMin !== undefined && s.raw < range.validMin) || (range?.validMax !== undefined && s.raw > range.validMax);
+  if (out === (s.noTarget === true)) return s;
+  return out ? { t: s.t, raw: s.raw, noTarget: true } : { t: s.t, raw: s.raw };
 }
 
 // --- the guide ----------------------------------------------------------------------
@@ -331,6 +340,16 @@ export function mergePluginSettings(current: Record<string, unknown>, patch: Sen
   return out;
 }
 
+/** The whole plugin config with `patch` applied; an undefined value removes that key. */
+export function mergeSettings(current: Record<string, unknown>, patch: Record<string, string | number | undefined>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...current };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete out[k];
+    else out[k] = v;
+  }
+  return out;
+}
+
 /** the patch as lines to type into Settings › Plugins › Skilltree */
 export function settingsLines(patch: SensorSettingsPatch): [string, string][] {
   const rows: [string, string][] = [
@@ -342,4 +361,215 @@ export function settingsLines(patch: SensorSettingsPatch): [string, string][] {
   ];
   if (patch.sensorNamePrefix) rows.push(["Distance sensor name filter", patch.sensorNamePrefix]);
   return rows;
+}
+
+// --- the sensor menu (/skilltree/sensor) --------------------------------------------------
+
+export type SensorTab = "status" | "calibrate" | "range" | "device";
+
+export const SENSOR_TABS: readonly { id: SensorTab; label: string }[] = [
+  { id: "status", label: "Status" },
+  { id: "calibrate", label: "Calibrate" },
+  { id: "range", label: "Range & limits" },
+  { id: "device", label: "Device" },
+];
+
+/** the tab named by ?tab= in a location search string; status by default */
+export function parseSensorTab(search: string): SensorTab {
+  const m = /[?&]tab=([^&#]*)/.exec(search);
+  const v = m ? decodeURIComponent(m[1]!) : "";
+  return SENSOR_TABS.some((t) => t.id === v) ? (v as SensorTab) : "status";
+}
+
+export interface SensorMenuInput {
+  configured: boolean;
+  status: SensorStatus | undefined;
+  calibration: { rawAtZero: number; rawAtFull: number } | undefined;
+  config: BleSensorConfig | undefined;
+  limits: TrackLimits;
+}
+
+export interface SensorMenuItem {
+  id: SensorTab;
+  label: string;
+  /** short state next to the label */
+  badge: string;
+  tone: Tone;
+}
+
+const round = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** "31 – 4000", "≥ 31", "≤ 4000" or "all readings" */
+export function validRangeText(config: Pick<BleSensorConfig, "validMin" | "validMax"> | undefined): string {
+  const lo = config?.validMin;
+  const hi = config?.validMax;
+  if (lo !== undefined && hi !== undefined) return `${round(lo)} – ${round(hi)}`;
+  if (lo !== undefined) return `≥ ${round(lo)}`;
+  if (hi !== undefined) return `≤ ${round(hi)}`;
+  return "all readings";
+}
+
+export function sensorMenuView(input: SensorMenuInput): SensorMenuItem[] {
+  const c = input.status?.connection ?? "disconnected";
+  const status: SensorMenuItem = !input.configured
+    ? { id: "status", label: "Status", badge: "not set up", tone: "muted" }
+    : c === "connected"
+      ? { id: "status", label: "Status", badge: "connected", tone: "blue" }
+      : c === "connecting"
+        ? { id: "status", label: "Status", badge: "connecting", tone: "orange" }
+        : c === "error"
+          ? { id: "status", label: "Status", badge: "problem", tone: "red" }
+          : { id: "status", label: "Status", badge: "off", tone: "muted" };
+  const calibrate: SensorMenuItem = input.calibration
+    ? { id: "calibrate", label: "Calibrate", badge: "saved", tone: "blue" }
+    : { id: "calibrate", label: "Calibrate", badge: input.configured ? "needed" : "—", tone: input.configured ? "orange" : "muted" };
+  const depth = input.limits.maxDepth < 100 ? `depth ${Math.round(input.limits.maxDepth)}` : "no depth limit";
+  const range: SensorMenuItem = { id: "range", label: "Range & limits", badge: depth, tone: "muted" };
+  const device: SensorMenuItem = input.configured
+    ? { id: "device", label: "Device", badge: input.status?.device ?? input.config?.namePrefix ?? "set", tone: "muted" }
+    : { id: "device", label: "Device", badge: "set up", tone: "orange" };
+  return [status, calibrate, range, device];
+}
+
+export interface ReadinessStep {
+  label: string;
+  done: boolean;
+  /** where to fix it */
+  tab: SensorTab;
+}
+
+export interface ReadinessView {
+  steps: ReadinessStep[];
+  /** every step done: interactive clips are scored */
+  ready: boolean;
+  summary: string;
+}
+
+export function readinessView(input: { configured: boolean; connected: boolean; calibrated: boolean }): ReadinessView {
+  const steps: ReadinessStep[] = [
+    { label: "Sensor found and saved", done: input.configured, tab: "device" },
+    { label: "Connected", done: input.connected, tab: "status" },
+    { label: "Rest and deepest positions calibrated", done: input.calibrated, tab: "calibrate" },
+  ];
+  const ready = steps.every((s) => s.done);
+  const missing = steps.find((s) => !s.done);
+  const summary = ready
+    ? "Ready: interactive clips follow their funscript with the sensor and score the track."
+    : `Interactive clips still play, but the track isn't scored until: ${missing!.label.toLowerCase()}.`;
+  return { steps, ready, summary };
+}
+
+/** what a raw reading means under the valid range */
+export function rawVerdict(raw: number | undefined, config: Pick<BleSensorConfig, "validMin" | "validMax"> | undefined): string {
+  if (raw === undefined || !Number.isFinite(raw)) return "no reading";
+  if (config?.validMin !== undefined && raw < config.validMin) return `no target (below ${round(config.validMin)})`;
+  if (config?.validMax !== undefined && raw > config.validMax) return `no target (above ${round(config.validMax)})`;
+  return "in range";
+}
+
+// --- range & limits form ------------------------------------------------------------------
+
+export interface RangeForm {
+  validMin: string;
+  validMax: string;
+  maxDepth: string;
+  maxHoldSec: string;
+}
+
+function field(v: unknown): string {
+  return typeof v === "number" && Number.isFinite(v) ? String(v) : typeof v === "string" ? v.trim() : "";
+}
+
+export function rangeFormFrom(raw: Record<string, unknown>): RangeForm {
+  return {
+    validMin: field(raw.sensorValidMin),
+    validMax: field(raw.sensorValidMax),
+    maxDepth: field(raw.trackMaxDepth),
+    maxHoldSec: field(raw.trackMaxHoldSec),
+  };
+}
+
+export type RangePatch = Record<"sensorValidMin" | "sensorValidMax" | "trackMaxDepth" | "trackMaxHoldSec", number | undefined>;
+
+/** The settings patch for the form (empty = default, removed), or the problems that block saving. */
+export function parseRangeForm(form: RangeForm): { patch?: RangePatch; problems: string[] } {
+  const problems: string[] = [];
+  const parse = (v: string, what: string): number | undefined => {
+    if (v.trim() === "") return undefined;
+    const n = Number(v.trim().replace(",", "."));
+    if (!Number.isFinite(n)) {
+      problems.push(`${what} is not a number.`);
+      return undefined;
+    }
+    return n;
+  };
+  const validMin = parse(form.validMin, "No-target below");
+  const validMax = parse(form.validMax, "No-target above");
+  const maxDepth = parse(form.maxDepth, "Max depth");
+  const maxHoldSec = parse(form.maxHoldSec, "Max hold");
+  if (validMin !== undefined && validMax !== undefined && validMin >= validMax) {
+    problems.push("“No target below” must be lower than “no target above”.");
+  }
+  if (maxDepth !== undefined && (maxDepth < 0 || maxDepth > 100)) problems.push("Max depth goes from 0 to 100.");
+  if (maxHoldSec !== undefined && maxHoldSec <= 0) problems.push("Max hold must be more than 0 seconds.");
+  if (problems.length > 0) return { problems };
+  return { patch: { sensorValidMin: validMin, sensorValidMax: validMax, trackMaxDepth: maxDepth, trackMaxHoldSec: maxHoldSec }, problems };
+}
+
+// --- live trace ------------------------------------------------------------------------------
+
+export const TRACE_MS = 10_000;
+export const TRACE_W = 600;
+export const TRACE_H = 120;
+
+/**
+ * SVG polylines for the last `windowMs` of positions (0..100, 100 at the
+ * top), oldest at the left. A missing position (no target, uncalibrated)
+ * breaks the line, so a lost target shows as a gap.
+ */
+export function tracePolylines(
+  points: readonly { t: number; pos: number | undefined }[],
+  now: number,
+  windowMs = TRACE_MS,
+  width = TRACE_W,
+  height = TRACE_H,
+): string[] {
+  const lines: string[] = [];
+  let cur: string[] = [];
+  for (const p of points) {
+    const age = now - p.t;
+    if (age > windowMs || age < 0) continue;
+    if (p.pos === undefined || !Number.isFinite(p.pos)) {
+      if (cur.length > 1) lines.push(cur.join(" "));
+      cur = [];
+      continue;
+    }
+    const x = Math.round(((windowMs - age) / windowMs) * width * 10) / 10;
+    cur.push(`${x},${previewY(p.pos, height)}`);
+  }
+  if (cur.length > 1) lines.push(cur.join(" "));
+  return lines;
+}
+
+// --- sensor chip (play header, session bar) --------------------------------------------------
+
+export interface SensorChipView {
+  label: string;
+  tone: Tone;
+  /** what a click does: connect (a user gesture for the picker), open the sensor menu, or nothing new */
+  action: "connect" | "setup" | "open";
+  title: string;
+}
+
+export function sensorChipView(status: SensorStatus | undefined, opts: { configured: boolean; calibrated: boolean }): SensorChipView {
+  if (!opts.configured) return { label: "Sensor", tone: "muted", action: "setup", title: "Set up the distance sensor" };
+  const c = status?.connection ?? "disconnected";
+  if (c === "connected") {
+    return opts.calibrated
+      ? { label: "Sensor", tone: "blue", action: "open", title: `Distance sensor connected${status?.device ? ` (${status.device})` : ""}` }
+      : { label: "Sensor · calibrate", tone: "orange", action: "setup", title: "Calibrate the distance sensor so interactive clips are scored" };
+  }
+  if (c === "connecting") return { label: "Sensor · connecting", tone: "orange", action: "open", title: status?.message ?? "Connecting to the distance sensor" };
+  if (c === "error") return { label: "Sensor · problem", tone: "red", action: "setup", title: status?.message ?? "The distance sensor has a problem" };
+  return { label: "Sensor · connect", tone: "muted", action: "connect", title: "Connect the distance sensor" };
 }

@@ -91,6 +91,11 @@ describe("policyForScene", () => {
     assert.deepEqual(policyForScene(plain, tags).rules, ["attention"]);
   });
 
+  it("interactive scenes (a funscript) add track", () => {
+    assert.deepEqual(policyForScene(scene("1", [], { interactive: true }), tags).rules, ["attention", "track"]);
+    assert.deepEqual(policyForScene(scene("2", [], { interactive: false }), tags).rules, ["attention"]);
+  });
+
   it("trackMin: strictest over tags, percent values read as shares, default 0.7", () => {
     const tt: PolicyTagInput[] = [
       { id: "t1", name: "t1", rules: ["track"], trackMin: 0.6 },

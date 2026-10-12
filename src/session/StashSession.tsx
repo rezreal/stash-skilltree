@@ -46,6 +46,7 @@ import { FlashOverlay } from "../player/FlashOverlay.tsx";
 import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
+import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
 import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
 import { usePlayData, type PlayData } from "../player/usePlayData.ts";
@@ -468,6 +469,7 @@ function SessionOverlay(props: {
             <span className="stp-mono">{formatCoins(s.balance)}</span>
           </span>
           <OverlayInteractive className="stp-sp-actions">
+            {track && !finished && <SensorStatusChip onOpen={() => setPanelOpen(true)} />}
             <button
               type="button"
               className={`stp-sp-chip stp-tone-${chip.tone}`}
@@ -508,7 +510,7 @@ function SessionOverlay(props: {
             <SensorsPanel
               reading={attention.reading}
               snapFlashes={flashIntensity > 0 ? snaps.length : 0}
-              distanceSensor={policy.rules.includes("track")}
+              distanceSensor={policy.rules.includes("track") || track !== undefined}
               track={track}
             />
             {sensorRows}

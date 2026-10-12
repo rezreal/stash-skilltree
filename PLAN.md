@@ -156,6 +156,17 @@ Watch policy = rules composed per scene from its tags:
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
   for drift correction). Lag measured per session. User limits (max depth,
   max hold) stop scoring beyond them. Attention relaxes during track sections.
+  Every interactive scene (stash's `interactive`: it has a funscript) gets
+  this rule automatically; without a connected, calibrated sensor it stays
+  unscored. The sensor menu at /skilltree/sensor has four sections: Status
+  (connection, auto-connect switch, live raw/position with a 10 s trace,
+  readiness checklist), Calibrate (rest → deepest → check & save wizard),
+  Range & limits (no-target raw range, max depth/hold, saved into the plugin
+  settings) and Device ("Find my sensor"). Auto-connect (per browser, on by
+  default): dropped links retry every ≤ 5 s, polled reads that fail or hang
+  (2 s) three times in a row drop and re-open the link, a known sensor
+  comes back when a track clip starts, and after a reload where the browser
+  lists earlier grants (`getDevices`). Disconnect stops it until Connect.
 
 - **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
   video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the
