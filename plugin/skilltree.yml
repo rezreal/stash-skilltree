@@ -112,3 +112,41 @@ settings:
       but not scored. Stop the clip any time (Stop or Esc) if something
       doesn't feel right.
     type: NUMBER
+  webcamRequired:
+    displayName: Sessions need the webcam
+    description: >-
+      On by default (also while this switch has never been set). Sessions
+      need a camera: before a clip starts you turn it on and must be in front
+      of it, and while watching, leaving the camera's view counts as looking
+      away. The pictures are analysed in the browser and never leave it; the
+      camera turns off when the session ends. Off: sessions start without a
+      camera too; when no camera is available, presence and webcam action
+      prompts are skipped.
+    type: BOOLEAN
+  promptsEnabled:
+    displayName: Check prompts in clips
+    description: >-
+      On by default (also while this switch has never been set). Checks the
+      prompt markers of a clip: repeat after me, gaze targets and webcam
+      actions. Off: prompts are not checked and don't count for or against a
+      clip. Spend prompts are always asked.
+    type: BOOLEAN
+  speechEnabled:
+    displayName: Microphone for repeat-after-me
+    description: >-
+      On by default (also while this switch has never been set). Uses the
+      microphone and local speech recognition (nothing leaves the browser)
+      for repeat-after-me prompts; the microphone is only open from about a
+      second before such a prompt until it ends. Headphones help: the clip's
+      own voice can be picked up. Off: repeat prompts are skipped.
+    type: BOOLEAN
+  videoAnalysis:
+    displayName: Analyse the clip for gaze targets
+    description: >-
+      On by default (also while this switch has never been set). Runs
+      MediaPipe on the playing clip around gaze prompts to find where the
+      person's eyes, hands, hips and so on are, so "look at ..." prompts can
+      be checked with an eye tracker. Needs the models from
+      tools/fetch_models.sh. Off: gaze prompts that need the person are
+      skipped.
+    type: BOOLEAN

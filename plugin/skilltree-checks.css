@@ -1,0 +1,210 @@
+/* Skilltree live checks (src/checks): prompt banner, gaze target outline,
+   camera gate, sensor rows. Scoped under .skilltree-play (the overlay root,
+   which defines the palette variables); the fallbacks keep it readable if a
+   variable is missing. */
+
+/* --- prompt banner ----------------------------------------------------------- */
+
+.skilltree-play .stc-banner {
+  backdrop-filter: blur(4px);
+  background: rgba(12, 15, 19, 0.82);
+  border: 1px solid var(--st-border, #2e3843);
+  border-left: 3px solid var(--st-open, #f0a04b);
+  border-radius: 10px;
+  color: var(--st-text, #e7eaee);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 12px;
+  pointer-events: none;
+  position: relative;
+}
+
+.skilltree-play .stc-banner.is-replaying { border-left-color: var(--st-gold, #e3c16f); }
+.skilltree-play .stc-banner.is-passed { border-left-color: var(--st-complete, #5b9df0); }
+.skilltree-play .stc-banner.is-missed { border-left-color: var(--st-error, #e5534b); }
+.skilltree-play .stc-banner.is-unchecked { border-left-color: var(--stp-line, #3a4652); }
+
+.skilltree-play .stc-banner-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.skilltree-play .stc-banner-text {
+  flex: 1 1 auto;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skilltree-play .stc-banner-status {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.skilltree-play .stc-banner.is-replaying .stc-banner-status { color: var(--st-gold, #e3c16f); }
+.skilltree-play .stc-banner.is-passed .stc-banner-status { color: var(--st-complete, #5b9df0); }
+.skilltree-play .stc-banner.is-missed .stc-banner-status { color: var(--st-error, #e5534b); }
+.skilltree-play .stc-banner.is-active .stc-banner-status { color: var(--st-muted, #9aa5b1); }
+
+.skilltree-play .stc-banner-left {
+  color: var(--st-muted, #9aa5b1);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.skilltree-play .stc-banner-bar {
+  background: var(--stp-thumb, #232b34);
+  border-radius: 3px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.skilltree-play .stc-banner-fill {
+  background: var(--st-open, #f0a04b);
+  border-radius: 3px;
+  display: block;
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+.skilltree-play .stc-banner.is-passed .stc-banner-fill { background: var(--st-complete, #5b9df0); }
+.skilltree-play .stc-banner.is-missed .stc-banner-fill { background: var(--st-error, #e5534b); }
+.skilltree-play .stc-banner.is-replaying .stc-banner-fill { background: var(--st-gold, #e3c16f); }
+
+.skilltree-play .stc-banner-note {
+  color: var(--st-muted, #9aa5b1);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skilltree-play .stc-banner-fill { transition: none; }
+}
+
+/* --- gaze target outline (RegionOutline) -------------------------------------
+   A 1px anchor at its positioned ancestor's corner; the shapes are placed in
+   viewport coordinates minus the anchor's own position and overflow it. */
+
+.skilltree-play .stc-region {
+  height: 1px;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 1px;
+  z-index: 4;
+}
+
+.skilltree-play .stc-region ellipse,
+.skilltree-play .stc-region polygon,
+.skilltree-play .stc-region rect {
+  fill: rgba(240, 160, 75, 0.08);
+  stroke: var(--st-open, #f0a04b);
+  stroke-dasharray: 6 4;
+  stroke-width: 2;
+}
+
+.skilltree-play .stc-region rect.is-outside { fill: none; }
+
+/* --- camera gate ---------------------------------------------------------------- */
+
+.skilltree-play .stc-gate {
+  backdrop-filter: blur(6px);
+  background: rgba(12, 15, 19, 0.9);
+  border: 1px solid var(--st-border, #2e3843);
+  border-radius: 12px;
+  box-sizing: border-box;
+  color: var(--st-text, #e7eaee);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  left: 50%;
+  max-height: calc(100% - 24px);
+  max-width: calc(100% - 24px);
+  overflow: auto;
+  padding: 16px;
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px;
+  z-index: 7;
+}
+
+.skilltree-play .stc-gate-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.skilltree-play .stc-gate-text {
+  color: var(--stp-soft, #c3ccd5);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.skilltree-play .stc-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skilltree-play .stc-gate-live {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skilltree-play .stc-gate-preview {
+  aspect-ratio: 4 / 3;
+  background: var(--stp-deep, #11151a);
+  border: 2px solid var(--st-open, #f0a04b);
+  border-radius: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  width: 240px;
+}
+
+.skilltree-play .stc-gate-preview.is-present { border-color: var(--st-complete, #5b9df0); }
+
+.skilltree-play .stc-gate-preview video {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror: moving left moves left */
+  width: 100%;
+}
+
+.skilltree-play .stc-gate-presence {
+  align-items: center;
+  display: inline-flex;
+  font-size: 14px;
+  gap: 8px;
+  margin: 0;
+}
+
+.skilltree-play .stc-gate-presence.is-present { color: var(--st-complete, #5b9df0); }
+.skilltree-play .stc-gate-presence.is-absent { color: var(--st-open, #f0a04b); }
+
+.skilltree-play .stc-dot {
+  background: currentColor;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 8px;
+  width: 8px;
+}
+
+/* --- sensor rows ---------------------------------------------------------------- */
+
+.skilltree-play .stc-sensor-rows { border-top: 1px solid var(--st-border, #2e3843); padding-top: 8px; }
