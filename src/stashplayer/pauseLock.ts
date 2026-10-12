@@ -35,7 +35,7 @@ export const LOCK_CSS = `
 }
 `;
 
-interface ElementLike {
+export interface ElementLike {
   tagName?: string;
   isContentEditable?: boolean;
   getAttribute?(name: string): string | null;
@@ -55,7 +55,7 @@ export interface KeyLike {
 const TEXT_INPUT_EXEMPT = ["button", "checkbox", "hidden", "radio", "reset", "submit"];
 const PAUSE_BUTTONS = ".vjs-play-control, .vjs-big-play-button, .vjs-big-play-pause-button";
 
-function isEditable(el: ElementLike): boolean {
+export function isEditable(el: ElementLike): boolean {
   if (el.isContentEditable) return true;
   const tag = (el.tagName ?? "").toLowerCase();
   if (tag === "textarea" || tag === "select") return true;
@@ -127,7 +127,7 @@ interface ContainerLike {
 }
 
 /** stash's .VideoPlayer (player + scrubber), or the player root itself */
-function areaOf(container: HTMLElement | null): { contains(node: unknown): boolean } | null {
+export function playerArea(container: HTMLElement | null): { contains(node: unknown): boolean } | null {
   const c = container as unknown as ContainerLike | null;
   if (!c) return null;
   const outer = c.closest?.(".VideoPlayer") as ContainerLike | null | undefined;
@@ -188,7 +188,7 @@ export function lockUserPause(handle: VideoHandle, env: PauseLockEnv = browserEn
   const onKey = (e: Event) => {
     const k = e as unknown as KeyLike & Event;
     if (handle.paused()) return; // the toggle would play: fine
-    if (!isPauseKey(k, areaOf(handle.container()))) return;
+    if (!isPauseKey(k, playerArea(handle.container()))) return;
     e.preventDefault();
     e.stopPropagation();
     (e as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();

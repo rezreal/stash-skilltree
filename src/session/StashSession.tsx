@@ -57,6 +57,7 @@ import { OverlayInteractive } from "../stashplayer/OverlayHost.tsx";
 import type { StashPlayerContext } from "../stashplayer/patch.tsx";
 import { lockUserPause } from "../stashplayer/pauseLock.ts";
 import { lockPlaybackRate } from "../stashplayer/rateLock.ts";
+import { lockSeeking } from "../stashplayer/seekLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import { usePluginSettings } from "../ui/pluginApi.ts";
 import { loadSceneById } from "../stash/testSearch.ts";
@@ -344,6 +345,9 @@ function SessionOverlay(props: {
   React.useEffect(() => (lock ? lockUserPause(handle) : undefined), [handle, lock]);
   // ranked play runs at 1x: a faster clip would ask for less attention
   React.useEffect(() => lockPlaybackRate(handle), [handle]);
+  // ranked play can't seek while it runs; test mode can, to try checks out of order
+  const seekLocked = !test && !finished;
+  React.useEffect(() => (seekLocked ? lockSeeking(handle) : undefined), [handle, seekLocked]);
 
   const getContainer = React.useCallback(() => handle.container(), [handle]);
   const getVideoTime = React.useCallback(() => (handle.video() ? handle.currentTime() : undefined), [handle]);

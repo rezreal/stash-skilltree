@@ -35,6 +35,7 @@ import type { AttentionReading } from "../player/gazeView.ts";
 import { useAttentionSource, type AttentionSource } from "../player/useAttentionSource.ts";
 import type { PlayData } from "../player/usePlayData.ts";
 import { isExposureOnly, previousExposure, promptMarkers } from "../player/view.ts";
+import { seekByPlugin } from "../stashplayer/seekLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
 import type { MarkerInput } from "../core/types.ts";
 import { isViewerPause, loopWorthSaving, playerRequest, spendDeadlineMs } from "./controller.ts";
@@ -402,16 +403,8 @@ export function useSkilltreeSession(input: SkilltreeSessionInput): SkilltreeSess
 
   const reportPrompt = React.useCallback((result: PromptResult) => dispatch({ type: "prompt", result }), []);
   const reportTrack = React.useCallback((score: number) => dispatch({ type: "track", score }), []);
-  const seek = React.useCallback(
-    (sec: number) => {
-      try {
-        handle.player()?.currentTime(Math.max(0, sec));
-      } catch {
-        // player between dispose and removal
-      }
-    },
-    [handle],
-  );
+  // the session's own seeks (prompt replays) pass the seek lock
+  const seek = React.useCallback((sec: number) => seekByPlugin(handle, sec), [handle]);
 
   return {
     start,
