@@ -11,6 +11,10 @@ ui:
   css:
     - skilltree.css
     - skilltree-play.css
+  # models and wasm for vision and speech, fetched by tools/fetch_models.sh
+  # into plugin/assets/ and served at /plugin/skilltree/assets/...
+  assets:
+    /: assets
 
 settings:
   defaultNeed:

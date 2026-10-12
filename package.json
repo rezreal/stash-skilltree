@@ -9,7 +9,8 @@
     "watch": "node build.mjs --watch",
     "test": "node --test 'test/**/*.test.ts' && python3 test/test_extract_markers.py",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "fetch-models": "tools/fetch_models.sh"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
