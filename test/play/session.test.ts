@@ -160,8 +160,21 @@ describe("session", () => {
     assert.equal(step(s, { type: "ended", nowMs: s.lastNowMs }).phase, "aborted");
   });
 
-  it("user pause does not count against attention and has no abort timer", () => {
+  it("a pause by the viewer is undone when pausing is not allowed", () => {
     let s = start(100);
+    s = play(s, { from: 0, seconds: 10 });
+    s = step(s, { type: "pauseByUser" });
+    assert.equal(s.phase, "playing");
+    assert.equal(s.pausedBy, undefined);
+    assert.equal(s.resumeRequested, true);
+    assert.equal(s.pauseAttempts, 1);
+    s = step(s, { type: "tick", nowMs: s.lastNowMs + TICK_MS, videoTime: 10.25, attending: true, playing: true });
+    assert.equal(s.resumeRequested, false);
+    assert.equal(s.pauseAttempts, 1);
+  });
+
+  it("user pause does not count against attention and has no abort timer", () => {
+    let s = start(100, { ...DEFAULT_POLICY, allowUserPause: true });
     s = play(s, { from: 0, seconds: 50 });
     s = step(s, { type: "pauseByUser" });
     assert.equal(s.phase, "paused");

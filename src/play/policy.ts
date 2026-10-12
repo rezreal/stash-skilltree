@@ -81,5 +81,7 @@ export function policyForScene(scene: SceneInput, policyTags: PolicyTagInput[]):
     rewardMult: rewardMult ?? DEFAULT_POLICY.rewardMult,
   };
   if (minMinutes !== undefined) policy.minMinutes = minMinutes;
+  // loops may be paused and resumed; watched clips may not
+  if (!policy.rules.includes("attention") && policy.rules.includes("exposure")) policy.allowUserPause = true;
   return policy;
 }

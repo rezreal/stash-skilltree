@@ -43,6 +43,7 @@ export function createSession(input: {
     spends: [],
     pauseRequested: false,
     resumeRequested: false,
+    pauseAttempts: 0,
   };
 }
 
@@ -221,6 +222,12 @@ export function step(state: SessionState, event: SessionEvent): SessionState {
       return s;
     case "pauseByUser":
       if (event.nowMs !== undefined) s.lastNowMs = event.nowMs;
+      if (!s.policy.allowUserPause) {
+        // not allowed: undo it; only Stop ends a clip early
+        s.pauseAttempts += 1;
+        s.resumeRequested = true;
+        return s;
+      }
       clearPause(s);
       s.phase = "paused";
       s.pausedBy = "user";

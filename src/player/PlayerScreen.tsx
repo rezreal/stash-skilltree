@@ -418,6 +418,7 @@ function PlayerSession(props: SessionProps) {
   const subtitle = [performerNames.join(", "), nodes.map(nodeLabel).join(", "), dateLabel(scene.date)]
     .filter((s) => s.length > 0)
     .join(" · ");
+  const pauseNotice = useRecentChange(session.pauseAttempts, 4000);
   const showInattention = session.phase === "paused" && session.pausedBy === "inattention" && !openSpend;
   const pauseText = pauseReasonText(attention.reading);
   const abortIn =
@@ -502,6 +503,11 @@ function PlayerSession(props: SessionProps) {
             {session.phase === "grace" && !openSpend && (
               <div className="stp-hint-banner is-warning" role="status">
                 {graceText(attention.reading)}
+              </div>
+            )}
+            {pauseNotice && !openSpend && (
+              <div className="stp-hint-banner is-warning" role="status">
+                Pausing isn’t part of the session. Press Esc to stop – the clip won’t count.
               </div>
             )}
 
@@ -949,4 +955,20 @@ function Timeline(props: {
       </div>
     </div>
   );
+}
+
+/** True for `ms` after `value` last increased. */
+function useRecentChange(value: number, ms: number): boolean {
+  const [until, setUntil] = React.useState(0);
+  const prev = React.useRef(value);
+  React.useEffect(() => {
+    if (value > prev.current) setUntil(Date.now() + ms);
+    prev.current = value;
+  }, [value, ms]);
+  React.useEffect(() => {
+    if (until === 0) return;
+    const id = window.setTimeout(() => setUntil(0), Math.max(0, until - Date.now()));
+    return () => window.clearTimeout(id);
+  }, [until]);
+  return until > 0;
 }

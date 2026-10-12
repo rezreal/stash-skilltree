@@ -20,6 +20,12 @@ export interface WatchPolicy {
   /** prompts: share of prompts that must be followed (default 0.75) */
   promptsMin: number;
   rewardMult: number;
+  /**
+   * Whether the viewer may pause. Off for watched clips: only the plugin
+   * pauses (inattention, spend prompts, replays) and Stop ends the clip.
+   * On for loops, which are meant to be paused and resumed.
+   */
+  allowUserPause?: boolean;
 }
 
 /** st.kind=policy tags as loaded for playing */
@@ -108,6 +114,8 @@ export interface SessionState {
   pauseRequested: boolean;
   /** one-shot: the UI should resume the video (cleared on the next step) */
   resumeRequested: boolean;
+  /** pauses the viewer tried while pausing is not allowed */
+  pauseAttempts: number;
   endedAtMs?: number;
 }
 
