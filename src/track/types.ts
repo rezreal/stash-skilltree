@@ -113,7 +113,7 @@ export const DEFAULT_SECTION_PARAMS: SectionParams = {
   strokeSpeed: 60,
 };
 
-export const DEFAULT_LIMITS: TrackLimits = { maxDepth: 85, maxHoldSec: 8 };
+export const DEFAULT_LIMITS: TrackLimits = { maxDepth: 100, maxHoldSec: 8 };
 
 // --- scoring ----------------------------------------------------------------------
 

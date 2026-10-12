@@ -58,13 +58,14 @@ describe("track session", () => {
   });
 
   it("applies the default limits", () => {
-    // DEFAULT_LIMITS: max depth 85, max hold 8 s
-    const s = createTrackSession({ script: longScript(), calibration: cal });
-    assert.equal(s.sections.find((x) => x.kind === "stroke")?.unscored, undefined); // reaches 80
+    // DEFAULT_LIMITS: no depth limit (100), max hold 8 s
     const deep = new ScriptBuilder(0).flat(1000).strokes(95, 10, 400).flat(1000).to(50, 1000).flat(9000).actions;
     const d = createTrackSession({ script: deep, calibration: cal });
-    assert.equal(d.sections.find((x) => x.kind === "stroke")?.unscored, true);
-    assert.equal(d.sections.find((x) => x.kind === "hold")?.unscored, true);
+    assert.equal(d.sections.find((x) => x.kind === "stroke")?.unscored, undefined); // 95 deep is scored
+    assert.equal(d.sections.find((x) => x.kind === "hold")?.unscored, true); // 9 s hold > 8 s
+    // a limit the user sets still applies
+    const limited = createTrackSession({ script: deep, calibration: cal, limits: { maxDepth: 85, maxHoldSec: 8 } });
+    assert.equal(limited.sections.find((x) => x.kind === "stroke")?.unscored, true);
   });
 
   it("uses a given lag without estimating", () => {
