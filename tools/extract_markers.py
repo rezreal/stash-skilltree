@@ -41,7 +41,10 @@ GAZE_TARGETS = [
 ]
 ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still",
            "arms_up", "hands_on_head", "hands_together", "kneel",
-           "kneel_sit", "stand", "lie_down"]
+           "kneel_sit", "stand", "lie_down",
+           "cat", "cow", "puppy", "down_dog", "plank", "plow", "straddle",
+           "straddle_up", "child", "forward_fold", "happy_baby", "savasana",
+           "hastasana"]
 TYPES = ["repeat", "gaze", "action", "spend"]
 
 # Seconds after the instruction ends during which the plugin checks compliance.
@@ -67,7 +70,13 @@ computer can verify, of these four types:
 - action: the viewer is told to do a visible body action. "action" is one of:
   nod, shake_head, eyes_closed, eyes_open, hand_raised, still (stay completely
   still), arms_up, hands_on_head, hands_together, kneel, kneel_sit (kneel
-  sitting back on the heels, as in meditation), stand, lie_down.
+  sitting back on the heels, as in meditation; also yoga thunderbolt pose /
+  vajrasana), stand, lie_down, and the yoga
+  poses cat, cow, puppy (extended puppy pose), down_dog (downward-facing dog),
+  plank, plow, straddle (seated straddle stretch, legs wide on the floor),
+  straddle_up (upward seated straddle, legs lifted wide), child (child's
+  pose), forward_fold (standing forward fold), happy_baby, savasana (corpse
+  pose), hastasana (upward salute: standing, arms straight overhead).
 - spend: the viewer is told to send/give/pay an amount of money, coins or
   tribute. "amount" = the number as an integer.
 

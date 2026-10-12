@@ -137,7 +137,9 @@ Watch policy = rules composed per scene from its tags:
 - `prompts` — markers: repeat-after-me (local STT, fuzzy match), webcam
   actions and body poses (MediaPipe: nod, shake, eyes closed/open, hand
   raised, still, arms up, hands on head, hands together, kneel, kneel
-  sitting on the heels, stand, lie down; pose windows over 10 s are scored
+  sitting on the heels, stand, lie down; yoga: cat, cow, extended puppy,
+  downward dog, plank, plow, straddle stretch, upward seated straddle, child's
+  pose, standing forward fold, happy baby, savasana, upward salute; pose windows over 10 s are scored
   by the share of time in the pose), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
   prompts (hold-to-confirm or voice; declining fails the clip). A missed

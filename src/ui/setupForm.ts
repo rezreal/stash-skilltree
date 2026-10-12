@@ -46,6 +46,19 @@ export const PROMPT_ACTIONS = [
   "kneel_sit",
   "stand",
   "lie_down",
+  "cat",
+  "cow",
+  "puppy",
+  "down_dog",
+  "plank",
+  "plow",
+  "straddle",
+  "straddle_up",
+  "child",
+  "forward_fold",
+  "happy_baby",
+  "savasana",
+  "hastasana",
 ] as const;
 
 /** Written by the plugin while playing; shown read-only, never written here. */
@@ -123,9 +136,24 @@ export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
   hands_on_head: "both hands on the head",
   hands_together: "hands together in front of the chest",
   kneel: "kneel (the camera must see the legs)",
-  kneel_sit: "kneel sitting back on the heels, back upright, as in meditation (the camera must see the legs; best from the side)",
+  kneel_sit:
+    "kneel sitting back on the heels, back upright, as in meditation; yoga thunderbolt pose (vajrasana) " +
+    "(the camera must see the legs; best from the side)",
   stand: "stand upright (the camera must see the legs)",
   lie_down: "lie down",
+  cat: "yoga cat: on hands and knees, back rounded up, head dropped",
+  cow: "yoga cow: on hands and knees, belly dropped, head lifted",
+  puppy: "yoga extended puppy: hips over the knees, chest down, arms stretched forward (side-on to the camera)",
+  down_dog: "yoga downward-facing dog: hands and feet on the floor, hips lifted high (side-on to the camera)",
+  plank: "plank on hands or forearms, body in a straight line (side-on to the camera)",
+  plow: "yoga plow: on the back, legs over the head, feet toward the floor behind it (side-on to the camera)",
+  straddle: "straddle stretch: sitting with straight legs spread wide on the floor (facing the camera)",
+  straddle_up: "yoga upward seated straddle: balancing on the seat, straight legs lifted wide (facing the camera)",
+  child: "yoga child's pose: kneeling, hips back on the heels, folded forward over the thighs",
+  forward_fold: "yoga standing forward fold: standing, folded down from the hips, head toward the knees",
+  happy_baby: "yoga happy baby: on the back, knees pulled toward the armpits, soles up, holding the feet (side-on to the camera)",
+  savasana: "yoga corpse pose (savasana): lying flat on the back, legs long, arms by the sides (side-on to the camera)",
+  hastasana: "yoga upward salute (hastasana): standing upright, both arms straight overhead (the camera must see the legs)",
 };
 
 export const REPLAY_HELP: Readonly<Record<string, string>> = {

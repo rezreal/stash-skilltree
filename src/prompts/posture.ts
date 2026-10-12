@@ -4,6 +4,17 @@
 // y grows downwards ("above" = smaller y). Landmarks with visibility below
 // POSTURE.minVisibility are ignored; when the landmarks a pose needs are
 // missing the answer is "unknown" (neither pass nor fail).
+//
+// Floor poses (yoga): straightness of a limb survives the 2D projection, a
+// bend angle doesn't. So poses told apart by a bend (plank, down_dog, plow,
+// puppy) are only judged side-on to the camera, and the straddles, told apart
+// by how wide the legs are, only facing it; from the wrong side the answer is
+// "unknown" with a hint to turn (also happy_baby and savasana, lying poses
+// that point at a camera at the feet). cat, cow, child and forward_fold work
+// from either side (heights; the fold's hip angle only side-on). Thunderbolt
+// pose (vajrasana) is kneel_sit; hastasana (upward salute) is stand + arms_up
+// with straight arms. The view is read off the shoulder width: a frontal torso is ~0.75
+// torso lengths wide, a side-on one much narrower.
 
 import { POSE } from "./types.ts";
 import type { HoldState } from "./hold.ts";
@@ -52,9 +63,102 @@ export const POSTURE = {
   standTorsoMaxTiltDeg: 20,
   /** lie_down: shoulder-hip line within this of horizontal, degrees */
   lieMaxTiltDeg: 30,
+  /** side-on view: shoulder width below this share of the torso length (frontal ~0.75) */
+  sideMaxShoulderTorso: 0.45,
+  /** a straight arm or leg: joint angle above this, degrees */
+  straightMinDeg: 150,
+  /** a bent knee (on all fours): knee angle below this, degrees */
+  bentKneeMaxDeg: 130,
+  // Floor poses below; distances are in body scale = max(torso length, shoulder width),
+  // which stays usable when the torso points at the camera.
+  /** all fours (cat, cow, puppy): hips at least this far above the knees (thighs upright) */
+  fourHipsAboveKnees: 0.4,
+  /** cat, cow: hands on the floor - wrists at most this far above the knees */
+  fourHandsAboveKnees: 0.35,
+  /** cat, cow: wrists at least this far below the shoulders (arms holding the chest up) */
+  fourChestAboveHands: 0.4,
+  /** cat: head (nose) at least this far below the shoulders (head dropped, back rounded) */
+  catHeadBelowShoulders: 0.25,
+  /** cow: head at least this far above the shoulders (head lifted, belly dropped) */
+  cowHeadAboveShoulders: 0.1,
+  /** puppy: chest down - wrists at most this far below the shoulders */
+  puppyChestAboveHands: 0.35,
+  /** puppy: wrists at least this much farther from the hips than the shoulders (arms reaching forward) */
+  puppyReach: 0.3,
+  /** down_dog: hips at least this far above the shoulders */
+  dogHipsAboveShoulders: 0.3,
+  /** down_dog, forward_fold: knee angle above this, degrees (soft knees are fine) */
+  softKneeMinDeg: 130,
+  /** forward_fold: shoulder-hip-ankle angle below this, degrees; down_dog needs at least this */
+  foldHipMaxDeg: 50,
+  /** forward_fold: shoulders at least this far below the hips */
+  foldShouldersBelowHips: 0.3,
+  /** forward_fold: hips at least this far above the ankles (standing on the feet) */
+  foldHipsAboveFeet: 0.8,
+  /** down_dog: shoulder-hip-ankle angle at most this, degrees (larger: hips not lifted) */
+  dogHipMaxDeg: 120,
+  /** plank: shoulder-hip line within this of horizontal, degrees */
+  plankMaxTiltDeg: 35,
+  /** plank: shoulder-hip-ankle angle above this, degrees (a straight body) */
+  plankBodyMinDeg: 160,
+  /** plank: elbows or wrists at least this far below the shoulders (on hands or forearms) */
+  plankSupport: 0.3,
+  /** plow: hips at least this far above the shoulders */
+  plowHipsAboveShoulders: 0.5,
+  /** plow: shoulder-hip-ankle angle at most this, degrees (legs folded over the head) */
+  plowHipMaxDeg: 75,
+  /** plow: ankles at least this far below the hips (feet lowered behind the head) */
+  plowFeetBelowHips: 0.5,
+  /** plow: ankles at most this far below the shoulders (shoulders on the floor, not a standing fold) */
+  plowFeetBelowShoulders: 0.4,
+  /** child: shoulders at most this far above the hips (folded forward over the thighs) */
+  childShouldersAboveHips: 0.15,
+  /** happy_baby: knees at least this far (torso lengths) above the hips */
+  happyKneesAboveHips: 0.3,
+  /** happy_baby: shoulder-hip-knee angle at most this, degrees (knees drawn toward the armpits) */
+  happyHipMaxDeg: 100,
+  /** happy_baby: ankles at least this far (torso lengths) above the knees (soles up) */
+  happyFeetAboveKnees: 0.2,
+  /** happy_baby: each wrist within this (torso lengths) of an ankle (holding the feet) */
+  happyHandsToFeet: 0.5,
+  /** savasana: knees, ankles and wrists within this (torso lengths) of hip height (resting on the floor) */
+  savasanaOffFloor: 0.3,
+  /** straddle: angle between the legs (hips to ankles) at least this, degrees */
+  straddleMinDeg: 90,
+  /** straddle: ankles at most this far below the hips (sitting, not standing) */
+  straddleFeetBelowHips: 1,
+  /** straddle: ankles at most this far above the hips (legs resting on the floor) */
+  straddleFeetAboveHips: 0.2,
+  /** straddle_up: angle between the legs at least this, degrees */
+  straddleUpMinDeg: 50,
+  /** straddle_up: ankles at least this far above the hips (legs lifted) */
+  straddleUpFeetAboveHips: 0.4,
+  /** straddle_up: shoulder-hip line within this of vertical, degrees (sitting up, leaning back a little) */
+  straddleUpTorsoMaxTiltDeg: 45,
 } as const;
 
-export const POSE_ACTIONS = ["arms_up", "hands_on_head", "hands_together", "kneel", "kneel_sit", "stand", "lie_down"] as const;
+export const POSE_ACTIONS = [
+  "arms_up",
+  "hands_on_head",
+  "hands_together",
+  "kneel",
+  "kneel_sit",
+  "stand",
+  "lie_down",
+  "cat",
+  "cow",
+  "puppy",
+  "down_dog",
+  "plank",
+  "plow",
+  "straddle",
+  "straddle_up",
+  "child",
+  "forward_fold",
+  "happy_baby",
+  "savasana",
+  "hastasana",
+] as const;
 export type PoseAction = (typeof POSE_ACTIONS)[number];
 
 export function isPoseAction(a: PromptAction | undefined): a is PoseAction {
@@ -108,6 +212,37 @@ export const POSTURE_HINTS = {
   standStraight: "Stand up straight",
   lieFlat: "Lie down flat",
   notInView: "Get in front of the camera",
+  showWhole: "Show your whole body to the camera",
+  turnSide: "Turn side-on to the camera",
+  faceCamera: "Face the camera",
+  allFours: "Get on your hands and knees",
+  handsFloor: "Put your hands on the floor",
+  hipsOverKnees: "Lift your hips over your knees",
+  armsStraight: "Straighten your arms",
+  roundBack: "Round your back and drop your head",
+  archBack: "Drop your belly and lift your head",
+  chestDown: "Lower your chest toward the floor",
+  reachForward: "Stretch your arms forward",
+  hipsUp: "Lift your hips",
+  handsForward: "Walk your hands forward",
+  bodyLevel: "Bring your body level with the floor",
+  onHands: "Push up onto your hands or forearms",
+  hipsOverShoulders: "Lift your hips over your shoulders",
+  legsOverHead: "Bring your legs over your head",
+  feetDown: "Lower your feet toward the floor",
+  shouldersDown: "Lie back with your shoulders on the floor",
+  legsUp: "Lift your legs off the floor",
+  legsDown: "Rest your legs on the floor",
+  legsWide: "Spread your legs wider",
+  sitDown: "Sit down on the floor",
+  foldOverThighs: "Fold forward, chest onto your thighs",
+  foldDeeper: "Fold forward from your hips",
+  onFeet: "Stand on your feet",
+  lieBack: "Lie on your back",
+  kneesToChest: "Pull your knees toward your armpits",
+  feetUp: "Lift your feet, soles to the ceiling",
+  holdFeet: "Hold your feet",
+  armsDown: "Rest your arms by your sides",
 } as const;
 
 export interface PostureVerdict {
@@ -132,6 +267,19 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     kneel_sit: H.showLegs,
     stand: H.showLegs,
     lie_down: H.showBody,
+    cat: H.showWhole,
+    cow: H.showWhole,
+    puppy: H.showWhole,
+    down_dog: H.showWhole,
+    plank: H.showWhole,
+    plow: H.showWhole,
+    straddle: H.showLegs,
+    straddle_up: H.showLegs,
+    child: H.showLegs,
+    forward_fold: H.showLegs,
+    happy_baby: H.showWhole,
+    savasana: H.showWhole,
+    hastasana: H.showWhole,
   };
   const unknown: PostureVerdict = { state: "unknown", hint: unseen[action] };
   const IN: PostureVerdict = { state: "in" };
@@ -255,5 +403,264 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
       if (!sm || !hm || dist(sm, hm) === 0) return unknown;
       return tiltFromHorizontal(sm, hm) <= POSTURE.lieMaxTiltDeg ? IN : out(H.lieFlat);
     }
+
+    case "hastasana": {
+      // what's missing for standing first, then for the arms
+      const stand = assessPosture("stand", pose, aspect);
+      if (stand.state !== "in") return stand;
+      const up = assessPosture("arms_up", pose, aspect);
+      if (up.state !== "in") return up;
+      for (const [s, e, w] of [
+        [ls, POSE.leftElbow, lw],
+        [rs, POSE.rightElbow, rw],
+      ] as const) {
+        const elbow = at(e);
+        if (s && elbow && w && angle(s, elbow, w) <= POSTURE.straightMinDeg) return out(H.armsStraight);
+      }
+      return IN;
+    }
+
+    case "cat":
+    case "cow":
+    case "puppy":
+    case "down_dog":
+    case "plank":
+    case "plow":
+    case "straddle":
+    case "straddle_up":
+    case "child":
+    case "forward_fold":
+    case "happy_baby":
+    case "savasana": {
+      const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
+      const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
+      if (!sm || !hm) return unknown;
+      const torso = dist(sm, hm);
+      const scale = Math.max(torso, sw);
+      if (scale <= 0) return unknown;
+      const legs: Limb[] = [];
+      const arms: Limb[] = [];
+      for (const [h, k, a] of [
+        [POSE.leftHip, POSE.leftKnee, POSE.leftAnkle],
+        [POSE.rightHip, POSE.rightKnee, POSE.rightAnkle],
+      ] as const) {
+        const root = at(h);
+        const joint = at(k);
+        const end = at(a);
+        if (root && joint && end) legs.push({ root, joint, end });
+      }
+      for (const [s, e, w] of [
+        [POSE.leftShoulder, POSE.leftElbow, POSE.leftWrist],
+        [POSE.rightShoulder, POSE.rightElbow, POSE.rightWrist],
+      ] as const) {
+        const root = at(s);
+        const end = at(w);
+        if (root && end) arms.push({ root, joint: at(e), end });
+      }
+      const side = sw < POSTURE.sideMaxShoulderTorso * torso;
+      const head = at(POSE.nose) ?? midOf(at(POSE.leftEye), at(POSE.rightEye)) ?? midOf(at(POSE.leftEar), at(POSE.rightEar));
+      return floorPose(action, { sm, hm, torso, scale, side, legs, arms, head }) ?? unknown;
+    }
+  }
+}
+
+/** A limb from its root (shoulder, hip) over the middle joint (elbow, knee) to its end (wrist, ankle). */
+interface Limb {
+  root: Q;
+  joint: Q | undefined;
+  end: Q;
+}
+
+interface Body {
+  /** shoulder and hip midpoints (or the one visible side) */
+  sm: Q;
+  hm: Q;
+  torso: number;
+  /** max(torso length, shoulder width) */
+  scale: number;
+  /** seen side-on (else facing the camera, or turned away) */
+  side: boolean;
+  /** visible legs (with knee) and arms (elbow optional) */
+  legs: Limb[];
+  arms: Limb[];
+  head: Q | undefined;
+}
+
+const midOf = (a: Q | undefined, b: Q | undefined): Q | undefined => (a && b ? mid(a, b) : undefined);
+
+const straight = (l: Limb, minDeg: number = POSTURE.straightMinDeg): boolean =>
+  l.joint === undefined || angle(l.root, l.joint, l.end) > minDeg;
+
+/**
+ * The yoga floor poses; undefined when the needed landmarks are missing.
+ * Seen from a side that can't show the pose: unknown, with a hint to turn.
+ * Checks run most basic first; the first one that fails gives the hint.
+ */
+function floorPose(action: PoseAction, b: Body): PostureVerdict | undefined {
+  const H = POSTURE_HINTS;
+  const P = POSTURE;
+  const { sm, hm, torso, scale, legs, arms } = b;
+  /** checks in order: [ok, hint when not] */
+  const first = (checks: readonly (readonly [boolean, string])[]): PostureVerdict => {
+    for (const [ok, hint] of checks) if (!ok) return { state: "out", hint };
+    return { state: "in" };
+  };
+  const turnSide: PostureVerdict = { state: "unknown", hint: H.turnSide };
+  const faceCamera: PostureVerdict = { state: "unknown", hint: H.faceCamera };
+  const all = <T>(xs: readonly T[], f: (x: T) => boolean): boolean => xs.every(f);
+  const spread = (): number | undefined => {
+    if (legs.length < 2) return undefined;
+    return angle(legs[0]!.end, hm, legs[1]!.end);
+  };
+
+  switch (action) {
+    case "cat":
+    case "cow":
+    case "puppy": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      // knees on the floor, bent, the hips up over them
+      const kneesDown = all(
+        legs,
+        (l) =>
+          l.joint !== undefined &&
+          Math.abs(l.joint.y - l.end.y) < P.kneelKneeAnkleMaxTorso * scale &&
+          angle(l.root, l.joint, l.end) < P.bentKneeMaxDeg,
+      );
+      const hipsUp = all(legs, (l) => l.joint !== undefined && l.joint.y - l.root.y >= P.fourHipsAboveKnees * scale);
+      const kneeY = Math.max(...legs.map((l) => l.joint!.y));
+      if (action === "puppy") {
+        if (!b.side) return turnSide;
+        return first([
+          [kneesDown, H.allFours],
+          [hipsUp, H.hipsOverKnees],
+          [all(arms, (a) => a.end.y - a.root.y <= P.puppyChestAboveHands * scale), H.chestDown],
+          [all(arms, (a) => dist(a.end, hm) >= dist(a.root, hm) + P.puppyReach * scale), H.reachForward],
+        ]);
+      }
+      if (b.head === undefined) return undefined;
+      const headDrop = b.head.y - sm.y;
+      return first([
+        [kneesDown, H.allFours],
+        [all(arms, (a) => a.end.y >= kneeY - P.fourHandsAboveKnees * scale), H.handsFloor],
+        [hipsUp, H.hipsOverKnees],
+        [all(arms, (a) => a.end.y - a.root.y >= P.fourChestAboveHands * scale && straight(a)), H.armsStraight],
+        action === "cat"
+          ? [headDrop >= P.catHeadBelowShoulders * scale, H.roundBack]
+          : [-headDrop >= P.cowHeadAboveShoulders * scale, H.archBack],
+      ]);
+    }
+
+    case "down_dog": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      const hipDeg = Math.min(...legs.map((l) => angle(sm, hm, l.end)));
+      return first([
+        [all(arms, (a) => a.end.y > a.root.y), H.handsFloor],
+        [sm.y - hm.y >= P.dogHipsAboveShoulders * torso, H.hipsUp],
+        [all(legs, (l) => straight(l, P.softKneeMinDeg)), H.legsStraight],
+        [all(arms, (a) => straight(a)), H.armsStraight],
+        [hipDeg >= P.foldHipMaxDeg, H.handsForward],
+        [hipDeg <= P.dogHipMaxDeg, H.hipsUp],
+      ]);
+    }
+
+    case "plank": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      const supported = arms.some((a) => Math.max(a.end.y, a.joint?.y ?? a.end.y) - a.root.y >= P.plankSupport * torso);
+      // the most bent side decides; sagging hips sit below the shoulder-ankle line
+      let worst: { deg: number; sag: boolean } | undefined;
+      for (const l of legs) {
+        const deg = angle(sm, hm, l.end);
+        const dx = l.end.x - sm.x;
+        const lineY = dx === 0 ? hm.y : sm.y + ((l.end.y - sm.y) * (hm.x - sm.x)) / dx;
+        if (worst === undefined || deg < worst.deg) worst = { deg, sag: hm.y > lineY };
+      }
+      return first([
+        [tiltFromHorizontal(sm, hm) <= P.plankMaxTiltDeg, H.bodyLevel],
+        [supported, H.onHands],
+        [all(legs, (l) => straight(l)), H.legsStraight],
+        [worst!.deg > P.plankBodyMinDeg, worst!.sag ? H.hipsUp : H.hipsLower],
+      ]);
+    }
+
+    case "child": {
+      if (legs.length === 0) return undefined;
+      return first([
+        [all(legs, (l) => Math.abs(l.joint!.y - l.end.y) < P.kneelKneeAnkleMaxTorso * scale && angle(l.root, l.joint!, l.end) < P.bentKneeMaxDeg), H.kneesDown],
+        [all(legs, (l) => Math.abs(l.end.y - l.root.y) < P.kneelSitHipAnkleMaxTorso * scale), H.ontoHeels],
+        [hm.y - sm.y <= P.childShouldersAboveHips * scale, H.foldOverThighs],
+      ]);
+    }
+
+    case "forward_fold": {
+      if (legs.length === 0) return undefined;
+      return first([
+        [all(legs, (l) => l.end.y - hm.y >= P.foldHipsAboveFeet * scale && l.end.y - sm.y >= P.plowFeetBelowShoulders * scale), H.onFeet],
+        [sm.y - hm.y >= P.foldShouldersBelowHips * scale, H.foldDeeper],
+        [all(legs, (l) => straight(l, P.softKneeMinDeg)), H.legsStraight],
+        [!b.side || all(legs, (l) => angle(sm, hm, l.end) < P.foldHipMaxDeg), H.foldDeeper],
+      ]);
+    }
+
+    case "happy_baby": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      return first([
+        [tiltFromHorizontal(sm, hm) <= P.lieMaxTiltDeg, H.lieBack],
+        [all(legs, (l) => hm.y - l.joint!.y >= P.happyKneesAboveHips * torso && angle(sm, hm, l.joint!) <= P.happyHipMaxDeg), H.kneesToChest],
+        [all(legs, (l) => !straight(l)), H.bendKnees],
+        [all(legs, (l) => l.joint!.y - l.end.y >= P.happyFeetAboveKnees * torso), H.feetUp],
+        [all(arms, (a) => legs.some((l) => dist(a.end, l.end) <= P.happyHandsToFeet * torso)), H.holdFeet],
+      ]);
+    }
+
+    case "savasana": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      const low = (q: Q): boolean => Math.abs(q.y - hm.y) <= P.savasanaOffFloor * torso;
+      return first([
+        [tiltFromHorizontal(sm, hm) <= P.lieMaxTiltDeg, H.lieFlat],
+        [all(legs, (l) => low(l.joint!) && low(l.end)), H.legsDown],
+        [all(legs, (l) => straight(l)), H.legsStraight],
+        [all(arms, (a) => low(a.end) && dist(a.end, hm) <= torso), H.armsDown],
+      ]);
+    }
+
+    case "plow": {
+      if (legs.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      return first([
+        [sm.y - hm.y >= P.plowHipsAboveShoulders * torso, H.hipsOverShoulders],
+        [all(legs, (l) => angle(sm, hm, l.end) <= P.plowHipMaxDeg), H.legsOverHead],
+        [all(legs, (l) => l.end.y - sm.y <= P.plowFeetBelowShoulders * torso), H.shouldersDown],
+        [all(legs, (l) => l.end.y - hm.y >= P.plowFeetBelowHips * torso), H.feetDown],
+        [all(legs, (l) => straight(l)), H.legsStraight],
+      ]);
+    }
+
+    case "straddle":
+    case "straddle_up": {
+      const deg = spread();
+      if (deg === undefined) return undefined;
+      if (b.side) return faceCamera;
+      if (action === "straddle") {
+        return first([
+          [all(legs, (l) => l.end.y - hm.y <= P.straddleFeetBelowHips * scale), H.sitDown],
+          [all(legs, (l) => hm.y - l.end.y <= P.straddleFeetAboveHips * scale), H.legsDown],
+          [all(legs, (l) => straight(l)), H.legsStraight],
+          [deg >= P.straddleMinDeg, H.legsWide],
+        ]);
+      }
+      return first([
+        [all(legs, (l) => hm.y - l.end.y >= P.straddleUpFeetAboveHips * scale), H.legsUp],
+        [all(legs, (l) => straight(l)), H.legsStraight],
+        [deg >= P.straddleUpMinDeg, H.legsWide],
+        [sm.y < hm.y && 90 - tiltFromHorizontal(sm, hm) <= P.straddleUpTorsoMaxTiltDeg, H.backStraight],
+      ]);
+    }
+
+    default:
+      return undefined;
   }
 }

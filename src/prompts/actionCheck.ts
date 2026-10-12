@@ -8,7 +8,7 @@
 // Frames without a face don't count and don't reset, except for still
 // (a face leaving the frame is movement).
 // Body-pose actions (arms_up, hands_on_head, hands_together, kneel, stand,
-// lie_down; see posture.ts) hold for min(holdSec, poseMaxSec) and are gated
+// lie_down, the yoga poses; see posture.ts) hold for min(holdSec, poseMaxSec) and are gated
 // on the viewer pose, not the face (a face is often hidden when lying down);
 // time where the needed landmarks are missing is neither pass nor fail.
 // In windows longer than LONG_WINDOW_SEC a body pose is scored by share, like

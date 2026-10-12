@@ -35,6 +35,19 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   kneel_sit: "Kneel and sit on your heels",
   stand: "Stand up",
   lie_down: "Lie down",
+  cat: "Cat pose",
+  cow: "Cow pose",
+  puppy: "Extended puppy pose",
+  down_dog: "Downward-facing dog",
+  plank: "Plank",
+  plow: "Plow pose",
+  straddle: "Straddle stretch",
+  straddle_up: "Upward seated straddle",
+  child: "Child's pose",
+  forward_fold: "Standing forward fold",
+  happy_baby: "Happy baby pose",
+  savasana: "Savasana (corpse pose)",
+  hastasana: "Upward salute (hastasana)",
 };
 
 /** "their eyes", "the floor in front of their feet", ... */
