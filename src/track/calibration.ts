@@ -26,8 +26,29 @@ export function linearPosition(raw: number, cal: TrackCalibration): number {
   return ((raw - cal.rawAtZero) / span) * 100;
 }
 
-/** Calibrated position: linear minus drift, clamped to 0..100. */
+/**
+ * Readings past the deepest point by more than this share of the calibrated
+ * span are not a deeper push but the sensor losing its target: backed off
+ * out of range, many distance sensors report 0 or their maximum.
+ */
+export const NO_TARGET_MARGIN = 0.5;
+
+/**
+ * The sensor sees nothing: a reading far beyond the deepest point, or 0 when
+ * 0 lies outside the calibrated range (the usual "no echo" value). Treated
+ * as fully out, never as fully in.
+ */
+export function isNoTarget(raw: number, cal: TrackCalibration): boolean {
+  if (!Number.isFinite(raw)) return true;
+  const lo = Math.min(cal.rawAtZero, cal.rawAtFull);
+  const hi = Math.max(cal.rawAtZero, cal.rawAtFull);
+  if (raw === 0 && (lo > 0 || hi < 0)) return true;
+  return linearPosition(raw, cal) > 100 * (1 + NO_TARGET_MARGIN);
+}
+
+/** Calibrated position: linear minus drift, clamped to 0..100; no target reads as 0 (out). */
 export function toPosition(raw: number, cal: TrackCalibration): number {
+  if (isNoTarget(raw, cal)) return 0;
   const p = linearPosition(raw, cal) - cal.drift;
   if (!(p > 0)) return 0; // also -0 and NaN
   return p > 100 ? 100 : p;
@@ -92,6 +113,11 @@ export function createDriftTracker(opts?: Partial<DriftOptions>): DriftTracker {
       // a gap or a step back in time restarts the stability window
       if (prevT !== undefined && (tMs <= prevT || tMs - prevT > o.maxGapMs)) win = [];
       lastT = tMs;
+      if (isNoTarget(raw, cal)) {
+        // nothing in front of the sensor says nothing about its drift
+        win.length = 0;
+        return cal;
+      }
       win.push({ t: tMs, off: linearPosition(raw, cal) - expected });
       while (win.length > 1 && tMs - win[1].t >= o.stableMs) win.shift();
       if (tMs - win[0].t < o.stableMs || win.length < 3) return cal;

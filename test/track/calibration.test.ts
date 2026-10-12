@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   calibrate,
   createDriftTracker,
+  isNoTarget,
   linearPosition,
   parseTrackCalibration,
   serializeTrackCalibration,
@@ -20,12 +21,27 @@ describe("calibration", () => {
     assert.equal(toPosition(40, near), 100);
     assert.equal(toPosition(80, near), 50);
     assert.equal(toPosition(200, near), 0);
-    assert.equal(toPosition(0, near), 100);
+    assert.equal(toPosition(0, near), 0); // 0 = no echo: out, not in
     assert.equal(linearPosition(140, near), -25);
     const far = calibrate(10, 90, NOW);
     assert.equal(toPosition(30, far), 25);
     assert.equal(far.drift, 0);
     assert.equal(far.createdAt, NOW);
+  });
+
+  it("reads a lost target as fully out, not fully in", () => {
+    // mouthpiece in = closer = smaller reading: rest 60 mm, deepest 20 mm
+    const cal = calibrate(60, 20, "2026-01-01T00:00:00Z");
+    assert.equal(toPosition(20, cal), 100);
+    assert.equal(toPosition(15, cal), 100, "a little past the deepest point is still fully in");
+    assert.equal(toPosition(0, cal), 0, "0 = no echo when backed off");
+    assert.equal(isNoTarget(0, cal), true);
+    assert.equal(toPosition(80, cal), 0, "further out than rest");
+    // the other orientation: larger = deeper, sensor reports its maximum when lost
+    const up = calibrate(100, 400, "2026-01-01T00:00:00Z");
+    assert.equal(toPosition(400, up), 100);
+    assert.equal(toPosition(8190, up), 0, "far past the deepest point is a lost target");
+    assert.equal(isNoTarget(500, up), false, "within the margin it is a deep push");
   });
 
   it("subtracts the drift", () => {
