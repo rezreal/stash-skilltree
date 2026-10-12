@@ -89,6 +89,12 @@
   font-size: 12px;
 }
 
+.skilltree-play .stc-banner-hint {
+  color: var(--st-open, #f0a04b);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skilltree-play .stc-banner-fill { transition: none; }
 }

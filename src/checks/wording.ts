@@ -169,6 +169,8 @@ export interface BannerView {
   shareText?: string;
   /** why this prompt can't be checked right now (it is then not counted) */
   note?: string;
+  /** active body poses: what to change right now ("Sit back onto your heels") */
+  hint?: string;
   /** seconds left in the window, when known */
   secondsLeft?: number;
 }
@@ -212,6 +214,7 @@ function openView(pick: PromptProgress, input: BannerInput): BannerView {
   else if (pick.replays > 0) view.status = "Second try";
   const note = input.uncheckable?.(spec);
   if (note !== undefined) view.note = note;
+  else if (pick.phase === "active" && pick.hint !== undefined) view.hint = pick.hint;
   if (pick.phase === "active" && input.videoTime !== undefined && Number.isFinite(input.videoTime)) {
     view.secondsLeft = Math.max(0, spec.end - input.videoTime);
   }

@@ -313,6 +313,7 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
         };
         if (r?.detail !== undefined) p.detail = r.detail;
         if (r?.share !== undefined) p.share = r.share;
+        if (e.phase === "active" && r?.hint !== undefined) p.hint = r.hint;
         return p;
       });
     },

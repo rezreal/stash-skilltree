@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { classifyPosture } from "../../src/prompts/posture.ts";
+import { assessPosture, classifyPosture, POSTURE_HINTS as H } from "../../src/prompts/posture.ts";
 import { pose } from "./fixtures.ts";
 
 // webcam frames, aspect 4/3; y grows downwards
@@ -136,6 +136,31 @@ describe("classifyPosture", () => {
     assert.equal(classifyPosture("kneel_sit", pose(bowing)), "out");
     assert.equal(classifyPosture("kneel_sit", pose(STANDING)), "out");
     assert.equal(classifyPosture("kneel_sit", pose({ ...front, leftAnkle: undefined, rightAnkle: undefined })), "unknown");
+  });
+
+  it("says what is missing for kneel_sit, most basic first", () => {
+    const side = { leftShoulder: [0.5, 0.35], leftHip: [0.5, 0.6], leftKnee: [0.65, 0.68], leftAnkle: [0.48, 0.7] } as const;
+    assert.deepEqual(assessPosture("kneel_sit", pose(side)), { state: "in" });
+    // tall kneel: hips up over the knees
+    const tall = { leftShoulder: [0.5, 0.3], leftHip: [0.5, 0.55], leftKnee: [0.5, 0.8], leftAnkle: [0.32, 0.82] } as const;
+    assert.deepEqual(assessPosture("kneel_sit", pose(tall)), { state: "out", hint: H.ontoHeels });
+    assert.deepEqual(assessPosture("kneel_sit", pose({ ...side, leftShoulder: [0.7, 0.55] })), { state: "out", hint: H.backStraight });
+    assert.deepEqual(assessPosture("kneel_sit", pose(STANDING)), { state: "out", hint: H.kneesDown });
+    const crossLegged = { leftShoulder: [0.45, 0.4], leftHip: [0.45, 0.7], leftKnee: [0.3, 0.68], leftAnkle: [0.47, 0.72] } as const;
+    assert.deepEqual(assessPosture("kneel_sit", pose(crossLegged)), { state: "out", hint: H.heelsNotFloor });
+    assert.deepEqual(assessPosture("kneel_sit", pose({ ...side, leftAnkle: undefined })), { state: "unknown", hint: H.showLegs });
+  });
+
+  it("says what is missing for the other poses", () => {
+    assert.equal(assessPosture("arms_up", pose({ ...DESK, leftWrist: [0.4, 0.05], rightWrist: [0.6, 0.27] })).hint, H.armsUp);
+    assert.equal(assessPosture("arms_up", pose(DESK)).hint, H.showHands);
+    const head = { ...DESK, leftWrist: [0.47, 0.2], rightWrist: [0.53, 0.2] } as const;
+    assert.equal(assessPosture("hands_on_head", pose({ ...head, leftElbow: [0.45, 0.45], rightElbow: [0.55, 0.45] })).hint, H.elbowsOut);
+    assert.equal(assessPosture("hands_together", pose({ ...DESK, leftWrist: [0.4, 0.65], rightWrist: [0.6, 0.65] })).hint, H.handsTogether);
+    assert.equal(assessPosture("stand", pose({ ...STANDING, leftKnee: [0.55, 0.62], rightKnee: [0.6, 0.62] })).hint, H.legsStraight);
+    assert.equal(assessPosture("kneel", pose(STANDING)).hint, H.kneesDown);
+    assert.equal(assessPosture("lie_down", pose(STANDING)).hint, H.lieFlat);
+    assert.equal(assessPosture("stand", pose(STANDING)).hint, undefined);
   });
 
   it("lie_down: shoulder-hip line near horizontal", () => {

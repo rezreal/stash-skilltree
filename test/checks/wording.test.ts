@@ -147,6 +147,17 @@ describe("long gaze windows on the banner", () => {
     assert.equal(none.shareText, "on target – · need 75%");
   });
 
+  it("an active pose shows what is missing, unless it can't be checked", () => {
+    const seiza = spec({ check: "action", start: 0, end: 300, action: "kneel_sit" });
+    const row = (over: Partial<PromptProgress>, uncheckable?: () => string) =>
+      bannerViews({ progress: [{ spec: seiza, phase: "active", progress: 0.5, replays: 0, ...over }], nowMs: 0, ...(uncheckable ? { uncheckable } : {}) })[0]!;
+    assert.equal(row({ hint: "Sit back onto your heels" }).hint, "Sit back onto your heels");
+    assert.equal(row({}).hint, undefined);
+    const off = row({ hint: "Sit back onto your heels" }, () => "no camera");
+    assert.equal(off.hint, undefined);
+    assert.equal(off.note, "no camera");
+  });
+
   it("long body-pose windows show the share too", () => {
     const seiza = spec({ check: "action", start: 0, end: 300, action: "kneel_sit" });
     const v = bannerViews({ progress: [{ spec: seiza, phase: "active", progress: 1, replays: 0, share: 0.9 }], videoTime: 100, nowMs: 0 })[0]!;

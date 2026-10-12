@@ -79,6 +79,8 @@ export interface PromptProgress {
   detail?: string;
   /** long gaze windows: share of the evidence time on target (see CheckResult.share) */
   share?: number;
+  /** active body poses: what to change right now (see CheckResult.hint) */
+  hint?: string;
 }
 
 // --- perception inputs ----------------------------------------------------------
@@ -200,6 +202,8 @@ export interface CheckResult {
   detail: string;
   /** long (sustained) gaze windows: share 0..1 of the evidence time on target; absent before any evidence */
   share?: number;
+  /** body poses: what to change right now to be in the pose ("Sit back onto your heels") */
+  hint?: string;
 }
 
 /** Something the prompt runner asks the player to do. */

@@ -86,9 +86,57 @@ function tiltFromHorizontal(a: Q, b: Q): number {
   return deg;
 }
 
+/** What the viewer should change, per pose action and reason (imperative, short). */
+export const POSTURE_HINTS = {
+  showHands: "Show both hands and shoulders to the camera",
+  showHead: "Show your hands, elbows and face to the camera",
+  showLegs: "The camera can't see your legs – move back or turn sideways",
+  showBody: "Show your shoulders and hips to the camera",
+  armsUp: "Raise both hands above your head",
+  handsOnHead: "Put both hands on your head",
+  elbowsOut: "Spread your elbows out to the sides",
+  handsTogether: "Bring your hands together",
+  handsChest: "Hold your hands in front of your chest",
+  kneesDown: "Put your knees on the floor",
+  bendKnees: "Bend your knees",
+  foldLegs: "Fold your legs under you",
+  hipsLower: "Lower your hips",
+  ontoHeels: "Sit back onto your heels",
+  heelsNotFloor: "Sit on your heels, not on the floor",
+  backStraight: "Straighten your back",
+  legsStraight: "Straighten your legs",
+  standStraight: "Stand up straight",
+  lieFlat: "Lie down flat",
+  notInView: "Get in front of the camera",
+} as const;
+
+export interface PostureVerdict {
+  state: HoldState;
+  /** when not "in": what is missing, in plain words (POSTURE_HINTS) */
+  hint?: string;
+}
+
 /** "in" when the pose shows the action, "out" when not, "unknown" when it can't tell. */
 export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefined, aspect?: number): HoldState {
-  if (pose === undefined || pose.length === 0) return "unknown";
+  return assessPosture(action, pose, aspect).state;
+}
+
+/** classifyPosture with the reason when the pose is not (or can't be seen to be) held. */
+export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined, aspect?: number): PostureVerdict {
+  const H = POSTURE_HINTS;
+  const unseen: Readonly<Record<PoseAction, string>> = {
+    arms_up: H.showHands,
+    hands_on_head: H.showHead,
+    hands_together: H.showHands,
+    kneel: H.showLegs,
+    kneel_sit: H.showLegs,
+    stand: H.showLegs,
+    lie_down: H.showBody,
+  };
+  const unknown: PostureVerdict = { state: "unknown", hint: unseen[action] };
+  const IN: PostureVerdict = { state: "in" };
+  const out = (hint: string): PostureVerdict => ({ state: "out", hint });
+  if (pose === undefined || pose.length === 0) return unknown;
   const ax = aspect !== undefined && aspect > 0 && Number.isFinite(aspect) ? aspect : POSTURE.defaultAspect;
   const at = (i: number): Q | undefined => {
     const p = pose[i];
@@ -103,20 +151,19 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
   const lw = at(POSE.leftWrist);
   const rw = at(POSE.rightWrist);
   const sw = ls && rs ? dist(ls, rs) : 0;
-  const yes = (b: boolean): HoldState => (b ? "in" : "out");
 
   switch (action) {
     case "arms_up": {
-      if (!lw || !rw || !ls || !rs || sw <= 0) return "unknown";
+      if (!lw || !rw || !ls || !rs || sw <= 0) return unknown;
       const nose = at(POSE.nose);
       const limit = nose ? nose.y - POSTURE.armsUpAboveNoseSw * sw : mid(ls, rs).y - POSTURE.armsUpAboveShouldersSw * sw;
-      return yes(lw.y < limit && rw.y < limit);
+      return lw.y < limit && rw.y < limit ? IN : out(H.armsUp);
     }
 
     case "hands_on_head": {
       const le = at(POSE.leftElbow);
       const re = at(POSE.rightElbow);
-      if (!lw || !rw || !ls || !rs || !le || !re || sw <= 0) return "unknown";
+      if (!lw || !rw || !ls || !rs || !le || !re || sw <= 0) return unknown;
       const eyeL = at(POSE.leftEye);
       const eyeR = at(POSE.rightEye);
       const nose = at(POSE.nose);
@@ -128,25 +175,23 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
       } else if (nose) {
         eyeY = nose.y - 0.1 * sw;
         headX = nose.x;
-      } else return "unknown";
+      } else return unknown;
       const ok = (w: Q): boolean =>
         w.y >= eyeY - POSTURE.headHandsAboveEyesSw * sw &&
         w.y <= eyeY + POSTURE.headHandsBelowEyesSw * sw &&
         Math.abs(w.x - headX) <= POSTURE.headHandsNearSw * sw;
+      if (!ok(lw) || !ok(rw)) return out(H.handsOnHead);
       const elbowsWide = Math.abs(le.x - re.x) > Math.abs(ls.x - rs.x);
-      return yes(ok(lw) && ok(rw) && elbowsWide);
+      return elbowsWide ? IN : out(H.elbowsOut);
     }
 
     case "hands_together": {
-      if (!lw || !rw || !ls || !rs || sw <= 0) return "unknown";
+      if (!lw || !rw || !ls || !rs || sw <= 0) return unknown;
       const sy = mid(ls, rs).y;
       const hy = lh && rh ? mid(lh, rh).y : sy + POSTURE.assumedTorsoSw * sw;
       const wm = mid(lw, rw);
-      return yes(
-        dist(lw, rw) <= POSTURE.handsTogetherSw * sw &&
-          wm.y >= sy - POSTURE.handsTogetherAboveShouldersSw * sw &&
-          wm.y <= hy,
-      );
+      if (dist(lw, rw) > POSTURE.handsTogetherSw * sw) return out(H.handsTogether);
+      return wm.y >= sy - POSTURE.handsTogetherAboveShouldersSw * sw && wm.y <= hy ? IN : out(H.handsChest);
     }
 
     case "kneel":
@@ -159,12 +204,14 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
       const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
       const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
       let complete = 0;
-      let all = true;
+      /** the first leg problem found, most basic first */
+      let miss: string | undefined;
       for (const [s, h, k, a] of sides) {
         const hip = at(h);
         const knee = at(k);
         const ankle = at(a);
         if (!hip || !knee || !ankle) continue;
+        let why: string | undefined;
         if (action === "kneel" || action === "kneel_sit") {
           if (!sm || !hm) continue;
           const torso = dist(sm, hm);
@@ -172,38 +219,41 @@ export function classifyPosture(action: PoseAction, pose: NormPoint[] | undefine
           complete++;
           const kneeLow = Math.abs(knee.y - ankle.y) < POSTURE.kneelKneeAnkleMaxTorso * torso;
           const bent = dist(knee, ankle) < POSTURE.kneelShortShinTorso * torso || angle(hip, knee, ankle) < POSTURE.kneelKneeMaxDeg;
-          if (action === "kneel") {
-            const hipsLow = Math.abs(ankle.y - hip.y) < POSTURE.kneelHipAnkleMaxTorso * torso;
-            if (!(hipsLow && kneeLow && bent)) all = false;
-          } else {
-            // on the heels: hips down near the ankles but still above the knees
-            const onHeels = Math.abs(ankle.y - hip.y) < POSTURE.kneelSitHipAnkleMaxTorso * torso;
-            const aboveKnee = knee.y - hip.y >= POSTURE.kneelSitHipAboveKneeTorso * torso;
-            if (!(onHeels && aboveKnee && kneeLow && bent)) all = false;
+          if (!kneeLow) why = H.kneesDown;
+          else if (!bent) why = action === "kneel" ? H.bendKnees : H.foldLegs;
+          else if (action === "kneel") {
+            if (Math.abs(ankle.y - hip.y) >= POSTURE.kneelHipAnkleMaxTorso * torso) why = H.hipsLower;
+          } else if (knee.y - hip.y < POSTURE.kneelSitHipAboveKneeTorso * torso) {
+            // hips at or below the knees: sitting on the floor (cross-legged, between the feet)
+            why = H.heelsNotFloor;
+          } else if (Math.abs(ankle.y - hip.y) >= POSTURE.kneelSitHipAnkleMaxTorso * torso) {
+            // on the heels: hips down near the ankles
+            why = H.ontoHeels;
           }
         } else {
           const shoulder = at(s);
           if (!shoulder) continue;
           complete++;
-          if (angle(hip, knee, ankle) <= POSTURE.standJointMinDeg || angle(shoulder, hip, knee) <= POSTURE.standJointMinDeg) {
-            all = false;
-          }
+          if (angle(hip, knee, ankle) <= POSTURE.standJointMinDeg) why = H.legsStraight;
+          else if (angle(shoulder, hip, knee) <= POSTURE.standJointMinDeg) why = H.standStraight;
         }
+        miss ??= why;
       }
-      if (complete === 0) return "unknown";
+      if (complete === 0) return unknown;
+      if (miss !== undefined) return out(miss);
       if (action === "stand" || action === "kneel_sit") {
-        if (!sm || !hm) return "unknown";
+        if (!sm || !hm) return unknown;
         const maxTilt = action === "stand" ? POSTURE.standTorsoMaxTiltDeg : POSTURE.kneelSitTorsoMaxTiltDeg;
-        if (90 - tiltFromHorizontal(sm, hm) > maxTilt) all = false;
+        if (90 - tiltFromHorizontal(sm, hm) > maxTilt) return out(action === "stand" ? H.standStraight : H.backStraight);
       }
-      return yes(all);
+      return IN;
     }
 
     case "lie_down": {
       const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
       const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
-      if (!sm || !hm || dist(sm, hm) === 0) return "unknown";
-      return yes(tiltFromHorizontal(sm, hm) <= POSTURE.lieMaxTiltDeg);
+      if (!sm || !hm || dist(sm, hm) === 0) return unknown;
+      return tiltFromHorizontal(sm, hm) <= POSTURE.lieMaxTiltDeg ? IN : out(H.lieFlat);
     }
   }
 }

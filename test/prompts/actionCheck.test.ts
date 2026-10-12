@@ -171,6 +171,26 @@ describe("body-pose actions", () => {
     assert.equal(short.result().passed, true);
   });
 
+  it("reports a steady hint of what is missing, cleared once the pose is held", () => {
+    const c = createActionCheck(spec({ check: "action", action: "kneel_sit", start: 10, end: 40 }));
+    feed(c, 0, 400, () => ({ pose: STANDING_POSE }));
+    assert.equal(c.result().hint, undefined); // not yet steady
+    feed(c, 400, 1000, () => ({ pose: STANDING_POSE }));
+    assert.equal(c.result().hint, "Put your knees on the floor");
+    feed(c, 1000, 1200, () => ({ pose: SEIZA }));
+    assert.equal(c.result().hint, "Put your knees on the floor"); // a moment in the pose keeps it
+    feed(c, 1200, 1600, () => ({ pose: SEIZA }));
+    assert.equal(c.result().hint, undefined);
+    feed(c, 1600, 2600, () => ({ personPresent: false, facePresent: false }));
+    assert.equal(c.result().hint, "Get in front of the camera");
+    // a passed short window has no hint
+    const short = check("kneel_sit");
+    feed(short, 0, 1600, () => ({ pose: SEIZA }));
+    feed(short, 1600, 3000, () => ({ pose: STANDING_POSE }));
+    assert.equal(short.result().passed, true);
+    assert.equal(short.result().hint, undefined);
+  });
+
   it("missing landmarks or no person are neither pass nor fail", () => {
     const c = check("arms_up", 1);
     feed(c, 0, 600, () => ({ pose: UP }));

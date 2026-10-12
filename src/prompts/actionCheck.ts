@@ -15,9 +15,15 @@
 // a long gaze window: passed iff at least SUSTAINED_MIN_SHARE of the evidence
 // time was in the pose and at least the hold time of it (meditation-style
 // "stay kneeling for the whole part").
+// Body poses also report what is missing right now (posture.ts hints, e.g.
+// "Sit back onto your heels"): a reason shows once it held POSE_HINT
+// .showMs, and goes away once the pose has been held for .clearMs, so the
+// banner doesn't flicker at a threshold. No hint after a short window has
+// passed.
 
 import { createHoldTracker, createShareTracker, isSustained, sharePercentText, SUSTAINED_MIN_SHARE } from "./hold.ts";
-import { classifyPosture, isPoseAction } from "./posture.ts";
+import { assessPosture, isPoseAction, POSTURE_HINTS } from "./posture.ts";
+import type { PostureVerdict } from "./posture.ts";
 import type { HoldState } from "./hold.ts";
 import type { CheckResult, PromptSpec, ViewerFrame } from "./types.ts";
 
@@ -56,6 +62,44 @@ export interface ActionCheck {
   push(frame: ViewerFrame): void;
   result(): CheckResult;
   reset(): void;
+}
+
+export const POSE_HINT = {
+  /** a reason must hold this long before it shows, ms */
+  showMs: 600,
+  /** the hint goes away once the pose was held this long, ms */
+  clearMs: 250,
+} as const;
+
+// --- pose hints -----------------------------------------------------------------
+
+interface HintTracker {
+  push(t: number, v: PostureVerdict): void;
+  readonly hint: string | undefined;
+  reset(): void;
+}
+
+function createHintTracker(): HintTracker {
+  let shown: string | undefined;
+  let cand: string | undefined;
+  let since = 0;
+  return {
+    push(t, v) {
+      const next = v.state === "in" ? undefined : v.hint;
+      if (next !== cand) {
+        cand = next;
+        since = t;
+      }
+      if (t - since >= (cand === undefined ? POSE_HINT.clearMs : POSE_HINT.showMs)) shown = cand;
+    },
+    get hint() {
+      return shown;
+    },
+    reset() {
+      shown = cand = undefined;
+      since = 0;
+    },
+  };
 }
 
 // --- oscillation ---------------------------------------------------------------
@@ -177,6 +221,7 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
   let needSec = spec.holdSec;
   let tolerance = 0;
   let classify: (f: ViewerFrame) => HoldState;
+  let hints: HintTracker | undefined;
   let absentResets = false;
   let label: string;
   const both = (f: ViewerFrame): [number, number] | undefined =>
@@ -216,7 +261,13 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
         needSec = Math.min(spec.holdSec, T.poseMaxSec);
         tolerance = T.poseFlickerMs;
         label = action.replace(/_/g, " ");
-        classify = (f) => (f.personPresent ? classifyPosture(action, f.pose, f.aspect) : "unknown");
+        const tracker = createHintTracker();
+        hints = tracker;
+        classify = (f) => {
+          const v: PostureVerdict = f.personPresent ? assessPosture(action, f.pose, f.aspect) : { state: "unknown", hint: POSTURE_HINTS.notInView };
+          tracker.push(f.t, v);
+          return v.state;
+        };
       } else {
         label = "unknown action";
         classify = () => "unknown";
@@ -251,18 +302,22 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
           detail: `${label} ${sharePercentText(sh)}`,
         };
         if (sh !== undefined) r.share = sh;
+        if (hints?.hint !== undefined) r.hint = hints.hint;
         return r;
       }
       const passed = hold.passed;
-      return {
+      const r: CheckResult = {
         passed,
         progress: passed ? 1 : Math.min(1, hold.bestMs / hold.needMs),
         detail: `${label} ${(hold.bestMs / 1000).toFixed(1)} of ${(hold.needMs / 1000).toFixed(1)} s`,
       };
+      if (!passed && hints?.hint !== undefined) r.hint = hints.hint;
+      return r;
     },
     reset() {
       hold.reset();
       share.reset();
+      hints?.reset();
     },
   };
 }

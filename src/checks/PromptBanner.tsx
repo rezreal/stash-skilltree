@@ -2,7 +2,8 @@
 // prompts are checked side by side; see bannerViews): the instruction in plain
 // words, a progress bar (hold / phrase match / share), the seconds left (long
 // gaze windows: the share instead, "eyes closed 82% · need 75%"), and the
-// replaying / missed / done states. Polls the checks itself (~10 Hz) so the session controller
+// replaying / missed / done states. Body poses add what is missing right now
+// ("Sit back onto your heels"). Polls the checks itself (~10 Hz) so the session controller
 // doesn't re-render for every progress step.
 //
 // RegionOutline draws where a gaze prompt's target is on the video. Off by
@@ -81,6 +82,7 @@ function BannerRow(props: { view: BannerView; checks: PromptChecks; showRegion?:
         <span className="stc-banner-fill" style={{ width: `${pct}%` }} />
       </div>
       {view.note && <span className="stc-banner-note">Not checked: {view.note}</span>}
+      {view.hint && <span className="stc-banner-hint">{view.hint}</span>}
       {props.showRegion && view.tone === "active" && view.spec.check === "gaze" && (
         <RegionOutline checks={checks} spec={view.spec} />
       )}
