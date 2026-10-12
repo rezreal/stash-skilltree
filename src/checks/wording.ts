@@ -1,6 +1,6 @@
 // What the prompt banner says. Pure.
 
-import { eyesClosedHoldSec } from "../prompts/gazeCheck.ts";
+import { eyesClosedHoldSec, isSustained, shareText, type GazeMoment } from "../prompts/gazeCheck.ts";
 import type { GazeTarget, PromptAction, PromptPhase, PromptProgress, PromptSpec } from "../prompts/types.ts";
 
 const TARGET_WORDS: Readonly<Record<GazeTarget, string>> = {
@@ -67,12 +67,23 @@ export function promptInstruction(spec: Pick<PromptSpec, "check" | "title" | "ta
   }
 }
 
-/** The label of the progress bar: what is measured. */
-export function progressLabel(spec: Pick<PromptSpec, "check" | "holdSec"> & { target?: GazeTarget | undefined }): string {
+type LabelSpec = Pick<PromptSpec, "check" | "holdSec"> & { target?: GazeTarget | undefined; start?: number; end?: number };
+
+/** A gaze window longer than LONG_WINDOW_SEC: scored by share, not by the hold. */
+export function sustainedGaze(spec: LabelSpec): boolean {
+  return spec.check === "gaze" && spec.start !== undefined && spec.end !== undefined && isSustained({ start: spec.start, end: spec.end });
+}
+
+/**
+ * The label of the progress bar: what is measured. Long gaze windows show
+ * the share ("eyes closed 82% · need 75%"), short ones the hold ("hold 2 s").
+ */
+export function progressLabel(spec: LabelSpec, share?: number): string {
   switch (spec.check) {
     case "repeat":
       return "match";
     case "gaze":
+      if (sustainedGaze(spec)) return shareText(spec.target, share);
       return `hold ${formatSec(spec.target === "eyes_closed" ? eyesClosedHoldSec(spec.holdSec) : spec.holdSec)}`;
     default:
       return "hold";
@@ -82,6 +93,48 @@ export function progressLabel(spec: Pick<PromptSpec, "check" | "holdSec"> & { ta
 function formatSec(s: number): string {
   const r = Math.round(s * 10) / 10;
   return `${r} s`;
+}
+
+// --- gaze prompts as the attention target -------------------------------------------
+
+export interface PromptAttentionText {
+  /** the inattention overlay */
+  pause: { title: string; hint: string };
+  /** the banner notice and callout title during the grace period */
+  grace: string;
+  /** what to do, short (the callout detail while paused) */
+  back: string;
+}
+
+/** What the session says when the viewer doesn't follow an active gaze prompt. */
+export function promptAttentionText(spec: Pick<PromptSpec, "target">): PromptAttentionText {
+  const target = spec.target;
+  if (target === "eyes_closed") {
+    return {
+      pause: {
+        title: "Your eyes are open – close them to continue",
+        hint: "This part asks you to keep your eyes closed. The clip continues as soon as they are closed again.",
+      },
+      grace: "Your eyes are open – close them",
+      back: "Close your eyes",
+    };
+  }
+  const instruction = target ? gazeInstruction(target) : "Look at the person";
+  const where = target === "off_screen" ? "away from the screen" : target ? `at ${gazeTargetWords(target)}` : "at the person";
+  return {
+    pause: { title: `${instruction} to continue`, hint: `This part asks you to look ${where}. The clip continues when you do.` },
+    grace: instruction,
+    back: instruction,
+  };
+}
+
+/** The attention verdict's reason for a gaze prompt's moment, in plain words. */
+export function promptAttentionReason(spec: Pick<PromptSpec, "target">, state: GazeMoment): string {
+  if (state === "unknown") return "prompt not measurable right now";
+  if (state === "on") return spec.target === "eyes_closed" ? "eyes closed" : "following the prompt";
+  if (spec.target === "eyes_closed") return "eyes open";
+  if (spec.target === "off_screen") return "looking at the screen";
+  return spec.target ? `not looking at ${gazeTargetWords(spec.target)}` : "not looking at the person";
 }
 
 // --- banner ------------------------------------------------------------------------
@@ -97,6 +150,8 @@ export interface BannerView {
   /** 0..1 */
   progress: number;
   progressLabel: string;
+  /** long gaze windows: the share line, shown instead of the seconds left ("eyes closed 82% · need 75%") */
+  shareText?: string;
   /** why this prompt can't be checked right now (it is then not counted) */
   note?: string;
   /** seconds left in the window, when known */
@@ -115,10 +170,17 @@ export const RESULT_SHOW_MS = 2000;
 
 const OPEN: readonly PromptPhase[] = ["active", "replaying"];
 
+/** The active prompt that started last (a prompt inside a long gaze window shows over it). */
+function latestActive(progress: readonly PromptProgress[]): PromptProgress | undefined {
+  let pick: PromptProgress | undefined;
+  for (const p of progress) if (p.phase === "active" && (pick === undefined || p.spec.start > pick.spec.start)) pick = p;
+  return pick;
+}
+
 /**
- * What the banner shows now: the first active prompt; else a prompt waiting
- * for its replay ("Replaying: try again"); else the last result for
- * RESULT_SHOW_MS ("Done" / "Missed"); else nothing.
+ * What the banner shows now: the active prompt that started last; else a
+ * prompt waiting for its replay ("Replaying: try again"); else the last
+ * result for RESULT_SHOW_MS ("Done" / "Missed"); else nothing.
  */
 export function bannerView(input: {
   progress: readonly PromptProgress[];
@@ -127,8 +189,7 @@ export function bannerView(input: {
   last?: LastResult;
   uncheckable?: (spec: PromptSpec) => string | undefined;
 }): BannerView | undefined {
-  const pick =
-    input.progress.find((p) => p.phase === "active") ?? input.progress.find((p) => OPEN.includes(p.phase));
+  const pick = latestActive(input.progress) ?? input.progress.find((p) => OPEN.includes(p.phase));
   if (pick) {
     const spec = pick.spec;
     const view: BannerView = {
@@ -136,8 +197,9 @@ export function bannerView(input: {
       tone: pick.phase === "replaying" ? "replaying" : "active",
       instruction: promptInstruction(spec),
       progress: clamp01(pick.progress),
-      progressLabel: progressLabel(spec),
+      progressLabel: progressLabel(spec, pick.share),
     };
+    if (sustainedGaze(spec)) view.shareText = view.progressLabel;
     if (pick.phase === "replaying") view.status = "Replaying: try again";
     else if (pick.replays > 0) view.status = "Second try";
     const note = input.uncheckable?.(spec);
@@ -149,14 +211,17 @@ export function bannerView(input: {
   }
   const last = input.last;
   if (last && input.nowMs - last.atMs >= 0 && input.nowMs - last.atMs < RESULT_SHOW_MS) {
-    return {
+    const p = input.progress.find((q) => q.spec.markerId === last.spec.markerId);
+    const view: BannerView = {
       spec: last.spec,
       tone: last.passed ? "passed" : "missed",
       instruction: promptInstruction(last.spec),
       status: last.passed ? "Done" : "Missed",
-      progress: last.passed ? 1 : clamp01(input.progress.find((p) => p.spec.markerId === last.spec.markerId)?.progress ?? 0),
-      progressLabel: progressLabel(last.spec),
+      progress: last.passed ? 1 : clamp01(p?.progress ?? 0),
+      progressLabel: progressLabel(last.spec, p?.share),
     };
+    if (sustainedGaze(last.spec)) view.shareText = view.progressLabel;
+    return view;
   }
   return undefined;
 }

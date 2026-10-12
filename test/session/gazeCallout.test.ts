@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { calloutMode, edgePoint, insideRect, placeCallout, relativeTo } from "../../src/session/gazeCallout.ts";
+import { calloutAim, calloutMode, edgePoint, insideRect, placeCallout, regionBounds, relativeTo } from "../../src/session/gazeCallout.ts";
 
 const viewport = { width: 1000, height: 800 };
 const player = { left: 100, top: 100, right: 740, bottom: 460 };
@@ -76,5 +76,28 @@ describe("helpers", () => {
     assert.equal(insideRect({ x: 100, y: 460 }, player), true);
     assert.equal(insideRect({ x: 99, y: 200 }, player), false);
     assert.deepEqual(relativeTo(player, { left: 100, top: 50 }), { left: 0, top: 50, right: 640, bottom: 410 });
+  });
+});
+
+describe("calloutAim (gaze prompts)", () => {
+  const ellipse = { kind: "ellipse" as const, cx: 500, cy: 300, rx: 50, ry: 20 };
+
+  it("points at the video without a prompt or a located target", () => {
+    assert.equal(calloutAim(undefined, undefined), "video");
+    assert.equal(calloutAim("eyes", undefined), "video");
+  });
+
+  it("hides during eyes_closed and off_screen prompts", () => {
+    assert.equal(calloutAim("eyes_closed", undefined), "hide");
+    assert.equal(calloutAim("off_screen", { kind: "outside", of: { left: 0, top: 0, right: 10, bottom: 10 } }), "hide");
+  });
+
+  it("points at the target region's bounding box", () => {
+    assert.deepEqual(calloutAim("eyes", ellipse), { left: 450, top: 280, right: 550, bottom: 320 });
+    assert.deepEqual(
+      regionBounds({ kind: "polygon", points: [{ x: 1, y: 5 }, { x: 4, y: 2 }, { x: 3, y: 9 }] }),
+      { left: 1, top: 2, right: 4, bottom: 9 },
+    );
+    assert.equal(regionBounds({ kind: "polygon", points: [] }), undefined);
   });
 });

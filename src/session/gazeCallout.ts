@@ -1,6 +1,9 @@
 // Where the "look back at the video" callout goes: at the viewer's gaze when
 // it is known and inside the viewport, with an arrow pointing towards the
-// video's centre. Pure geometry, tested under node --test.
+// video's centre - or, during a gaze prompt, towards the prompt's target
+// region (calloutAim). Pure geometry, tested under node --test.
+
+import type { GazeTarget, Region } from "../prompts/types.ts";
 
 export interface Point {
   x: number;
@@ -39,7 +42,10 @@ export function calloutMode(input: {
   /** the sample was valid (eyes tracked) */
   valid: boolean;
   viewport: Size;
-  /** the player's rect in viewport coordinates; null without a player */
+  /**
+   * what the callout points at, viewport coordinates: the player's rect, or
+   * a gaze prompt's target region (calloutAim); null without a player
+   */
   target: Rect | null;
   /** the player (or an ancestor of it) is the fullscreen element */
   fullscreen: boolean;
@@ -49,7 +55,7 @@ export function calloutMode(input: {
   const view: Rect = { left: 0, top: 0, right: input.viewport.width, bottom: input.viewport.height };
   if (!insideRect(point, view)) return undefined;
   if (input.fullscreen) return "overlay";
-  // looking at the player already: the centred message is right there
+  // looking at the target already: the centred message is right there
   if (insideRect(point, target)) return undefined;
   return "fixed";
 }
@@ -112,4 +118,38 @@ export function edgePoint(size: Size, angleDeg: number): Point {
 /** a rect relative to another (viewport -> container coordinates) */
 export function relativeTo(r: Rect, origin: { left: number; top: number }): Rect {
   return { left: r.left - origin.left, top: r.top - origin.top, right: r.right - origin.left, bottom: r.bottom - origin.top };
+}
+
+// --- gaze prompts -----------------------------------------------------------------
+
+/** the bounding box of a target region; undefined for "outside" (no single place to point at) */
+export function regionBounds(region: Region): Rect | undefined {
+  switch (region.kind) {
+    case "ellipse":
+      return { left: region.cx - region.rx, top: region.cy - region.ry, right: region.cx + region.rx, bottom: region.cy + region.ry };
+    case "polygon": {
+      if (region.points.length === 0) return undefined;
+      const xs = region.points.map((p) => p.x);
+      const ys = region.points.map((p) => p.y);
+      return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * What the callout points at while a gaze prompt leads (target = its gaze
+ * target, region = where that target is now):
+ * - "video": no gaze prompt, or its target can't be located right now
+ * - "hide": eyes_closed (nothing to look at; the centred overlay says
+ *   "close your eyes") and off_screen (TODO: a callout without an arrow
+ *   for "look away"; the centred overlay says it for now)
+ * - a rect: the target region's bounding box
+ */
+export function calloutAim(target: GazeTarget | undefined, region: Region | undefined): "video" | "hide" | Rect {
+  if (target === undefined) return "video";
+  if (target === "eyes_closed" || target === "off_screen") return "hide";
+  if (region === undefined) return "video";
+  return regionBounds(region) ?? "hide";
 }

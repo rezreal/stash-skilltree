@@ -132,8 +132,20 @@ Watch policy = rules composed per scene from its tags:
   raised, still, arms up, hands on head, hands together, kneel, stand, lie
   down), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
-  prompts (hold-to-confirm or voice; declining fails the clip). Gaze prompts
-  suspend the attention rule.
+  prompts (hold-to-confirm or voice; declining fails the clip).
+  **Gaze prompts replace the attention target** while their window is
+  active: attending = gaze inside the target region (`eyes_closed`: eyes
+  closed — tracker present without gaze or webcam blink scores; an explicit
+  "open" wins), so the usual grace → pause → resume → abort applies to the
+  prompt ("Your eyes are open – close them to continue"; resumes as soon as
+  the eyes close). No evidence (target not located, nothing tracked) counts
+  as attending; presence still ANDs in. Overlapping gaze prompts: the one
+  that started last leads; earlier ones count the overlap as no evidence.
+  Scoring: windows ≤ 10 s (`LONG_WINDOW_SEC`) need a continuous hold of
+  `holdSec`; longer (sustained) windows pass when ≥ 75 %
+  (`SUSTAINED_MIN_SHARE`) of the evidence time was on target (and at least
+  `holdSec` of it); time without evidence neither counts nor is required.
+  The banner shows that share ("eyes closed 82% · need 75%").
 - `track` — funscript + BLE distance sensor. Sections: stroke (range +
   turning-point timing), hold (time inside band; flat with depth), ramp
   (sample-wise with lag compensation), idle (flat near 0, not scored, used
@@ -143,7 +155,7 @@ Watch policy = rules composed per scene from its tags:
 - **Presence** — during a session the webcam runs continuously and the
   viewer must be in front of it (face or body found). Attention = present
   AND (gaze on the video, or the focus/activity stand-in without a
-  tracker). A setting makes the webcam required (default) — without camera
+  tracker; during a gaze prompt: following the prompt). A setting makes the webcam required (default) — without camera
   permission a session cannot start. The camera is released when the
   session ends.
 

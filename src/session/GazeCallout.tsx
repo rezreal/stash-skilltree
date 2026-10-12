@@ -1,6 +1,7 @@
 // "Look back at the video" where the viewer is looking: while the session
 // warns (grace) or has paused for inattention, a small callout follows the
-// smoothed gaze point with an arrow towards the video's centre. Only while
+// smoothed gaze point with an arrow towards the video's centre (or, during
+// a gaze prompt, towards the target region: `aim`). Only while
 // an eye tracker is connected and the point is valid and inside the
 // viewport; otherwise the caller shows its centred message on the video.
 //
@@ -21,6 +22,8 @@ export interface GazeCalloutState {
   point: ViewportPoint;
   /** the player's rect, viewport coordinates */
   target: Rect;
+  /** what the arrow points at (the player, or a gaze prompt's target region), viewport coordinates */
+  aim: Rect;
 }
 
 /** the callout box; CSS (.stp-gaze-callout) uses the same size */
@@ -43,8 +46,14 @@ function isFullscreenFor(el: Element): boolean {
 /**
  * Where the callout goes right now, or undefined for the centred fallback.
  * Re-evaluated on every gaze frame and on every render of the caller.
+ * aim: what to point at instead of the player (viewport coordinates); the
+ * callout also hides while the gaze is on it.
  */
-export function useGazeCallout(enabled: boolean, getTarget: () => HTMLElement | null): GazeCalloutState | undefined {
+export function useGazeCallout(
+  enabled: boolean,
+  getTarget: () => HTMLElement | null,
+  aim?: Rect,
+): GazeCalloutState | undefined {
   const gaze = useGaze();
   const connected = gaze.status?.connection === "connected";
   const sample = useGazePoint(enabled && connected);
@@ -64,15 +73,16 @@ export function useGazeCallout(enabled: boolean, getTarget: () => HTMLElement | 
     const p = smoothPoint(prev?.p, sample.point, prev ? sample.t - prev.t : 0);
     smoothed.current = { p, t: sample.t };
     const target = toRect(el.getBoundingClientRect());
+    const aimAt = aim ?? target;
     const mode = calloutMode({
       point: p,
       valid: true,
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      target,
+      target: aimAt,
       fullscreen: isFullscreenFor(el),
     });
     if (mode) {
-      const state = { mode, point: p, target };
+      const state = { mode, point: p, target, aim: aimAt };
       lastGood.current = { state, at: now };
       return state;
     }
@@ -90,7 +100,7 @@ export function GazeCallout(props: { state: GazeCalloutState; title: string; det
   const bounds: Rect = overlay
     ? state.target
     : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
-  const place = placeCallout({ point: state.point, target: state.target, bounds, size: CALLOUT_SIZE });
+  const place = placeCallout({ point: state.point, target: state.aim, bounds, size: CALLOUT_SIZE });
   // overlay: the host fills the player, so player coordinates
   const left = overlay ? place.left - state.target.left : place.left;
   const top = overlay ? place.top - state.target.top : place.top;

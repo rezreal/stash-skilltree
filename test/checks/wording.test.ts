@@ -8,6 +8,8 @@ import {
   gazeInstruction,
   gazeTargetWords,
   progressLabel,
+  promptAttentionReason,
+  promptAttentionText,
   promptInstruction,
   RESULT_SHOW_MS,
 } from "../../src/checks/wording.ts";
@@ -97,5 +99,60 @@ describe("gaze eyes_closed wording", () => {
     const v = bannerView({ progress: [{ spec: ec, phase: "active", progress: 0.5, replays: 0 }], nowMs: 0 })!;
     assert.equal(v.instruction, "Close your eyes");
     assert.equal(v.progressLabel, "hold 1.5 s");
+  });
+});
+
+describe("long gaze windows on the banner", () => {
+  const longEc = spec({ check: "gaze", start: 10, end: 1721, target: "eyes_closed" });
+  const longEyes = spec({ check: "gaze", start: 2, end: 552, target: "eyes" });
+  const shortEc = spec({ check: "gaze", start: 10, end: 15, target: "eyes_closed" });
+
+  it("shows the share instead of the hold timer", () => {
+    const v = bannerView({ progress: [{ spec: longEc, phase: "active", progress: 1, replays: 0, share: 0.82 }], videoTime: 100, nowMs: 0 })!;
+    assert.equal(v.shareText, "eyes closed 82% · need 75%");
+    assert.equal(v.progressLabel, "eyes closed 82% · need 75%");
+    const none = bannerView({ progress: [{ spec: longEyes, phase: "active", progress: 0, replays: 0 }], nowMs: 0 })!;
+    assert.equal(none.shareText, "on target – · need 75%");
+  });
+
+  it("short windows keep the hold label and no share line", () => {
+    const v = bannerView({ progress: [{ spec: shortEc, phase: "active", progress: 0.5, replays: 0 }], videoTime: 12, nowMs: 0 })!;
+    assert.equal(v.progressLabel, "hold 1.5 s");
+    assert.equal(v.shareText, undefined);
+    assert.equal(progressLabel({ check: "gaze", holdSec: 2, target: "eyes", start: 0, end: 10 }), "hold 2 s");
+    assert.equal(progressLabel({ check: "gaze", holdSec: 2, target: "eyes", start: 0, end: 11 }, 0.5), "on target 50% · need 75%");
+  });
+
+  it("a prompt starting inside a long gaze window shows over it", () => {
+    const rep = spec({ check: "repeat", start: 300, end: 306, title: "yes" });
+    const v = bannerView({
+      progress: [
+        { spec: longEyes, phase: "active", progress: 0.3, replays: 0 },
+        { spec: longEc, phase: "active", progress: 0.5, replays: 0 },
+        { spec: rep, phase: "active", progress: 0, replays: 0 },
+      ],
+      nowMs: 0,
+    })!;
+    assert.equal(v.spec, rep);
+    const g = bannerView({
+      progress: [
+        { spec: longEyes, phase: "active", progress: 0.3, replays: 0 },
+        { spec: longEc, phase: "active", progress: 0.5, replays: 0 },
+      ],
+      nowMs: 0,
+    })!;
+    assert.equal(g.spec, longEc);
+  });
+});
+
+describe("gaze prompts as the attention target: wording", () => {
+  it("eyes_closed and region targets", () => {
+    assert.equal(promptAttentionText({ target: "eyes_closed" }).pause.title, "Your eyes are open – close them to continue");
+    assert.equal(promptAttentionText({ target: "groin" }).pause.title, "Look at their groin to continue");
+    assert.equal(promptAttentionText({ target: "feet_floor" }).grace, "Look at the floor in front of their feet");
+    assert.match(promptAttentionText({ target: "off_screen" }).pause.hint, /away from the screen/);
+    assert.equal(promptAttentionReason({ target: "eyes_closed" }, "off"), "eyes open");
+    assert.equal(promptAttentionReason({ target: "eyes" }, "off"), "not looking at their eyes");
+    assert.equal(promptAttentionReason({ target: "eyes" }, "unknown"), "prompt not measurable right now");
   });
 });

@@ -164,7 +164,7 @@ export interface CheckSchedule {
   parts: PersonParts;
   /** the webcam should run at the action rate (action or eyes_closed gaze windows) */
   actionRate: boolean;
-  /** a gaze window is active (the attention rule is suspended meanwhile) */
+  /** a gaze window is active (its prompt replaces the attention target meanwhile) */
   gazeActive: boolean;
   /** specs in phase "active" */
   active: PromptSpec[];

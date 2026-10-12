@@ -79,3 +79,56 @@ export function createHoldTracker(opts: HoldTrackerOptions): HoldTracker {
     },
   };
 }
+
+// --- share accounting (long gaze windows) ------------------------------------------
+// The same sample-and-hold intervals as the hold tracker, summed by state
+// instead of chained into runs: "in" adds to onMs, "out" to offMs, "unknown"
+// to neither (time without evidence neither counts nor is required).
+// Intervals longer than maxDtMs only count maxDtMs.
+
+export interface ShareTracker {
+  push(t: number, state: HoldState): void;
+  /** forget the previous push (a discontinuity) */
+  cut(): void;
+  reset(): void;
+  readonly onMs: number;
+  readonly offMs: number;
+  /** onMs / (onMs + offMs); undefined before any evidence */
+  readonly share: number | undefined;
+}
+
+export function createShareTracker(opts?: { maxDtMs?: number }): ShareTracker {
+  const maxDt = Math.max(1, opts?.maxDtMs ?? 250);
+  let prev: { t: number; state: HoldState } | undefined;
+  let on = 0;
+  let off = 0;
+
+  return {
+    push(t, state) {
+      if (!Number.isFinite(t)) return;
+      if (prev !== undefined && t > prev.t) {
+        const dt = Math.min(t - prev.t, maxDt);
+        if (prev.state === "in") on += dt;
+        else if (prev.state === "out") off += dt;
+      }
+      prev = { t, state };
+    },
+    cut() {
+      prev = undefined;
+    },
+    reset() {
+      prev = undefined;
+      on = 0;
+      off = 0;
+    },
+    get onMs() {
+      return on;
+    },
+    get offMs() {
+      return off;
+    },
+    get share() {
+      return on + off > 0 ? on / (on + off) : undefined;
+    },
+  };
+}

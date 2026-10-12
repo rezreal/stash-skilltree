@@ -9,16 +9,21 @@
 //   camera permission (never a browser prompt mid-clip), otherwise the
 //   session runs without presence and webcam action prompts aren't checked.
 // - Attention per tick = present AND (gaze or the focus/activity stand-in).
-//   While a gaze prompt's window is active the gaze part is suspended (PLAN:
-//   gaze prompts suspend the attention rule; the prompt itself is scored by
-//   the prompts rule): the tick counts as attending unless presence says
-//   otherwise, so the viewer can follow "look at ..." prompts without
-//   grace/pause, but leaving the camera's view still counts.
+//   While a gaze prompt's window is active the prompt REPLACES the gaze
+//   part (PLAN: prompts): attending = following the prompt (gaze inside the
+//   target region; eyes_closed: eyes closed per the tracker / webcam
+//   evidence), with no evidence counting as attending. The session's usual
+//   grace -> pause -> resume -> abort machinery runs on that value, so
+//   "close your eyes" pauses the clip while the eyes are open and resumes
+//   it when they close again (no gaze on the video needed). Presence still
+//   ANDs in. The prompt itself is scored by the prompts rule.
 // - Track: the latest overall score is reported to the session while the
 //   track is scored (calibrated sensor, readings arrived); without a sensor
 //   nothing is reported and the track rule stays unscored.
 import { attentionWithPresence } from "../checks/adjust.ts";
-import { presencePauseText, presenceReasonText } from "../checks/attention.ts";
+import { combineAttention, presencePauseText, presenceReasonText } from "../checks/attention.ts";
+import { promptAttentionText } from "../checks/wording.ts";
+import type { PromptSpec } from "../prompts/types.ts";
 import { graceText, pauseReasonText, type AttentionReading, type PauseText } from "../player/gazeView.ts";
 
 /** PresenceInfo or anything shaped like it */
@@ -42,22 +47,32 @@ export function presenceWanted(input: { required: boolean; permission: CameraPer
   return input.required || input.permission === "granted";
 }
 
+/** PromptAttention (usePromptChecks.promptAttention) or anything shaped like it */
+export type PromptAttentionLike = { attending: boolean; reason: string; spec: Pick<PromptSpec, "target"> };
+
 /**
  * The tick's attention verdict: the reading (gaze or stand-in) AND presence.
- * During an active gaze prompt the reading counts as attending.
+ * During an active gaze prompt (prompt defined) the prompt's verdict
+ * replaces the reading.
  */
 export function sessionAttending(
   reading: AttentionReading,
   presence: PresenceLike | undefined,
-  opts: { required: boolean; gazePromptActive: boolean },
+  opts: { required: boolean; prompt?: PromptAttentionLike | undefined },
 ): boolean {
-  const base: AttentionReading = opts.gazePromptActive ? { ...reading, attending: true } : reading;
-  return attentionWithPresence(base, presence, opts.required).attending;
+  if (opts.prompt) {
+    return combineAttention({ attending: opts.prompt.attending, reason: opts.prompt.reason }, presence, opts.required).attending;
+  }
+  return attentionWithPresence(reading, presence, opts.required).attending;
 }
 
-/** sessionAttending as useSkilltreeSession's adjustAttention, reading its inputs on every tick */
+/**
+ * sessionAttending as useSkilltreeSession's adjustAttention, reading its
+ * inputs on every tick (the session's nowMs is Date.now(); prompt and
+ * presence run on performance.now(), so get() reads them itself).
+ */
 export function sessionAdjuster(
-  get: () => { presence: PresenceLike | undefined; required: boolean; gazePromptActive: boolean },
+  get: () => { presence: PresenceLike | undefined; required: boolean; prompt?: PromptAttentionLike | undefined },
 ): (reading: AttentionReading, nowMs: number) => boolean {
   return (reading) => {
     const { presence, ...opts } = get();
@@ -70,24 +85,38 @@ export interface AttentionTexts {
   pause: PauseText;
   /** the banner and callout during the grace period */
   grace: string;
+  /** what to do, short: the callout detail while paused ("Look back at the video") */
+  back: string;
   /** presence (not gaze) is why attention fails */
   byPresence: boolean;
 }
 
 const capitalize = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
+const BACK = "Look back at the video";
+
 /**
  * Why attention fails, in words: presence when it is the reason (absent
- * viewer; a stalled / off camera only when the webcam is required), the
- * gaze reasons otherwise.
+ * viewer; a stalled / off camera only when the webcam is required), else
+ * the active gaze prompt ("Your eyes are open – close them to continue",
+ * "Look at their eyes to continue"), else the gaze reasons.
  */
-export function attentionTexts(reading: AttentionReading, presence: PresenceLike | undefined, required: boolean): AttentionTexts {
+export function attentionTexts(
+  reading: AttentionReading,
+  presence: PresenceLike | undefined,
+  required: boolean,
+  prompt?: PromptAttentionLike,
+): AttentionTexts {
   const p = presencePauseText(presence, required);
   if (p) {
     const grace = presence ? capitalize(presenceReasonText(presence.reason)) : "Camera off";
-    return { pause: p, grace, byPresence: true };
+    return { pause: p, grace, back: BACK, byPresence: true };
   }
-  return { pause: pauseReasonText(reading), grace: graceText(reading), byPresence: false };
+  if (prompt) {
+    const t = promptAttentionText(prompt.spec);
+    return { pause: t.pause, grace: t.grace, back: t.back, byPresence: false };
+  }
+  return { pause: pauseReasonText(reading), grace: graceText(reading), back: BACK, byPresence: false };
 }
 
 /** What the score feed needs of useTrackSession's TrackHandle. */

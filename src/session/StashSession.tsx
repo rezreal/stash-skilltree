@@ -10,8 +10,9 @@
 //   flashes and the gaze callout. The pause lock follows the policy.
 // - Live checks (src/checks) and the track rule (src/player/useTrack.ts),
 //   decisions in ./checksWiring.ts: the camera gate before the session when
-//   the webcam is required, presence AND gaze as the tick's attention (gaze
-//   suspended during gaze prompts), prompt checks on the video clock, the
+//   the webcam is required, presence AND gaze as the tick's attention (an
+//   active gaze prompt replaces the gaze-on-video target: "close your eyes"
+//   pauses while the eyes are open), prompt checks on the video clock, the
 //   distance-sensor guide over the video and its score fed to the session.
 // Resources: the webcam is reference counted by the checks module and turns
 // off ~1 s after the session ends or the overlay unmounts (leaving the scene
@@ -55,6 +56,7 @@ import {
 } from "./checksWiring.ts";
 import { bannerNotice, findTreeScene, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
+import { calloutAim } from "./gazeCallout.ts";
 import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog } from "./overlays.tsx";
 import { CountsWhen, SlimTimeline, useRecentChange } from "./panels.tsx";
 import { useSkilltreeSession } from "./useSkilltreeSession.ts";
@@ -208,7 +210,7 @@ function SessionOverlay(props: {
       sessionAdjuster(() => ({
         presence: viewerRef.current?.present(),
         required: requiredRef.current,
-        gazePromptActive: checksRef.current?.gazePromptActive ?? false,
+        prompt: checksRef.current?.promptAttention(),
       })),
     [],
   );
@@ -276,8 +278,10 @@ function SessionOverlay(props: {
   }, [track, finished, flushTrack]);
 
   const presence = viewer.present();
-  const texts = attentionTexts(attention.reading, presence, required);
-  const attendingNow = sessionAttending(attention.reading, presence, { required, gazePromptActive: checks.gazePromptActive });
+  // the leading gaze prompt replaces the gaze-on-video target while active
+  const prompt = checks.promptAttention();
+  const texts = attentionTexts(attention.reading, presence, required, prompt);
+  const attendingNow = sessionAttending(attention.reading, presence, { required, prompt });
 
   const phase = phaseView(session.phase, policy, viewPauseCause(!!openSpend, session.pausedBy));
   const pauseAttemptRecent = useRecentChange(session.pauseAttempts, 4000);
@@ -292,7 +296,13 @@ function SessionOverlay(props: {
 
   const showInattention = session.phase === "paused" && session.pausedBy === "inattention" && !openSpend;
   const graceWarning = session.phase === "grace" && !openSpend;
-  const callout = useGazeCallout(showInattention || graceWarning, getContainer);
+  // during a gaze prompt the callout points at the target region (hidden for eyes_closed / off_screen)
+  const aim = prompt ? calloutAim(prompt.spec.target, checks.regionFor(prompt.spec)) : "video";
+  const callout = useGazeCallout(
+    (showInattention || graceWarning) && aim !== "hide",
+    getContainer,
+    typeof aim === "object" ? aim : undefined,
+  );
   const pauseText = texts.pause;
   const abortIn =
     session.pausedSinceMs !== undefined ? policy.abortSec - (Date.now() - session.pausedSinceMs) / 1000 : policy.abortSec;
@@ -383,7 +393,7 @@ function SessionOverlay(props: {
           title={showInattention ? pauseText.title : texts.grace}
           detail={
             showInattention
-              ? `Look back at the video · aborts in ${formatCountdown(abortIn)}`
+              ? `${texts.back} · aborts in ${formatCountdown(abortIn)}`
               : "The clip pauses if you stay away."
           }
         />

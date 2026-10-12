@@ -46,6 +46,7 @@ import {
   type SkippedSpec,
 } from "./schedule.ts";
 import { checksSettings, type ChecksSettings } from "./settings.ts";
+import { promptAttentionFrom, type PromptAttention } from "./attention.ts";
 import type { ViewerPresence } from "./useViewerPresence.ts";
 import type { LastResult } from "./wording.ts";
 
@@ -96,8 +97,15 @@ export interface PromptChecks {
   progress(): PromptProgress[];
   /** specs whose window is active (re-renders when this changes) */
   active: PromptSpec[];
-  /** a gaze prompt is active: the attention rule should be suspended */
+  /** a gaze prompt's window is active (re-renders when this changes) */
   gazePromptActive: boolean;
+  /**
+   * The session's attention target while a gaze prompt is active: the
+   * leading gaze prompt (latest start) and whether the viewer follows it at
+   * nowMs (performance.now() timebase, default now). undefined when no gaze
+   * prompt is active; it then is the usual gaze-on-video rule.
+   */
+  promptAttention(nowMs?: number): PromptAttention | undefined;
   status: ChecksStatus;
   /** the video ended: evaluates open windows and reports them (once) */
   finish(): void;
@@ -490,6 +498,10 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
   const progress = React.useCallback(() => (rt ? rt.runner.progress() : []), [rt]);
   const regionFor = React.useCallback((spec: PromptSpec) => rt?.runner.regionFor(spec), [rt]);
   const lastResult = React.useCallback(() => rt?.last, [rt]);
+  const promptAttention = React.useCallback(
+    (nowMs?: number) => (rt && !rt.finished ? promptAttentionFrom(rt.runner.currentGaze(nowMs ?? performance.now())) : undefined),
+    [rt],
+  );
   const videoTime = React.useCallback(() => videoTimeRef.current, []);
 
   return {
@@ -498,6 +510,7 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
     progress,
     active,
     gazePromptActive,
+    promptAttention,
     status,
     finish,
     regionFor,

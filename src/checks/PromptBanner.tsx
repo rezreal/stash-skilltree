@@ -1,6 +1,7 @@
 // The prompt banner over the video: the active prompt's instruction in plain
-// words, a progress bar (hold / phrase match), and the replaying / missed /
-// done states. Polls the checks itself (~10 Hz) so the session controller
+// words, a progress bar (hold / phrase match / share), the seconds left (long
+// gaze windows: the share instead, "eyes closed 82% · need 75%"), and the
+// replaying / missed / done states. Polls the checks itself (~10 Hz) so the session controller
 // doesn't re-render for every progress step.
 //
 // RegionOutline draws where a gaze prompt's target is on the video. Off by
@@ -50,8 +51,11 @@ export function PromptBanner(props: {
       <div className="stc-banner-head">
         <span className="stc-banner-text">{view.instruction}</span>
         {view.status && <span className="stc-banner-status">{view.status}</span>}
-        {view.secondsLeft !== undefined && view.tone === "active" && (
-          <span className="stc-banner-left stp-mono">{Math.ceil(view.secondsLeft)} s</span>
+        {view.shareText !== undefined && view.tone === "active" ? (
+          <span className="stc-banner-left stp-mono">{view.shareText}</span>
+        ) : (
+          view.secondsLeft !== undefined &&
+          view.tone === "active" && <span className="stc-banner-left stp-mono">{Math.ceil(view.secondsLeft)} s</span>
         )}
       </div>
       <div

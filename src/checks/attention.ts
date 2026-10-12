@@ -6,7 +6,10 @@
 // in use. A stalled / lost / off camera only blocks attention when the
 // webcam is required; otherwise the session carries on without presence.
 
+import type { GazeMoment } from "../prompts/gazeCheck.ts";
 import type { PresenceState } from "../prompts/presence.ts";
+import type { PromptSpec } from "../prompts/types.ts";
+import { promptAttentionReason } from "./wording.ts";
 
 /**
  * present / absent / no-frames: from the presence monitor while the camera
@@ -91,4 +94,25 @@ export function presencePauseText(
         ? { title: "Paused: camera off", hint: "This session needs the camera. Turn it on to continue." }
         : undefined;
   }
+}
+
+// --- gaze prompts ------------------------------------------------------------------
+// During an active gaze prompt the prompt replaces the attention target:
+// attending = following the prompt (gaze in the target region; eyes_closed:
+// eyes closed). No evidence ("unknown") counts as attending: a session never
+// pauses on missing evidence. Presence still ANDs in (combineAttention).
+
+/** The leading gaze prompt's verdict for this moment. */
+export interface PromptAttention {
+  attending: boolean;
+  state: GazeMoment;
+  /** plain words: "eyes open", "not looking at their eyes", ... */
+  reason: string;
+  spec: PromptSpec;
+}
+
+/** runner.currentGaze() as an attention verdict; undefined without an active gaze prompt. */
+export function promptAttentionFrom(cur: { state: GazeMoment; spec: PromptSpec } | undefined): PromptAttention | undefined {
+  if (!cur) return undefined;
+  return { attending: cur.state !== "off", state: cur.state, reason: promptAttentionReason(cur.spec, cur.state), spec: cur.spec };
 }

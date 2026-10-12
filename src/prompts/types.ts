@@ -56,7 +56,11 @@ export interface PromptSpec {
   title: string;
   target?: GazeTarget;
   action?: PromptAction;
-  /** gaze: seconds the gaze must hold on the target (default 2; eyes_closed: at most 1.5) */
+  /**
+   * gaze: seconds the gaze must hold on the target (default 2; eyes_closed:
+   * at most 1.5). Windows longer than 10 s are scored by share instead
+   * (gazeCheck.ts); there it is the least time on target.
+   */
   holdSec: number;
 }
 
@@ -70,6 +74,8 @@ export interface PromptProgress {
   /** replays used so far (max 1) */
   replays: number;
   detail?: string;
+  /** long gaze windows: share of the evidence time on target (see CheckResult.share) */
+  share?: number;
 }
 
 // --- perception inputs ----------------------------------------------------------
@@ -189,6 +195,8 @@ export interface CheckResult {
   /** 0..1 towards passing */
   progress: number;
   detail: string;
+  /** long (sustained) gaze windows: share 0..1 of the evidence time on target; absent before any evidence */
+  share?: number;
 }
 
 /** Something the prompt runner asks the player to do. */

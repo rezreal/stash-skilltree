@@ -19,6 +19,11 @@
 //   more than REPLAY_IGNORED_SEC past the window end) fails.
 // Spend specs are not run here (the player handles spend prompts).
 //
+// Overlapping gaze prompts: only the latest-started active one is fed (it
+// supersedes the earlier instruction); the others are idled, so the overlap
+// counts as no evidence for them. currentGaze() reports that prompt's
+// per-moment state (on / off / unknown) for the session's attention.
+//
 // Gaze target eyes_closed has no region: it gets the tracker's presence with
 // each gaze sample (GazeFeedSample.present, from the gaze source status) and
 // the webcam frames (feedViewer goes to action checks and to active
@@ -29,7 +34,7 @@ import { createGazeTargetCheck } from "./gazeCheck.ts";
 import { targetRegion } from "./regions.ts";
 import { createRepeatCheck } from "./speechCheck.ts";
 import type { ActionCheck, ActionCheckOptions } from "./actionCheck.ts";
-import type { GazeCheckOptions, GazeTargetCheck } from "./gazeCheck.ts";
+import type { GazeCheckOptions, GazeMoment, GazeTargetCheck } from "./gazeCheck.ts";
 import type { RegionOptions } from "./regions.ts";
 import type { RepeatCheck } from "./speechCheck.ts";
 import type { GazeAttentionSample } from "../gaze/types.ts";
@@ -83,6 +88,11 @@ export interface PromptRunner {
   setVideoBox(box: VideoBox): void;
   /** the region an active gaze spec currently targets (for overlays/debug) */
   regionFor(spec: PromptSpec): Region | undefined;
+  /**
+   * The leading active gaze prompt (latest start) and its state at nowMs
+   * (gaze / webcam timebase, performance.now()); undefined without one.
+   */
+  currentGaze(nowMs: number): { state: GazeMoment; spec: PromptSpec } | undefined;
   progress(): PromptProgress[];
 }
 
@@ -171,6 +181,16 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
     return { results: out.results, requests: [{ type: "seek", to }] };
   }
 
+  /** the active gaze entry that decides now: the latest start (equal starts: the earlier end, listed first) */
+  function leadGaze(): (Entry & { check: { kind: "gaze"; c: GazeTargetCheck } }) | undefined {
+    let lead: Entry | undefined;
+    for (const e of entries) {
+      if (e.phase !== "active" || e.check?.kind !== "gaze") continue;
+      if (lead === undefined || e.spec.start > lead.spec.start) lead = e;
+    }
+    return lead as (Entry & { check: { kind: "gaze"; c: GazeTargetCheck } }) | undefined;
+  }
+
   function regionFor(spec: PromptSpec): Region | undefined {
     if (spec.target === undefined || spec.target === "eyes_closed" || box === undefined) return undefined;
     const fresh = person !== undefined && Number.isFinite(videoTime) && Math.abs(person.videoTime - videoTime) <= PERSON_MAX_AGE_SEC;
@@ -221,8 +241,13 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
     },
 
     feedGaze(sample) {
+      const lead = leadGaze();
       for (const e of entries) {
         if (e.phase !== "active" || e.check?.kind !== "gaze") continue;
+        if (e !== lead) {
+          e.check.c.idle(sample.t);
+          continue;
+        }
         const input: Parameters<GazeTargetCheck["push"]>[0] = { t: sample.t, videoTime, gazeValid: sample.valid };
         if (sample.point !== undefined) input.gaze = sample.point;
         if (e.spec.target === "eyes_closed") {
@@ -240,10 +265,14 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
     },
 
     feedViewer(frame) {
+      const lead = leadGaze();
       for (const e of entries) {
         if (e.phase !== "active") continue;
         if (e.check?.kind === "action") e.check.c.push(frame);
-        else if (e.check?.kind === "gaze" && e.spec.target === "eyes_closed") e.check.c.pushViewer(frame);
+        else if (e.check?.kind === "gaze" && e.spec.target === "eyes_closed") {
+          if (e === lead) e.check.c.pushViewer(frame);
+          else e.check.c.idle(frame.t);
+        }
       }
     },
 
@@ -258,6 +287,11 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
 
     regionFor,
 
+    currentGaze(nowMs) {
+      const lead = leadGaze();
+      return lead ? { state: lead.check.c.current(nowMs), spec: lead.spec } : undefined;
+    },
+
     progress() {
       return entries.map((e) => {
         const r = e.phase === "active" ? e.check?.c.result() : e.last;
@@ -268,6 +302,7 @@ export function createPromptRunner(specs: PromptSpec[], opts?: PromptRunnerOptio
           replays: e.replays,
         };
         if (r?.detail !== undefined) p.detail = r.detail;
+        if (r?.share !== undefined) p.share = r.share;
         return p;
       });
     },

@@ -239,3 +239,50 @@ describe("createPromptRunner: gaze eyes_closed", () => {
     assert.equal(r.regionFor(EC), undefined);
   });
 });
+
+describe("createPromptRunner: currentGaze and overlapping gaze prompts", () => {
+  const EYES: PromptSpec = spec({ markerId: "ey", check: "gaze", target: "screen_center", start: 2, end: 552, holdSec: 2 });
+  const EC: PromptSpec = spec({ markerId: "ec", check: "gaze", target: "eyes_closed", start: 10, end: 1721, holdSec: 1.5 });
+
+  it("undefined without an active gaze prompt; the state of the active one otherwise", () => {
+    const r = createPromptRunner([GAZE]);
+    r.setVideoBox(BOX);
+    play(r, 9, 9.5, centre(r));
+    assert.equal(r.currentGaze(9500), undefined);
+    play(r, 10, 11, centre(r));
+    assert.deepEqual(r.currentGaze(11_000), { state: "on", spec: GAZE });
+    play(r, 11.05, 12, away(r));
+    assert.equal(r.currentGaze(12_000)?.state, "off");
+    // no samples for a while: unknown
+    assert.equal(r.currentGaze(13_000)?.state, "unknown");
+    play(r, 15, 15);
+    assert.equal(r.currentGaze(15_000), undefined);
+  });
+
+  it("the later prompt leads; the earlier one counts the overlap as no evidence", () => {
+    const r = createPromptRunner([EYES, EC]);
+    r.setVideoBox(BOX);
+    // 2..10 s: looking at the centre (the screen_center prompt alone)
+    play(r, 2, 9.95, centre(r));
+    assert.equal(r.currentGaze(9950)?.spec.markerId, "ey");
+    // 10..60 s: eyes closed (the tracker sees the viewer, no gaze)
+    play(r, 10, 60, (_vt, nowMs) => r.feedGaze({ t: nowMs, valid: false, present: true }));
+    assert.deepEqual(r.currentGaze(60_000), { state: "on", spec: EC });
+    const ey = phase(r, "ey");
+    assert.equal(ey.phase, "active");
+    // the eyes-closed stretch didn't count against the earlier prompt
+    assert.ok(ey.share! > 0.99, String(ey.share));
+    assert.equal(ey.progress, 1);
+    assert.equal(phase(r, "ec").progress, 1);
+  });
+
+  it("progress carries the share of long windows", () => {
+    const r = createPromptRunner([EC]);
+    play(r, 10, 30, (vt, nowMs) =>
+      r.feedGaze(vt < 25 ? { t: nowMs, valid: false, present: true } : { t: nowMs, point: { x: 1, y: 1 }, valid: true, present: true }),
+    );
+    const p = phase(r, "ec");
+    assert.ok(Math.abs(p.share! - 0.75) < 0.02, String(p.share));
+    assert.match(p.detail!, /^eyes closed \d+% · need 75%$/);
+  });
+});
