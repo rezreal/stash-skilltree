@@ -193,6 +193,12 @@ Watch policy = rules composed per scene from its tags:
   three ("You looked at eyes 30%, face 22%, chest 12%", every region in
   the tooltip). Setting `gazeRegions` (default on).
 
+- **Fullscreen** — a clip started with Watch (not an exposure loop) goes
+  fullscreen when stash's player appears, using the click's user activation
+  (kept across the in-app navigation, ~5 s in Chrome). Without it (reload,
+  slow load, the sensor picker used it) the clip starts in the page. Setting
+  `autoFullscreen` (default on).
+
 - **Presence** — during a session the webcam runs continuously and the
   viewer must be in front of it (face or body found). Attention = present
   AND (gaze on the video, or the focus/activity stand-in without a

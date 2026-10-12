@@ -144,6 +144,16 @@ settings:
       but not scored. Stop the clip any time (Stop or Esc) if something
       doesn't feel right.
     type: NUMBER
+  autoFullscreen:
+    displayName: Start clips fullscreen
+    description: >-
+      On by default (also while this switch has never been set). A clip
+      started with Watch on the choice screen goes fullscreen as soon as the
+      player appears. Browsers only allow this shortly after a click, so
+      after a page reload or a slow load the clip starts as usual (use the
+      player's fullscreen button). Exposure loops never go fullscreen. Off:
+      clips start in the page.
+    type: BOOLEAN
   webcamRequired:
     displayName: Sessions need the webcam
     description: >-

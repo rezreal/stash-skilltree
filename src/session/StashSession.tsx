@@ -25,6 +25,8 @@
 // - Gaze regions (src/checks/useGazeRegions.ts): with an eye tracker, the
 //   time the gaze spends on each body region of the person in the clip,
 //   shown in the summary and added to the clip's performers once saved.
+// - Ranked clips (not exposure loops) go fullscreen on arrival while the
+//   Watch click still counts as a user activation (../stashplayer/autoFullscreen.ts).
 // Resources: the webcam is reference counted by the checks module and turns
 // off ~1 s after the session ends or the overlay unmounts (leaving the scene
 // page); usePromptChecks frees the microphone and the speech / vision models
@@ -35,7 +37,7 @@ import type { SceneInput } from "../core/types.ts";
 import { CameraGate, useCameraPermission } from "../checks/CameraGate.tsx";
 import { ChecksSensorRows } from "../checks/ChecksSensorRows.tsx";
 import { PromptBanner } from "../checks/PromptBanner.tsx";
-import { checksSettings } from "../checks/settings.ts";
+import { checksSettings, parseBool } from "../checks/settings.ts";
 import { useGazeRegions } from "../checks/useGazeRegions.ts";
 import { usePromptChecks, type PromptChecks } from "../checks/usePromptChecks.ts";
 import { useViewerPresence, type ViewerPresence } from "../checks/useViewerPresence.ts";
@@ -58,6 +60,7 @@ import { phaseView, previousExposure } from "../player/view.ts";
 import { OverlayInteractive } from "../stashplayer/OverlayHost.tsx";
 import type { StashPlayerContext } from "../stashplayer/patch.tsx";
 import { lockUserPause } from "../stashplayer/pauseLock.ts";
+import { enterFullscreen, wantsAutoFullscreen } from "../stashplayer/autoFullscreen.ts";
 import { lockPlaybackRate } from "../stashplayer/rateLock.ts";
 import { lockSeeking } from "../stashplayer/seekLock.ts";
 import type { VideoHandle } from "../stashplayer/videoHandle.ts";
@@ -135,9 +138,18 @@ export function SkilltreeStashOverlay(props: { ctx: StashPlayerContext }) {
   const { state, reload } = usePlayData();
   const [attempt, setAttempt] = React.useState(0);
   const [dismissed, setDismissed] = React.useState(false);
+  const pluginSettings = usePluginSettings();
   // the camera gate: only when the webcam is required (default); playback is
   // held until a person is in view of the running camera
-  const webcamRequired = checksSettings(usePluginSettings()).webcamRequired;
+  const webcamRequired = checksSettings(pluginSettings).webcamRequired;
+  // ranked clips start fullscreen while the Watch click still counts (the gate shows in it too)
+  const autoFullscreen = wantsAutoFullscreen(props.ctx, parseBool(pluginSettings.autoFullscreen, true));
+  const fullscreenTried = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoFullscreen || fullscreenTried.current) return;
+    fullscreenTried.current = true;
+    void enterFullscreen(handle);
+  }, [handle, autoFullscreen]);
   const [gatePassed, setGatePassed] = React.useState(false);
   const treeScene = state.status === "ready" ? findTreeScene(state.data, sceneId) : undefined;
   // test mode: any scene; one outside the library is loaded on demand

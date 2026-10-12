@@ -35,6 +35,9 @@ export interface VideoJsLike {
   el(): Element;
   isDisposed?(): boolean;
   scrubbing?(): boolean;
+  /** fullscreen of the player's root (video.js keeps its own state in sync) */
+  requestFullscreen?(): Promise<void> | void;
+  isFullscreen?(): boolean;
   options_?: { userActions?: Record<string, unknown> };
 }
 
