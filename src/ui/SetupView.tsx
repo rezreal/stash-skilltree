@@ -9,12 +9,6 @@ import { SeriesSetupPanel } from "./SeriesSetupPanel.tsx";
 import { TagSetupPanel } from "./TagSetupPanel.tsx";
 import { TopicLadder } from "./TopicLadder.tsx";
 
-/** Request to open a tag in the editor; seq makes repeated requests distinct. */
-export interface SetupFocus {
-  tagId: Id;
-  seq: number;
-}
-
 type TagsState =
   | { status: "loading" }
   | { status: "error"; error: string }
@@ -36,21 +30,22 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 
 export interface SetupViewProps {
   hidden: boolean;
-  focus?: SetupFocus;
-  /** the open tab, held by the page (it is part of the deep link) */
+  /** the open tab, held by the page (it is part of the URL) */
   tab: Tab;
   onTab: (tab: Tab) => void;
-  /** the ladder topic to open first, and changes to it (deep link) */
-  initialTopic?: string;
-  onTopic?: (topic: string | undefined) => void;
-  /** the tag in the editor changed (deep link) */
+  /** the tag the URL names for the editor: an id opens it, null closes it, undefined leaves it */
+  wantTag?: Id | null;
+  /** the ladder topic the URL names: a topic opens it, null closes it, undefined leaves it */
+  wantTopic?: string | null;
+  /** the viewer opened another tag / topic (it goes into the URL) */
   onTag?: (id: Id | undefined) => void;
+  onTopic?: (topic: string | undefined) => void;
   /** reloads the library so the tree reflects written tags */
   onLibraryChanged: () => void;
 }
 
 export function SetupView(props: SetupViewProps) {
-  const { hidden, focus, onLibraryChanged, tab, onTab: setTab } = props;
+  const { hidden, onLibraryChanged, tab, onTab: setTab } = props;
   const client = React.useMemo(() => createClient(), []);
   const [state, setState] = React.useState<TagsState>({ status: "loading" });
   const mounted = React.useRef(true);
@@ -74,10 +69,6 @@ export function SetupView(props: SetupViewProps) {
       mounted.current = false;
     };
   }, [loadTags]);
-
-  React.useEffect(() => {
-    if (focus) setTab("tags");
-  }, [focus]);
 
   const [groupsState, setGroupsState] = React.useState<GroupsState>({ status: "idle" });
   const loadGroups = React.useCallback(async () => {
@@ -141,14 +132,20 @@ export function SetupView(props: SetupViewProps) {
         )}
         {/* both stay mounted so unsaved edits survive switching */}
         <div hidden={tab !== "tags"}>
-          <TagSetupPanel tags={state.tags} client={client} focus={focus} onSelect={props.onTag} onSaved={afterWrite} />
+          <TagSetupPanel
+            tags={state.tags}
+            client={client}
+            {...(props.wantTag !== undefined ? { want: props.wantTag } : {})}
+            {...(props.onTag ? { onSelect: props.onTag } : {})}
+            onSaved={afterWrite}
+          />
         </div>
         <div hidden={tab !== "ladder"}>
           <TopicLadder
             tags={state.tags}
             client={client}
             onApplied={afterWrite}
-            {...(props.initialTopic !== undefined ? { initialTopic: props.initialTopic } : {})}
+            {...(props.wantTopic !== undefined ? { want: props.wantTopic } : {})}
             {...(props.onTopic ? { onTopic: props.onTopic } : {})}
           />
         </div>

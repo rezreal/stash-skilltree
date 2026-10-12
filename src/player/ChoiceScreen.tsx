@@ -39,7 +39,7 @@ import { performerGazeSummary } from "./gazeRegionsView.ts";
 import { PerformerAvatar } from "./PerformerAvatar.tsx";
 import { loadCurrentPerformer, loadTestMode, saveCurrentPerformer, saveTestMode } from "./storage.ts";
 import { TestPanel } from "./TestPanel.tsx";
-import { EMPTY_TEST_LINK, parsePlayLink, playLinkSearch, type TestLink } from "./playLink.ts";
+import { EMPTY_TEST_LINK, parsePlayLink, playLinkSearch, type PlayLink, type TestLink } from "./playLink.ts";
 import { usePlayData, type PlayData } from "./usePlayData.ts";
 import { fogDepthRows } from "../ui/fogView.ts";
 import {
@@ -89,36 +89,44 @@ function ChoiceView(props: ChoiceViewProps) {
   const { useHistory, useLocation } = router();
   const history = useHistory();
   const location = useLocation();
-  // a deep link wins over the remembered choices (and becomes them)
-  const [initial] = React.useState(() => parsePlayLink(location.search));
-  const [stored, setStored] = React.useState<Id | undefined>(() =>
-    initial.has.performer ? initial.link.performer : loadCurrentPerformer(),
-  );
-  const performerId = stored !== undefined && data.graph.performers.has(stored) ? stored : undefined;
-  const choosePerformer = React.useCallback((id: Id | undefined) => {
+  // The URL is the state: picking a performer, test mode and its search push
+  // history entries, so back, forward and reload work (playLink.ts).
+  const parsed = parsePlayLink(location.search);
+  const go = (link: PlayLink, replace = false) => {
+    const search = playLinkSearch(link);
+    if (search === location.search) return;
+    if (replace) history.replace(`${PLAY_ROUTE}${search}`);
+    else history.push(`${PLAY_ROUTE}${search}`);
+  };
+  React.useEffect(() => {
+    if (parsed.has.performer || parsed.has.test) {
+      // a link becomes the remembered choice
+      if (parsed.has.performer) saveCurrentPerformer(parsed.link.performer);
+      if (parsed.has.test) saveTestMode(parsed.link.test !== undefined);
+      return;
+    }
+    // a bare /skilltree/play (the nav entry) resumes where the viewer left off
+    const stored = loadCurrentPerformer();
+    if (loadTestMode()) go({ test: EMPTY_TEST_LINK }, true);
+    else if (stored !== undefined) go({ performer: stored }, true);
+  }, []);
+  const linked = parsed.link.performer;
+  const performerId = linked !== undefined && data.graph.performers.has(linked) ? linked : undefined;
+  const testMode = parsed.link.test !== undefined;
+  const testLink = parsed.link.test ?? EMPTY_TEST_LINK;
+  const choosePerformer = (id: Id | undefined) => {
     saveCurrentPerformer(id);
-    setStored(id);
+    go(id !== undefined ? { performer: id } : {});
     window.scrollTo?.(0, 0);
-  }, []);
-  const [testMode, setTestModeState] = React.useState(() => (initial.has.test ? initial.link.test !== undefined : loadTestMode()));
-  const setTestMode = React.useCallback((on: boolean) => {
+  };
+  const lastTest = React.useRef<TestLink>(testLink);
+  if (testMode) lastTest.current = testLink;
+  const setTestMode = (on: boolean) => {
     saveTestMode(on);
-    setTestModeState(on);
-  }, []);
-  React.useEffect(() => {
-    if (initial.has.performer) saveCurrentPerformer(initial.link.performer);
-    if (initial.has.test) saveTestMode(initial.link.test !== undefined);
-  }, []);
-  const [testLink, setTestLink] = React.useState<TestLink>(initial.link.test ?? EMPTY_TEST_LINK);
-
-  // what is shown goes into the URL (replace: no history entry per click)
-  const search = playLinkSearch({
-    ...(performerId !== undefined ? { performer: performerId } : {}),
-    ...(testMode ? { test: testLink } : {}),
-  });
-  React.useEffect(() => {
-    if (search !== location.search) history.replace(`${PLAY_ROUTE}${search}`);
-  }, [search]);
+    const stored = loadCurrentPerformer();
+    go(on ? { test: lastTest.current } : stored !== undefined ? { performer: stored } : {});
+  };
+  const onTestChange = (next: TestLink, typing: boolean) => go({ test: next }, typing);
 
   // daily series change at the day boundary: suggestions follow the day,
   // cards the clock
@@ -162,7 +170,7 @@ function ChoiceView(props: ChoiceViewProps) {
       <main className="stp-main">
         <section className="stp-primary" aria-label={testMode ? "Test mode" : performerId ? "Suggestions" : "Start"}>
           {testMode ? (
-            <TestPanel data={data} initial={testLink} onChange={setTestLink} />
+            <TestPanel data={data} link={testLink} onChange={onTestChange} />
           ) : performerId === undefined || result === undefined ? (
             <StartView data={data} baseInput={baseInput} seriesCards={seriesCards} onPick={choosePerformer} />
           ) : (

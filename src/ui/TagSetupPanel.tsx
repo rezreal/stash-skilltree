@@ -28,7 +28,6 @@ import {
   type SetupKind,
   type TagFilter,
 } from "./setupForm.ts";
-import type { SetupFocus } from "./SetupView.tsx";
 
 /** rows rendered before "Show all" */
 const LIST_LIMIT = 200;
@@ -49,15 +48,16 @@ type Status = { ok: string } | { error: string };
 export interface TagSetupPanelProps {
   tags: SetupTag[];
   client: StashClient;
-  focus?: SetupFocus;
-  /** the tag in the editor changed (for the page's deep link) */
+  /** the tag the URL names: an id opens it in the editor, null closes the editor, undefined leaves it */
+  want?: Id | null;
+  /** the viewer opened another tag (it goes into the URL); not called for `want` itself */
   onSelect?: (id: Id | undefined) => void;
   /** called after a successful write; resolves once the tag list is fresh */
   onSaved: () => Promise<void>;
 }
 
 export function TagSetupPanel(props: TagSetupPanelProps) {
-  const { tags, client, focus, onSaved } = props;
+  const { tags, client, want, onSaved } = props;
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<TagFilter>(() => (tags.some(isConfigured) ? "configured" : "all"));
   const [showAll, setShowAll] = React.useState(false);
@@ -89,13 +89,25 @@ export function TagSetupPanel(props: TagSetupPanelProps) {
     setStatus(undefined);
   };
 
+  // follow the URL (a link, back / forward); select itself changes every render
   React.useEffect(() => {
-    if (focus) select(focus.tagId);
-    // only a new focus request selects; select itself changes every render
-  }, [focus]);
+    if (want === undefined) return;
+    if (want === null) {
+      if (selectedId === undefined) return;
+      if (edited && dirty && tag && !window.confirm(`Discard unsaved changes to "${tag.name}"?`)) return;
+      setSelectedId(undefined);
+      setDraft(undefined);
+      setStatus(undefined);
+    } else if (want !== selectedId) {
+      select(want);
+    }
+  }, [want]);
 
+  const reported = React.useRef(selectedId);
   React.useEffect(() => {
     if (selectedId !== undefined) editorHeading.current?.focus();
+    if (selectedId === reported.current) return;
+    reported.current = selectedId;
     props.onSelect?.(selectedId);
   }, [selectedId]);
 

@@ -14,14 +14,14 @@ import {
 import { createClient, loadLibrary } from "../stash/index.ts";
 import { pluginApi, usePluginSettings } from "./pluginApi.ts";
 import { PLAY_ROUTE, ROUTE } from "./register.tsx";
-import { authorLinkSearch, parseAuthorLink, type SetupTab } from "./deepLink.ts";
+import { authorLinkSearch, parseAuthorLink, type AuthorLink, type SetupTab } from "./deepLink.ts";
 import { countBySeverity, performerOptions, scenesInTree } from "./derive.ts";
 import { SkillTreeView } from "./SkillTreeView.tsx";
 import { fogStats } from "./fogView.ts";
 import { NodePanel } from "./NodePanel.tsx";
 import { LintPanel } from "./LintPanel.tsx";
 import { TopicTable } from "./TopicTable.tsx";
-import { SetupView, type SetupFocus } from "./SetupView.tsx";
+import { SetupView } from "./SetupView.tsx";
 
 type LoadState =
   | { status: "loading"; message: string }
@@ -116,20 +116,26 @@ function SkilltreeView(props: SkilltreeViewProps) {
   const { useHistory, useLocation } = pluginApi().libraries.ReactRouterDOM;
   const history = useHistory();
   const location = useLocation();
-  // what is open comes from the URL (deep link) and goes back into it
-  const [initial] = React.useState(() => parseAuthorLink(location.search));
-  const [authorView, setAuthorView] = React.useState(!initial.fog);
-  const [performerId, setPerformerId] = React.useState<Id | undefined>(initial.performer);
-  const [selected, setSelected] = React.useState<NodeKey | undefined>(initial.node);
-  const [section, setSection] = React.useState<Section>(initial.section);
+  // The URL is the state: every click pushes a history entry, so back,
+  // forward and reload restore exactly what was open (deepLink.ts).
+  const link = parseAuthorLink(location.search);
+  const go = (next: AuthorLink, replace = false) => {
+    const search = authorLinkSearch(next);
+    if (search === location.search) return;
+    if (replace) history.replace(`${ROUTE}${search}`);
+    else history.push(`${ROUTE}${search}`);
+  };
+  const authorView = !link.fog;
+  const performerId = link.performer;
+  const selected = link.node;
+  const section: Section = link.section;
+  const setupTab: SetupTab = link.tab ?? "tags";
   // Setup stays mounted once opened, so switching sections keeps its state.
-  const [setupOpened, setSetupOpened] = React.useState(initial.section === "setup");
-  const [setupFocus, setSetupFocus] = React.useState<SetupFocus | undefined>(
-    initial.tag !== undefined ? { tagId: initial.tag, seq: 1 } : undefined,
-  );
-  const [setupTab, setSetupTab] = React.useState<SetupTab>(initial.tab ?? "tags");
-  const [setupTag, setSetupTag] = React.useState<Id | undefined>(initial.tag);
-  const [ladderTopic, setLadderTopic] = React.useState<string | undefined>(initial.topic);
+  const [setupOpened, setSetupOpened] = React.useState(section === "setup");
+  if (section === "setup" && !setupOpened) setSetupOpened(true);
+  // what the setup panels last showed, carried along when switching tabs
+  const lastTag = React.useRef<Id | undefined>(link.tag);
+  const lastTopic = React.useRef<string | undefined>(link.topic);
 
   const graph = React.useMemo(() => buildGraph(library, { defaultNeed }), [library, defaultNeed]);
   const progress = React.useMemo(() => computeProgress(graph, { performerId }), [graph, performerId]);
@@ -140,22 +146,51 @@ function SkilltreeView(props: SkilltreeViewProps) {
   const depthOf = React.useCallback((topic: string) => topicDepth(graph, progress, topic), [graph, progress]);
   const tagNames = React.useMemo(() => libraryTagNames(library), [library]);
 
-  // a node or performer the library doesn't have (an old link) is dropped
+  // a node or performer the library doesn't have (an old link) is dropped from the URL
   const selectedKnown = selected !== undefined && graph.nodes.has(selected) ? selected : undefined;
   const performerKnown = performerId !== undefined && performers.some((p) => p.id === performerId) ? performerId : undefined;
-
-  const search = authorLinkSearch({
-    section,
-    tab: setupTab,
-    ...(setupTag !== undefined ? { tag: setupTag } : {}),
-    ...(ladderTopic !== undefined ? { topic: ladderTopic } : {}),
-    ...(selectedKnown !== undefined ? { node: selectedKnown } : {}),
-    ...(performerKnown !== undefined ? { performer: performerKnown } : {}),
-    fog: !authorView,
-  });
+  const stale = (selected !== undefined && selectedKnown === undefined) || (performerId !== undefined && performerKnown === undefined);
   React.useEffect(() => {
-    if (search !== location.search) history.replace(`${ROUTE}${search}`);
-  }, [search]);
+    if (!stale) return;
+    const { node: _n, performer: _p, ...rest } = link;
+    go({ ...rest, ...(selectedKnown !== undefined ? { node: selectedKnown } : {}), ...(performerKnown !== undefined ? { performer: performerKnown } : {}) }, true);
+  }, [stale]);
+
+  const setAuthorView = (on: boolean) => go({ ...link, fog: !on });
+  const setPerformerId = (id: Id | undefined) => {
+    const { performer: _p, ...rest } = link;
+    go(id !== undefined ? { ...rest, performer: id } : rest);
+  };
+  const setSelected = (key: NodeKey | undefined) => {
+    const { node: _n, ...rest } = link;
+    go(key !== undefined ? { ...rest, section: "tree", node: key } : { ...rest, section: "tree" });
+  };
+  const setupLink = (tab: SetupTab, tag?: Id): AuthorLink => {
+    const base: AuthorLink = { section: "setup", tab, ...(performerId !== undefined ? { performer: performerId } : {}) };
+    if (tab === "tags") {
+      const t = tag ?? lastTag.current;
+      if (t !== undefined) base.tag = t;
+    }
+    if (tab === "ladder" && lastTopic.current !== undefined) base.topic = lastTopic.current;
+    return base;
+  };
+  const setSection = (next: Section) => {
+    if (next === "setup") go(setupLink(setupTab));
+    else go({ section: "tree", ...(performerId !== undefined ? { performer: performerId } : {}) });
+  };
+  const setSetupTab = (tab: SetupTab) => go(setupLink(tab));
+  // the panels report what they show; a change the viewer made becomes a history entry
+  const onTag = (id: Id | undefined) => {
+    lastTag.current = id;
+    if (section === "setup" && setupTab === "tags" && id !== link.tag) go(setupLink("tags", id));
+  };
+  const onTopic = (topic: string | undefined) => {
+    lastTopic.current = topic;
+    if (section === "setup" && setupTab === "ladder" && topic !== link.topic) {
+      const { topic: _t, ...rest } = setupLink("ladder");
+      go(topic !== undefined ? { ...rest, topic } : rest);
+    }
+  };
 
   const counts = countBySeverity(issues);
   let complete = 0;
@@ -167,27 +202,9 @@ function SkilltreeView(props: SkilltreeViewProps) {
   const onPerformer = (e: ChangeEvent<HTMLSelectElement>) => setPerformerId(e.target.value || undefined);
   const showSetup = authorView && section === "setup";
   const openSetup = (tagId?: Id) => {
-    setSection("setup");
-    setSetupOpened(true);
-    if (tagId !== undefined) {
-      setSetupTab("tags");
-      setSetupFocus((prev) => ({ tagId, seq: (prev?.seq ?? 0) + 1 }));
-    }
+    if (tagId !== undefined) lastTag.current = tagId;
+    go(setupLink(tagId !== undefined ? "tags" : setupTab, tagId));
   };
-
-  const copyLink = () => {
-    const url = window.location.href;
-    void navigator.clipboard?.writeText(url).then(
-      () => setCopied(true),
-      () => window.prompt("Copy this link:", url),
-    );
-  };
-  const [copied, setCopied] = React.useState(false);
-  React.useEffect(() => {
-    if (!copied) return;
-    const id = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(id);
-  }, [copied]);
 
   return (
     <div className="skilltree">
@@ -216,9 +233,6 @@ function SkilltreeView(props: SkilltreeViewProps) {
         </ul>
         <div className="skilltree-controls">
           <PlayLink />
-          <button type="button" className="btn btn-sm btn-secondary" onClick={copyLink} title="Copy a link to exactly this view">
-            {copied ? "Link copied" : "Copy link"}
-          </button>
           {authorView && (
             <div className="btn-group btn-group-sm skilltree-sections" role="group" aria-label="Section">
               {(["tree", "setup"] as Section[]).map((s) => (
@@ -280,12 +294,12 @@ function SkilltreeView(props: SkilltreeViewProps) {
       {setupOpened && (
         <SetupView
           hidden={!showSetup}
-          focus={setupFocus}
           tab={setupTab}
           onTab={setSetupTab}
-          {...(initial.topic !== undefined ? { initialTopic: initial.topic } : {})}
-          onTopic={setLadderTopic}
-          onTag={setSetupTag}
+          wantTag={showSetup && setupTab === "tags" ? (link.tag ?? null) : undefined}
+          wantTopic={showSetup && setupTab === "ladder" ? (link.topic ?? null) : undefined}
+          onTopic={onTopic}
+          onTag={onTag}
           onLibraryChanged={onReload}
         />
       )}

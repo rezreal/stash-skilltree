@@ -27,20 +27,22 @@ export interface TopicLadderProps {
   client: StashClient;
   /** called after a batch write (also a partial one); resolves once the tag list is fresh */
   onApplied: () => Promise<void>;
-  /** the topic to open first (a deep link) */
-  initialTopic?: string;
-  /** the open topic changed (for the page's deep link) */
+  /** the topic the URL names: a topic opens it, null closes it, undefined leaves it */
+  want?: string | null;
+  /** the viewer opened another topic (it goes into the URL); not called for `want` itself */
   onTopic?: (topic: string | undefined) => void;
 }
 
 export function TopicLadder(props: TopicLadderProps) {
   const { tags, client, onApplied } = props;
   const topics = React.useMemo(() => ladderTopics(tags), [tags]);
-  const startTopic = props.initialTopic !== undefined && !topicError(props.initialTopic) ? normalizeTopic(props.initialTopic) : undefined;
-  const [topicInput, setTopicInput] = React.useState(startTopic ?? "");
+  const [topicInput, setTopicInput] = React.useState("");
   const [topicInputError, setTopicInputError] = React.useState<string | undefined>(undefined);
-  const [topic, setTopic] = React.useState<string | undefined>(startTopic);
+  const [topic, setTopic] = React.useState<string | undefined>(undefined);
+  const reported = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
+    if (topic === reported.current) return;
+    reported.current = topic;
     props.onTopic?.(topic);
   }, [topic]);
   // Pending edits belong to one topic and one tag list; a refreshed list
@@ -78,6 +80,25 @@ export function TopicLadder(props: TopicLadderProps) {
     setConfirming(false);
     setStatus(undefined);
   };
+
+  const closeTopic = () => {
+    if (topic === undefined) return;
+    if (changes.length > 0 && !window.confirm(`Discard ${changes.length} pending change(s) to ${topic}?`)) return;
+    setTopic(undefined);
+    setTopicInput("");
+    setDraft(undefined);
+    setAdding(undefined);
+    setConfirming(false);
+    setStatus(undefined);
+  };
+
+  // follow the URL (a link, back / forward); the handlers change every render
+  React.useEffect(() => {
+    const want = props.want;
+    if (want === undefined) return;
+    if (want === null) closeTopic();
+    else if (topicError(want) === undefined && normalizeTopic(want) !== topic) openTopic(want);
+  }, [props.want]);
 
   const apply = async () => {
     const total = changes.length;

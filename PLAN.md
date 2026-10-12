@@ -264,8 +264,10 @@ player with live checks → completion summary (coins, nodes out of the fog).
 
 ## Deep links
 
-Every view keeps what is open in its query string, so it can be bookmarked,
-shared or reloaded (the author page also has a "Copy link" button):
+The URL is each page's state: every click that changes the view pushes a
+history entry and the page renders from the query string, so back, forward
+and reload restore exactly what was open (typing in a search box replaces
+the entry instead of adding one per keystroke):
 
 - `/skilltree?node=Relaxation%3A2&performer=12` — tree, node selected, performer filter
 - `/skilltree?fog=1&performer=12` — the viewer's fog view
@@ -277,7 +279,8 @@ shared or reloaded (the author page also has a "Copy link" button):
 - `/skilltree/play?test=1&funscript=1&prompts=1&tags=4,9&q=intro&page=2` — test mode with its search
 
 On the play page a link wins over the remembered performer / test mode and
-becomes the remembered choice.
+becomes the remembered choice; a bare /skilltree/play (the nav entry)
+resumes the remembered one.
 
 A tag implies the tags tab, a topic the ladder tab; fog=1 wins over setup
 (setup needs the author view); unknown nodes or performers are dropped.

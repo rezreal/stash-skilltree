@@ -71,28 +71,18 @@ function useConfigurePlugin(): ConfigurePlugin | undefined {
 
 const fmt = (n: number | undefined, digits = 1) => (n === undefined || !Number.isFinite(n) ? "—" : n.toFixed(digits));
 
-function currentSearch(): string {
-  try {
-    return window.location.search;
-  } catch {
-    return "";
-  }
-}
-
 export function SensorCalibrationScreen() {
-  const { Link, useHistory } = router();
+  const { Link, useHistory, useLocation } = router();
   const history = useHistory();
+  const location = useLocation();
   const sensor = useTrackSensor();
   const connected = sensor.status?.connection === "connected";
   useTicker(connected, 100); // live value, trace and rate
-  const [tab, setTabState] = React.useState<SensorTab>(() => parseSensorTab(currentSearch()));
-  const setTab = React.useCallback(
-    (t: SensorTab) => {
-      setTabState(t);
-      history.replace(t === "status" ? SENSOR_ROUTE : `${SENSOR_ROUTE}?tab=${t}`);
-    },
-    [history],
-  );
+  // the tab lives in the URL: back, forward and reload keep it
+  const tab = parseSensorTab(location.search);
+  const setTab = (t: SensorTab) => {
+    if (t !== tab) history.push(t === "status" ? SENSOR_ROUTE : `${SENSOR_ROUTE}?tab=${t}`);
+  };
   const items = sensorMenuView({
     configured: sensor.configured,
     status: sensor.status,

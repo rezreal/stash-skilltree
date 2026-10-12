@@ -21,7 +21,7 @@ import {
 import { wantsSensor, watchUrl } from "../session/watchUrl.ts";
 import { connectSensorForClip } from "./useTrack.ts";
 import { router } from "./api.ts";
-import { EMPTY_TEST_LINK, type TestLink } from "./playLink.ts";
+import type { TestLink } from "./playLink.ts";
 import { errorText } from "./common.tsx";
 import { dateLabel, formatDuration, plural } from "./format.ts";
 import { rangeLabel, testSceneChips } from "./testView.ts";
@@ -29,6 +29,11 @@ import type { PlayData } from "./usePlayData.ts";
 import { policyLabel } from "./view.ts";
 
 const DEBOUNCE_MS = 300;
+
+/** a stable key of a test search, to tell when the URL and the panel differ */
+function linkKey(l: TestLink): string {
+  return JSON.stringify([l.tags, l.funscript, l.prompts, l.title, l.page]);
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = React.useState(value);
@@ -43,35 +48,50 @@ type Load<T> = { status: "idle" } | { status: "loading" } | { status: "ready"; v
 
 export function TestPanel(props: {
   data: PlayData;
-  /** the search to start with (a deep link) */
-  initial?: TestLink;
-  /** the search changed (for the page's deep link) */
-  onChange?: (link: TestLink) => void;
+  /** the search the URL names; the panel follows it (a link, back / forward) */
+  link: TestLink;
+  /** the viewer changed the search; `typing` = only the title changed (no history entry per keystroke) */
+  onChange: (link: TestLink, typing: boolean) => void;
 }) {
-  const { data } = props;
+  const { data, link } = props;
   const client = data.client;
-  const start = props.initial ?? EMPTY_TEST_LINK;
-  // tags from a link carry only ids: shown by id until their names arrive
-  const [tags, setTags] = React.useState<TagHit[]>(() => start.tags.map((id) => ({ id, name: `tag ${id}`, sceneCount: 0 })));
-  const [funscript, setFunscript] = React.useState(start.funscript);
-  const [promptMarkers, setPromptMarkers] = React.useState(start.prompts);
-  const [titleInput, setTitleInput] = React.useState(start.title);
-  const title = useDebounced(titleInput, DEBOUNCE_MS);
+  // names of tags seen so far: a link names tags by id only
+  const names = React.useRef(new Map<string, string>());
+  const hitsFor = (ids: readonly string[]): TagHit[] =>
+    ids.map((id) => ({ id, name: names.current.get(id) ?? `tag ${id}`, sceneCount: 0 }));
+  const [tags, setTagsState] = React.useState<TagHit[]>(() => hitsFor(link.tags));
+  const setTags = (next: TagHit[]) => {
+    for (const t of next) names.current.set(t.id, t.name);
+    setTagsState(next);
+  };
+  const [funscript, setFunscript] = React.useState(link.funscript);
+  const [promptMarkers, setPromptMarkers] = React.useState(link.prompts);
+  const [titleInput, setTitleInput] = React.useState(link.title);
+  const [title, setTitle] = React.useState(link.title);
   React.useEffect(() => {
-    if (start.tags.length === 0) return;
+    if (titleInput === title) return;
+    const id = window.setTimeout(() => setTitle(titleInput), DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [titleInput]);
+
+  // tags shown by id get their names from stash
+  const unnamed = tags.filter((t) => !names.current.has(t.id)).map((t) => t.id);
+  const unnamedKey = unnamed.join(",");
+  React.useEffect(() => {
+    if (unnamed.length === 0) return;
     let live = true;
-    loadTagsByIds(client, start.tags).then(
+    loadTagsByIds(client, unnamed).then(
       (named) => {
         if (!live) return;
-        // keep the user's picks if they changed the tags meanwhile
-        setTags((cur) => (cur.map((t) => t.id).join(",") === start.tags.join(",") ? named : cur));
+        for (const t of named) names.current.set(t.id, t.name);
+        setTagsState((cur) => cur.map((t) => ({ ...t, name: names.current.get(t.id) ?? t.name })));
       },
       () => undefined, // names stay "tag <id>"; the filter still works
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [unnamedKey]);
 
   // prompt tag ids, once (needed for "has prompt markers")
   const [promptTags, setPromptTags] = React.useState<Load<string[]>>({ status: "idle" });
@@ -87,7 +107,7 @@ export function TestPanel(props: {
   const tagKey = tags.map((t) => t.id).join(",");
   // the page belongs to one filter: a new filter starts at page 1
   const filterKey = JSON.stringify([tagKey, funscript, promptMarkers, title]);
-  const [paging, setPaging] = React.useState({ filterKey, page: start.page });
+  const [paging, setPaging] = React.useState({ filterKey, page: link.page });
   const page = paging.filterKey === filterKey ? paging.page : 1;
   const setPage = (p: number) => setPaging({ filterKey, page: p });
 
@@ -95,11 +115,31 @@ export function TestPanel(props: {
     () => ({ ...EMPTY_CRITERIA, tagIds: tagKey ? tagKey.split(",") : [], funscript, promptMarkers, title, page }),
     [tagKey, funscript, promptMarkers, title, page],
   );
+  // the URL and the panel follow each other: a link or back / forward sets
+  // the panel, a change by the viewer goes up into the URL
+  const current: TestLink = { tags: tagKey ? tagKey.split(",") : [], funscript, prompts: promptMarkers, title, page };
+  const currentKey = linkKey(current);
+  const wantedKey = linkKey(link);
+  React.useEffect(() => {
+    if (wantedKey === currentKey) return;
+    const nextTagKey = link.tags.join(",");
+    setTagsState(hitsFor(link.tags));
+    setFunscript(link.funscript);
+    setPromptMarkers(link.prompts);
+    setTitleInput(link.title);
+    setTitle(link.title);
+    setPaging({ filterKey: JSON.stringify([nextTagKey, link.funscript, link.prompts, link.title]), page: link.page });
+  }, [wantedKey]);
   const onChange = React.useRef(props.onChange);
   onChange.current = props.onChange;
+  const linkRef = React.useRef(link);
+  linkRef.current = link;
   React.useEffect(() => {
-    onChange.current?.({ tags: tagKey ? tagKey.split(",") : [], funscript, prompts: promptMarkers, title, page });
-  }, [tagKey, funscript, promptMarkers, title, page]);
+    const wanted = linkRef.current;
+    if (linkKey(wanted) === currentKey) return;
+    const typing = linkKey({ ...wanted, title: current.title }) === currentKey;
+    onChange.current(current, typing);
+  }, [currentKey]);
   const promptIds = promptTags.status === "ready" ? promptTags.value : undefined;
   const [results, setResults] = React.useState<Load<TestSearchPage>>({ status: "idle" });
   const [searching, setSearching] = React.useState(false);
