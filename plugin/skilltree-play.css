@@ -1771,6 +1771,54 @@
   z-index: 5;
 }
 
+/* the viewer's own camera (opt-in), bottom left above the timeline; mirrored */
+.skilltree-play .stp-sp-cam {
+  aspect-ratio: 4 / 3;
+  background: var(--stp-deep, #11151a);
+  border: 2px solid var(--st-open);
+  border-radius: 10px;
+  bottom: 98px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  left: 15px;
+  overflow: hidden;
+  position: absolute;
+  transition: bottom 0.2s ease;
+  width: clamp(120px, 20%, 280px);
+  z-index: 4;
+}
+
+.skilltree-play .stp-sp-cam.is-present { border-color: var(--st-complete); }
+
+.skilltree-play .stp-sp-cam video {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror: moving left moves left */
+  width: 100%;
+}
+
+.skilltree-play .stp-sp-cam .stp-sp-close {
+  background: rgba(12, 15, 19, 0.6);
+  color: var(--st-text);
+  font-size: 18px;
+  height: 24px;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 24px;
+}
+
+.video-js.vjs-user-inactive.vjs-playing .skilltree-play .stp-sp-cam,
+.video-js:not(.vjs-has-started) .skilltree-play .stp-sp-cam { bottom: 20px; }
+
+@media (max-width: 768px) {
+  .skilltree-play .stp-sp-cam { bottom: 82px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skilltree-play .stp-sp-cam { transition: none; }
+}
+
 /* slim timeline above the control bar; drops to the edge while the controls are hidden */
 .skilltree-play .stp-sp-timeline {
   bottom: 84px;

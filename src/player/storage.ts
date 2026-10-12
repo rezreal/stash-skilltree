@@ -5,6 +5,7 @@ const PERFORMER_KEY = "skilltree.play.performer";
 export const CALIBRATION_KEY = "skilltree.calibration";
 const SHOW_GAZE_KEY = "skilltree.play.showGaze";
 const TEST_MODE_KEY = "skilltree.play.testMode";
+const SHOW_CAMERA_KEY = "skilltree.play.showCamera";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -93,5 +94,23 @@ export function saveTestMode(on: boolean, store: StorageLike | undefined = stora
     else store?.removeItem(TEST_MODE_KEY);
   } catch {
     // not remembered; the toggle still holds for this page view
+  }
+}
+
+/** the "Show my camera" toggle of the session (picture-in-picture preview); off by default */
+export function loadShowCamera(store: StorageLike | undefined = storage()): boolean {
+  try {
+    return store?.getItem(SHOW_CAMERA_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShowCamera(on: boolean, store: StorageLike | undefined = storage()): void {
+  try {
+    if (on) store?.setItem(SHOW_CAMERA_KEY, "1");
+    else store?.removeItem(SHOW_CAMERA_KEY);
+  } catch {
+    // not remembered
   }
 }

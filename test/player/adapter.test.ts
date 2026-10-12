@@ -5,10 +5,12 @@ import {
   CALIBRATION_KEY,
   loadCalibrationText,
   loadCurrentPerformer,
+  loadShowCamera,
   loadShowGaze,
   loadTestMode,
   saveCalibrationText,
   saveCurrentPerformer,
+  saveShowCamera,
   saveShowGaze,
   saveTestMode,
 } from "../../src/player/storage.ts";
@@ -132,6 +134,13 @@ test("calibration text and the show-gaze toggle are stored per viewer, blocked s
   assert.equal(loadTestMode(store), false);
   assert.equal(data.has("skilltree.play.testMode"), false);
 
+  assert.equal(loadShowCamera(store), false);
+  saveShowCamera(true, store);
+  assert.equal(loadShowCamera(store), true);
+  assert.equal(loadShowGaze(store), false);
+  saveShowCamera(false, store);
+  assert.equal(loadShowCamera(store), false);
+
   const broken = {
     getItem: (): string | null => {
       throw new Error("blocked");
@@ -151,4 +160,6 @@ test("calibration text and the show-gaze toggle are stored per viewer, blocked s
   assert.equal(loadTestMode(broken), false);
   assert.equal(loadTestMode(undefined), false);
   assert.doesNotThrow(() => saveTestMode(true, broken));
+  assert.equal(loadShowCamera(broken), false);
+  assert.doesNotThrow(() => saveShowCamera(true, broken));
 });

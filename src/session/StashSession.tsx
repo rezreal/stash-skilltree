@@ -15,6 +15,7 @@
 //   banner (state, notices, coins, score chip -> sensors panel, Stop), the
 //   overlays, a slim timeline above the control bar, the gaze dot, snap
 //   flashes and the gaze callout. The pause lock follows the policy.
+//   Opt-in: the viewer's own camera as a picture-in-picture (CameraPip).
 // - Live checks (src/checks) and the track rule (src/player/useTrack.ts),
 //   decisions in ./checksWiring.ts: the camera gate before the session when
 //   the webcam is required, presence AND gaze as the tick's attention (an
@@ -42,6 +43,7 @@ import { formatCoins, formatCountdown } from "../player/format.ts";
 import { GazeDot } from "../player/GazeDot.tsx";
 import { SensorsPanel } from "../player/SensorsPanel.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
+import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
 import { usePlayData, type PlayData } from "../player/usePlayData.ts";
 import { useSnapEvents, useSnapFlashIntensity } from "../player/useSnapEvents.ts";
 import { useTrackSession, type TrackHandle } from "../player/useTrack.ts";
@@ -64,6 +66,7 @@ import {
   trackScoreToReport,
 } from "./checksWiring.ts";
 import { bannerNotice, findTreeScene, ruleResults, scoreChipView, viewPauseCause, wantsPauseLock } from "./controller.ts";
+import { CameraPip } from "./CameraPip.tsx";
 import { GazeCallout, useGazeCallout } from "./GazeCallout.tsx";
 import { calloutAim } from "./gazeCallout.ts";
 import { AbortedOverlay, CompleteSummary, InattentionOverlay, LoopSaved, SpendDialog, TEST_NOT_SAVED } from "./overlays.tsx";
@@ -324,6 +327,11 @@ function SessionOverlay(props: {
   const snaps = useSnapEvents(scene.id, scene.interactive);
   const flashIntensity = useSnapFlashIntensity();
   const [panelOpen, setPanelOpen] = React.useState(false);
+  const [showCamera, setShowCameraState] = React.useState(loadShowCamera);
+  const setShowCamera = React.useCallback((on: boolean) => {
+    setShowCameraState(on);
+    saveShowCamera(on);
+  }, []);
 
   // watched clips can't be paused by the viewer while the session runs; loops can
   const lock = wantsPauseLock(policy, session.phase);
@@ -399,6 +407,7 @@ function SessionOverlay(props: {
 
   const promptBanner: ReactNode = checks.specs.length > 0 ? <PromptBanner checks={checks} /> : null;
   const sensorRows: ReactNode = <ChecksSensorRows viewer={viewer} status={checks.status} />;
+  const cameraOn = viewer.state === "on";
 
   const stopLabel = exposureOnly && s.persists ? "Stop & save" : "Stop";
   // test mode: what decided the clip, for the summary and the aborted overlay
@@ -477,11 +486,18 @@ function SessionOverlay(props: {
               track={track}
             />
             {sensorRows}
+            {cameraOn && (
+              <label className="stp-toggle stp-small">
+                <input type="checkbox" checked={showCamera} onChange={(e) => setShowCamera(e.currentTarget.checked)} />
+                Show my camera
+              </label>
+            )}
           </OverlayInteractive>
         )}
       </div>
 
       {!finished && promptBanner && <div className="stp-sp-prompt">{promptBanner}</div>}
+      {!finished && showCamera && cameraOn && <CameraPip viewer={viewer} onHide={() => setShowCamera(false)} />}
 
       {showInattention && <InattentionOverlay text={pauseText} abortInSec={abortIn} compact={!!callout} />}
       {callout && (
