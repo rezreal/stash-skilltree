@@ -1,8 +1,10 @@
 // No seeking while a ranked Skilltree session runs: skipping ahead would earn
 // a clip without watching it, and jumping back would watch a part twice.
 //
-// - stash's progress bar takes no pointer input and its scrubber (the
-//   thumbnail strip under the player) is hidden
+// - stash's progress bar takes no pointer input, its scrubber (the
+//   thumbnail strip under the player) is hidden, and so are its 10 s skip
+//   buttons (control bar and the big centre group; visibility, so neither
+//   reflows)
 // - seek keys inside the player area (arrows, digits, Home/End, j/l) are
 //   stopped before stash's and video.js's hotkeys see them
 // - anything that still moves the playhead - the markers panel, OS media
@@ -18,6 +20,10 @@ export const SEEK_LOCK_STYLE_ID = "skilltree-stashplayer-noseek";
 
 export const SEEK_LOCK_CSS = `
 .video-js.${SEEK_LOCK_CLASS} .vjs-progress-control {
+  pointer-events: none !important;
+}
+.video-js.${SEEK_LOCK_CLASS} .vjs-seek-button {
+  visibility: hidden !important;
   pointer-events: none !important;
 }
 .VideoPlayer:has(.video-js.${SEEK_LOCK_CLASS}) .scrubber-wrapper {
