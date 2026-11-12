@@ -5,8 +5,9 @@
 // With `distanceSensor` it also shows the Bluetooth distance sensor of track
 // clips (connection, rate, calibrated) and, with `track`, the live score.
 import { router } from "./api.ts";
-import { CALIBRATE_ROUTE } from "./common.tsx";
+import { CALIBRATE_ROUTE, STROKE_CAMERA_ROUTE } from "./common.tsx";
 import { attentionSourceLabel, gazeChipView, gazeSensorView, type AttentionReading } from "./gazeView.ts";
+import { loadStrokeCalibration } from "./storage.ts";
 import { measuredRate, useGaze, useShowGaze } from "./useGaze.ts";
 import { TrackScoreLine } from "./TrackGuide.tsx";
 import { sensorRowView } from "./trackView.ts";
@@ -20,6 +21,8 @@ export function SensorsPanel(props: {
   distanceSensor?: boolean;
   /** the clip's track session, for the live score line */
   track?: TrackHandle;
+  /** show the stroke camera row (the clip has stroking / hands-off prompts) */
+  strokeCamera?: boolean;
 }) {
   const { Link } = router();
   const { reading } = props;
@@ -94,6 +97,7 @@ export function SensorsPanel(props: {
         </div>
       )}
       {(props.distanceSensor || props.track) && <DistanceSensorRow track={props.track} />}
+      {props.strokeCamera && <StrokeCameraRow />}
     </div>
   );
 }
@@ -138,6 +142,20 @@ function DistanceSensorRow(props: { track: TrackHandle | undefined }) {
           {sensor.configured && sensor.calibrated ? "Sensor setup" : sensor.configured ? "Calibrate sensor" : "Set up sensor"}
         </Link>
       </div>
+    </div>
+  );
+}
+
+/** whether this browser has a stroke-camera calibration, with the link to set it up */
+function StrokeCameraRow() {
+  const { Link } = router();
+  const calibrated = loadStrokeCalibration() !== undefined;
+  return (
+    <div className="stp-row stp-small">
+      <span className="stp-muted">Stroke camera</span>
+      <Link to={STROKE_CAMERA_ROUTE} className="stp-small stp-orange">
+        {calibrated ? "Calibrated · recalibrate" : "Set up"}
+      </Link>
     </div>
   );
 }

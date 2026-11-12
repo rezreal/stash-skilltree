@@ -13,12 +13,15 @@
 // hand_to_mouth: a hand at the mouth per the viewer pose (viewerFrame.ts
 // handToMouth), gated on the pose rather than the face, since the hand often
 // hides the face; holds for min(holdSec, handToMouthMaxSec).
+// stroking / hands_off: a wrist stroking at the lap, or not (stroke.ts, with
+// the stroke-camera calibration from the options), gated on the pose; while
+// the lap isn't in view they are unknown with a framing hint.
 // Body-pose actions (arms_up, hands_on_head, hands_together, kneel, stand,
 // lie_down, the yoga poses; see posture.ts) hold for min(holdSec, poseMaxSec) and are gated
 // on the viewer pose, not the face (a face is often hidden when lying down);
 // time where the needed landmarks are missing is neither pass nor fail.
-// In windows longer than LONG_WINDOW_SEC a body pose, mouth_closed and still
-// are scored by share, like a long gaze window: passed iff at least
+// In windows longer than LONG_WINDOW_SEC a body pose, mouth_closed, still,
+// stroking and hands_off are scored by share, like a long gaze window: passed iff at least
 // SUSTAINED_MIN_SHARE of the evidence time was in it and at least the hold
 // time of it (meditation-style "stay kneeling for the whole part", "hold it
 // in your mouth", "hold still").
@@ -30,6 +33,7 @@
 
 import { createHoldTracker, createShareTracker, isSustained, sharePercentText, SUSTAINED_MIN_SHARE } from "./hold.ts";
 import { assessPosture, isPoseAction, POSTURE_HINTS } from "./posture.ts";
+import { createStrokeTracker, type StrokeCalibration } from "./stroke.ts";
 import type { PostureVerdict } from "./posture.ts";
 import type { HoldState } from "./hold.ts";
 import type { CheckResult, PromptAction, PromptSpec, ViewerFrame } from "./types.ts";
@@ -69,10 +73,14 @@ export const ACTION_THRESHOLDS = {
 
 /** actions a long window scores by share instead of by one hold (see the top) */
 export function scoredByShare(action: PromptAction | undefined): boolean {
-  return isPoseAction(action) || action === "mouth_closed" || action === "still";
+  return isPoseAction(action) || action === "mouth_closed" || action === "still" || isStrokeAction(action);
 }
 
+const isStrokeAction = (action: PromptAction | undefined): boolean => action === "stroking" || action === "hands_off";
+
 export interface ActionCheckOptions {
+  /** the viewer's stroke-camera calibration (stroking / hands_off) */
+  stroke?: StrokeCalibration;
   stillMotion?: number;
   nodAmplitudeDeg?: number;
   shakeAmplitudeDeg?: number;
@@ -295,6 +303,21 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
       label = "hand at mouth";
       classify = (f) => (f.handToMouth === undefined ? "unknown" : f.handToMouth ? "in" : "out");
       break;
+    case "stroking":
+    case "hands_off": {
+      const stroke = createStrokeTracker(opts?.stroke);
+      const tracker = createHintTracker();
+      hints = tracker;
+      const off = action === "hands_off";
+      label = off ? "hands off" : "stroking";
+      classify = (f) => {
+        const s = stroke.push(f.t, f.pose, f.aspect);
+        const state: HoldState = s === "unknown" ? s : (s === "in") !== off ? "in" : "out";
+        tracker.push(f.t, state === "unknown" ? { state, hint: stroke.hint ?? POSTURE_HINTS.notInView } : { state });
+        return state;
+      };
+      break;
+    }
     default:
       if (isPoseAction(action)) {
         needSec = Math.min(spec.holdSec, T.poseMaxSec);
@@ -312,7 +335,7 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
         classify = () => "unknown";
       }
   }
-  const faceGated = !isPoseAction(action) && action !== "hand_to_mouth";
+  const faceGated = !isPoseAction(action) && action !== "hand_to_mouth" && !isStrokeAction(action);
   const sustained = scoredByShare(action) && isSustained(spec);
 
   const hold = createHoldTracker({ needMs: Math.max(0.1, needSec) * 1000, toleranceMs: tolerance, maxDtMs: 250 });

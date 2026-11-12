@@ -32,6 +32,8 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   mouth_open: "Open your mouth",
   mouth_closed: "Keep your mouth closed",
   hand_to_mouth: "Hand to your mouth",
+  stroking: "Stroke",
+  hands_off: "Hands off",
   arms_up: "Arms up",
   hands_on_head: "Hands on your head",
   hands_together: "Hands together",

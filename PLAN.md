@@ -143,8 +143,13 @@ Watch policy = rules composed per scene from its tags:
   raised, still, arms up, hands on head, hands together, kneel, kneel
   sitting on the heels, stand, lie down; yoga: cat, cow, extended puppy,
   downward dog, plank, plow, straddle stretch, upward seated straddle, child's
-  pose, standing forward fold, happy baby, savasana, upward salute, warrior II, tree, cobra, butterfly, shoulder stand; pose windows over 10 s are scored
-  by the share of time in the pose), gaze targets on the person in the video (MediaPipe
+  pose, standing forward fold, happy baby, savasana, upward salute, warrior II, tree, cobra, butterfly, shoulder stand;
+  mouth open / closed from the face's jawOpen, a hand at the mouth from the
+  pose; stroking / hands off: a wrist stroking at the lap, body-relative to
+  the hips in shoulder widths, with a per-browser stroke-camera calibration
+  at /skilltree/stroke-camera (framing, 5 s stroke, 3 s rest); windows over
+  10 s score poses, mouth closed, still, stroking and hands off by the share
+  of time in them), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
   prompts (hold-to-confirm or voice; declining fails the clip). A missed
   prompt up to 10 s long is replayed once (the clip seeks back to it);

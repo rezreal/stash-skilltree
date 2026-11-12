@@ -26,6 +26,7 @@ import { VIEWER_RATE } from "../perception/viewer.ts";
 import { createSpeech, type Speech } from "../perception/speech.ts";
 import { createVision, type PersonAnalyzer, type Vision } from "../perception/vision.ts";
 import type { PerceptionError } from "../perception/errors.ts";
+import { loadStrokeCalibration } from "../player/storage.ts";
 import { gazeStatusNow, subscribeGaze } from "../player/useGaze.ts";
 import { createPromptRunner, type GazeFeedSample, type PromptRunner } from "../prompts/runner.ts";
 import { promptSpecs } from "../prompts/specs.ts";
@@ -192,7 +193,9 @@ export function usePromptChecks(input: PromptChecksInput): PromptChecks {
   const key = `${input.scene.id}|${settings.speechEnabled ? 1 : 0}${settings.videoAnalysis ? 1 : 0}`;
   if (on && rtRef.current?.key !== key) {
     const sel = selectSpecs(promptSpecs(input.scene.markers), settings);
-    const runner = createPromptRunner(sel.specs);
+    // the stroke-camera calibration as it is when the clip starts
+    const stroke = loadStrokeCalibration();
+    const runner = createPromptRunner(sel.specs, stroke ? { action: { stroke } } : undefined);
     rtRef.current = {
       key,
       runner,

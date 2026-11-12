@@ -39,6 +39,9 @@ export const PROMPT_ACTIONS = [
   "mouth_open",
   "mouth_closed",
   "hand_to_mouth",
+  // a wrist stroking at the lap, or not (stroke.ts; the stroke-camera calibration)
+  "stroking",
+  "hands_off",
   // body pose of the viewer (ViewerFrame.pose)
   "arms_up",
   "hands_on_head",

@@ -639,6 +639,7 @@ function SessionOverlay(props: {
               snapFlashes={flashIntensity > 0 ? snaps.length : 0}
               distanceSensor={policy.rules.includes("track")}
               track={track}
+              strokeCamera={scene.markers.some((m) => m.check === "action" && (m.action === "stroking" || m.action === "hands_off"))}
             />
             {sensorRows}
             {cameraOn && (

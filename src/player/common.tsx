@@ -11,6 +11,8 @@ export { PLAY_ROUTE };
 
 /** the gaze calibration; outside /play, registered by register.tsx */
 export const CALIBRATE_ROUTE = `${ROUTE}/calibrate`;
+/** the stroke-camera setup (StrokeCameraScreen.tsx) */
+export const STROKE_CAMERA_ROUTE = `${ROUTE}/stroke-camera`;
 
 
 export function CoinIcon(props: { size?: number; strokeWidth?: number }) {

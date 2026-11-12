@@ -1,11 +1,13 @@
 // Per-viewer conveniences kept in localStorage. Every access is guarded:
 // private windows and blocked storage simply mean nothing is remembered.
+import { parseStrokeCalibration, type StrokeCalibration } from "../prompts/stroke.ts";
 
 const PERFORMER_KEY = "skilltree.play.performer";
 export const CALIBRATION_KEY = "skilltree.calibration";
 const SHOW_GAZE_KEY = "skilltree.play.showGaze";
 const TEST_MODE_KEY = "skilltree.play.testMode";
 const SHOW_CAMERA_KEY = "skilltree.play.showCamera";
+export const STROKE_CALIBRATION_KEY = "skilltree.strokeCalibration";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -112,5 +114,26 @@ export function saveShowCamera(on: boolean, store: StorageLike | undefined = sto
     else store?.removeItem(SHOW_CAMERA_KEY);
   } catch {
     // not remembered
+  }
+}
+
+/** the stroke-camera calibration of this browser (camera angle and room are per device) */
+export function loadStrokeCalibration(store: StorageLike | undefined = storage()): StrokeCalibration | undefined {
+  try {
+    return parseStrokeCalibration(store?.getItem(STROKE_CALIBRATION_KEY) ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
+
+/** stores the calibration; undefined removes it. false when storage is blocked. */
+export function saveStrokeCalibration(cal: StrokeCalibration | undefined, store: StorageLike | undefined = storage()): boolean {
+  try {
+    if (!store) return false;
+    if (cal) store.setItem(STROKE_CALIBRATION_KEY, JSON.stringify(cal));
+    else store.removeItem(STROKE_CALIBRATION_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }
