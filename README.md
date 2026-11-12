@@ -7,6 +7,17 @@ library into a skill tree: topics and levels you unlock by actually watching,
 following and performing what the clips ask. Configuration lives in tag
 custom fields (`st.*`), progress on scenes.
 
+## Install
+
+**From the Plugin Manager**: Settings › Plugins › Available Plugins › Add
+Source, with the source URL
+
+    https://rezreal.github.io/stash-skilltree/index.yml
+
+then install Skilltree from that source. The package includes the MediaPipe
+and Vosk models the camera and voice prompts load (Apache-2.0), so nothing is
+fetched from a CDN at runtime.
+
 ## Development
 
 ```bash
@@ -15,9 +26,12 @@ npm run check      # typecheck, tests, bundle
 ./build.sh         # dist/: plugin zip + index.yml (a stash plugin source)
 ```
 
-Manual install: copy `plugin/skilltree.yml`, `plugin/skilltree.js` and
-`plugin/skilltree.css` into a `skilltree` folder in your stash `plugins`
-directory, then Settings > Plugins > Reload Plugins.
+Manual install: run `tools/fetch_models.sh`, then copy `plugin/skilltree.yml`,
+`plugin/skilltree.js`, the three `plugin/skilltree*.css` files and
+`plugin/assets/` into a `skilltree` folder in your stash `plugins` directory,
+then Settings > Plugins > Reload Plugins. Every push to `main` tests, builds
+and publishes the package source to GitHub Pages
+(`.github/workflows/release.yml`).
 
 ## Deriving prompt markers from captions
 

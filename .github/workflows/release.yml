@@ -27,6 +27,8 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Fetch the perception models
+        run: tools/fetch_models.sh
       - name: Build package source
         run: ./build.sh
       - uses: actions/upload-pages-artifact@v3

@@ -36,6 +36,14 @@ members = [
     (f"{ROOT}/plugin/{ID}-checks.css", f"{ID}-checks.css"),
     (f"{ROOT}/README.md",       "README.md"),
 ]
+# the perception models and libraries (tools/fetch_models.sh) ship in the
+# zip too, under assets/ like on disk, so camera and voice prompts work when
+# the plugin is installed from the package source
+assets = f"{ROOT}/plugin/assets"
+for dirpath, _dirs, files in sorted(os.walk(assets)):
+    for name in sorted(files):
+        src = os.path.join(dirpath, name)
+        members.append((src, "assets/" + os.path.relpath(src, assets).replace(os.sep, "/")))
 
 zpath = f"{DIST}/{ID}.zip"
 with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
