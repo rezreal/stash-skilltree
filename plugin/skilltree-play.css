@@ -2025,7 +2025,7 @@
 .skilltree-play .stp-sp-mail-icon:hover { background: rgba(255, 255, 255, 0.07); color: var(--st-text); }
 .skilltree-play .stp-sp-mail-icon:focus-visible { outline: 2px solid var(--st-text); outline-offset: -2px; }
 
-.skilltree-play .stp-sp-mail-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.skilltree-play .stp-sp-mail-body { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
 .skilltree-play .stp-sp-mail-row {
   align-items: center;
   border-bottom: 1px solid var(--st-border);
@@ -2049,7 +2049,7 @@
 .skilltree-play .stp-sp-mail-text {
   flex: 1;
   line-height: 1.55;
-  min-height: 140px;
+  min-height: 96px;
   padding: 10px 12px;
   resize: none;
 }
@@ -2062,6 +2062,54 @@
   padding: 8px 12px;
 }
 .skilltree-play .stp-sp-mail-send { border-radius: 999px; flex: none; }
+.skilltree-play .stp-sp-mail-icon.is-on { background: rgba(255, 255, 255, 0.1); color: var(--st-text); }
+.skilltree-play .stp-sp-mail-foot .stp-small { flex: 1; min-width: 0; text-align: right; }
+
+/* camera viewfinder and attached photos (mirrored, like the camera PiP) */
+.skilltree-play .stp-sp-mail-finder {
+  align-items: center;
+  border-top: 1px solid var(--st-border);
+  display: flex;
+  flex: none;
+  gap: 10px;
+  padding: 8px 12px;
+}
+.skilltree-play .stp-sp-mail-finder video {
+  aspect-ratio: 4 / 3;
+  background: var(--stp-deep);
+  border-radius: 6px;
+  display: block;
+  object-fit: cover;
+  transform: scaleX(-1);
+  width: min(180px, 50%);
+}
+.skilltree-play .stp-sp-mail-finder-error { flex: 1; margin: 0; }
+.skilltree-play .stp-sp-mail-finder-actions { display: flex; flex-direction: column; gap: 6px; }
+.skilltree-play .stp-sp-mail-photos {
+  border-top: 1px solid var(--st-border);
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.skilltree-play .stp-sp-mail-photo { display: block; height: 48px; position: relative; }
+.skilltree-play .stp-sp-mail-photo img { border-radius: 4px; display: block; height: 48px; object-fit: cover; width: 64px; }
+.skilltree-play .stp-sp-mail-photo button {
+  background: rgba(12, 15, 19, 0.75);
+  border: none;
+  border-radius: 999px;
+  color: var(--st-text);
+  cursor: pointer;
+  font-size: 14px;
+  height: 20px;
+  line-height: 1;
+  padding: 0;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 20px;
+}
 
 .skilltree-play .stp-sp-mail-sent {
   background: var(--stp-card);

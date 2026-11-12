@@ -673,6 +673,7 @@ function SessionOverlay(props: {
           prompt={openMail}
           held={s.mailHeld}
           holdInSec={mailHoldAt(openMail, s.durationSec) - s.videoTime}
+          camera={cameraOn ? viewer.stream() : null}
           onSend={() => {
             s.sendMail(openMail);
             setMailsSent((n) => n + 1);

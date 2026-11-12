@@ -67,3 +67,15 @@ export function mailHoldAt(prompt: MailPrompt, durationSec: number): number {
   if (!(durationSec > 0)) return prompt.window.end;
   return Math.max(prompt.window.start, Math.min(prompt.window.end, durationSec - MAIL_END_MARGIN_SEC));
 }
+
+/** longest side of a webcam photo attached to a draft (px) */
+export const MAIL_PHOTO_MAX_PX = 1280;
+/** photos one draft can hold */
+export const MAIL_PHOTO_LIMIT = 8;
+
+/** a frame's size scaled down (never up) so its longest side fits max */
+export function fitWithin(width: number, height: number, max = MAIL_PHOTO_MAX_PX): { width: number; height: number } {
+  if (!(width > 0) || !(height > 0)) return { width: 0, height: 0 };
+  const k = Math.min(1, max / Math.max(width, height));
+  return { width: Math.round(width * k), height: Math.round(height * k) };
+}
