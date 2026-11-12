@@ -203,11 +203,17 @@ Watch policy = rules composed per scene from its tags:
   (lag-compensated) target, yellow turning red the further off (stroke
   15→45, hold 8→25, ramp 8→30 units), smoothed over 250 ms; only in scored
   sections with a live, calibrated sensor.
-  Lovense gating (`lovenseGate`, default on): with the separate Lovense Sync
-  plugin (repo stash-lovense: Web Bluetooth vibrators driven by the
-  funscript) the session sends `window` event `lovense:gain` {source:
-  "skilltree", gain} = 1 − mismatch in 0.05 steps (1 when nothing is
-  judged), and null when the clip ends; Lovense Sync multiplies all gains.
+  Toy Sync (separate plugin, repo stash-toy-sync: Lovense vibrators and
+  DG-LAB Coyote e-stim over Web Bluetooth, driven by the funscript):
+  gating (`toyGate`, default on) sends `window` event `toysync:gain`
+  {source: "skilltree", gain} = 1 − mismatch in 0.05 steps (1 when nothing
+  is judged), null when the clip ends. Nudges (`nudgeTrack`, `nudgeGaze`,
+  default on) send `toysync:nudge` {source, reason: "track" | "gaze"} after
+  the condition held 1 s, then every 5 s while it lasts: track = mismatch ≥
+  0.6 while playing; gaze = a gaze prompt reports "off" or the eye tracker
+  sees the viewer look away (never on the fallback, never in a background
+  window). Toy Sync rate-limits nudges (cooldown, per-minute cap) and only
+  e-stim devices at their calibrated nudge level act on them.
 
 - **Gaze regions** — with a real eye tracker (not the mouse stand-in) and
   video analysis on, MediaPipe pose + face run on the clip at ~2 Hz (the

@@ -54,7 +54,15 @@ import { eyesClosedDimOpacity } from "../player/flash.ts";
 import { FocusBlur } from "../player/FocusBlur.tsx";
 import { focusBlurPx, wantsFocusBlur } from "../player/focusBlur.ts";
 import { trackGlowIntensity } from "../player/trackView.ts";
-import { gainFromMismatch, lovenseGateEnabled, sendLovenseGain } from "../integrations/lovense.ts";
+import {
+  createNudgeTimer,
+  gainFromMismatch,
+  gazeNotFollowed,
+  onUnlessOff,
+  sendToyGain,
+  sendToyNudge,
+  TRACK_NUDGE_MISMATCH,
+} from "../integrations/toysync.ts";
 import { SensorStatusChip } from "../player/SensorStatusChip.tsx";
 import { TrackGuide } from "../player/TrackGuide.tsx";
 import { loadShowCamera, saveShowCamera } from "../player/storage.ts";
@@ -433,24 +441,31 @@ function SessionOverlay(props: {
     isPlaying,
   });
   trackRef.current = track;
-  // Lovense Sync (a separate plugin, if installed) runs the toy from the
-  // script; during track clips its strength follows how well the viewer is on
-  // target. The gain is withdrawn when the clip ends or the overlay goes.
-  const lovenseGate = lovenseGateEnabled(rawSettings.lovenseGate) && track !== undefined && !finished;
+  // Toy Sync (a separate plugin, if installed) runs the toys from the
+  // script. During track clips their strength follows how well the viewer is
+  // on target (gain), and staying far off sends a nudge (e-stim). The gain is
+  // withdrawn when the clip ends or the overlay goes.
+  const toyGate = onUnlessOff(rawSettings.toyGate) && track !== undefined && !finished;
+  const nudgeTrack = onUnlessOff(rawSettings.nudgeTrack) && track !== undefined && !finished;
+  const toyGateRef = React.useRef(toyGate);
+  toyGateRef.current = toyGate;
   const lastGain = React.useRef<number | null>(null);
-  const onLovenseMatch = React.useCallback((mismatch: number | undefined) => {
+  const mismatchRef = React.useRef<number | undefined>(undefined);
+  const onToyMatch = React.useCallback((mismatch: number | undefined) => {
+    mismatchRef.current = mismatch;
+    if (!toyGateRef.current) return;
     const gain = gainFromMismatch(mismatch);
     if (gain === lastGain.current) return;
     lastGain.current = gain;
-    sendLovenseGain(gain);
+    sendToyGain(gain);
   }, []);
   React.useEffect(() => {
-    if (!lovenseGate) return;
+    if (!toyGate) return;
     return () => {
       lastGain.current = null;
-      sendLovenseGain(null);
+      sendToyGain(null);
     };
-  }, [lovenseGate]);
+  }, [toyGate]);
   // only while scored (calibrated sensor sending): no sensor -> the track rule stays unscored
   React.useEffect(() => {
     if (!track || finished) return;
@@ -466,6 +481,29 @@ function SessionOverlay(props: {
   const focusSpec = !finished && wantsFocusBlur(prompt?.spec) ? prompt?.spec : undefined;
   const texts = attentionTexts(attention.reading, presence, required, prompt);
   const attendingNow = sessionAttending(attention.reading, presence, { required, prompt });
+
+  // nudges (Toy Sync, e-stim): the gaze isn't followed, or the track is far
+  // off, for a second - then every few seconds while it lasts. Only while the
+  // clip runs or waits for the viewer's attention; never during a spend prompt.
+  const nudgeGaze = onUnlessOff(rawSettings.nudgeGaze) && !finished;
+  const nudgeState = React.useRef({ reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, spend: !!openSpend });
+  nudgeState.current = { reading: attention.reading, phase: session.phase, pausedBy: session.pausedBy, spend: !!openSpend };
+  React.useEffect(() => {
+    if (!nudgeGaze && !nudgeTrack) return;
+    const gazeTimer = createNudgeTimer();
+    const trackTimer = createNudgeTimer();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const st = nudgeState.current;
+      const live =
+        !st.spend && (st.phase === "playing" || st.phase === "grace" || (st.phase === "paused" && st.pausedBy === "inattention"));
+      const gazeOff = live && gazeNotFollowed({ prompt: checksRef.current?.promptAttention(), reading: st.reading });
+      if (nudgeGaze && gazeTimer.update(gazeOff, now)) sendToyNudge("gaze");
+      const trackOff = live && st.phase !== "paused" && isPlaying() && (mismatchRef.current ?? 0) >= TRACK_NUDGE_MISMATCH;
+      if (nudgeTrack && trackTimer.update(trackOff, now)) sendToyNudge("track");
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [nudgeGaze, nudgeTrack, isPlaying]);
 
   const phase = phaseView(session.phase, policy, viewPauseCause(!!openSpend, session.pausedBy));
   const pauseAttemptRecent = useRecentChange(session.pauseAttempts, 4000);
@@ -525,7 +563,7 @@ function SessionOverlay(props: {
           getVideoTime={getVideoTime}
           track={track}
           glow={trackGlowIntensity(rawSettings.trackGlow)}
-          {...(lovenseGate ? { onMatch: onLovenseMatch } : {})}
+          {...(toyGate || nudgeTrack ? { onMatch: onToyMatch } : {})}
         />
       )}
 

@@ -147,15 +147,34 @@ settings:
       colors ease in and out rather than flash. Strength 0-100, default 70;
       0 turns it off.
     type: NUMBER
-  lovenseGate:
-    displayName: Lovense follows how well you track
+  toyGate:
+    displayName: Toys follow how well you track
     description: >-
-      With the Lovense Sync plugin installed and a toy connected, the toy
-      runs from the clip's funscript. During track clips this makes its
-      strength follow you: full while you are on the target (the green
-      glow), fading to off the further off you are. Without a sensor reading
-      the toy simply follows the script. On by default; turn off for plain
-      script sync.
+      With the Toy Sync plugin installed and a toy connected, the toy runs
+      from the clip's funscript. During track clips this makes its strength
+      follow you: full while you are on the target (the green glow), fading
+      to off the further off you are. Without a sensor reading the toy simply
+      follows the script. On by default; turn off for plain script sync.
+    type: BOOLEAN
+  nudgeTrack:
+    displayName: Nudge when far off the track
+    description: >-
+      With Toy Sync and a calibrated e-stim device (DG-LAB Coyote): staying
+      far off the target for a second in a track clip sends a short sharp
+      nudge at your calibrated nudge level, again every few seconds while it
+      lasts. Toy Sync limits how often nudges can come. Only with a live,
+      calibrated distance sensor. On by default (nothing happens without a
+      calibrated e-stim device).
+    type: BOOLEAN
+  nudgeGaze:
+    displayName: Nudge when the gaze isn't followed
+    description: >-
+      With Toy Sync and a calibrated e-stim device: looking away from the
+      clip (seen by the eye tracker), or not following a gaze prompt (eyes
+      open during "close your eyes", not looking where asked) for a second
+      sends a short sharp nudge, again every few seconds while it lasts.
+      Never without real evidence (the focus/activity fallback never
+      nudges) and not while the window is in the background. On by default.
     type: BOOLEAN
   trackMaxHoldSec:
     displayName: Track max hold (seconds)
