@@ -53,6 +53,29 @@ describe("nod / shake_head", () => {
     assert.equal(small.result().passed, false); // 9 degrees < 10
   });
 
+  it("a long window scores nodding along by share", () => {
+    const long = () => createActionCheck(spec({ check: "action", action: "nod", start: 0, end: 30 }));
+    const wave = sine(6, 1000);
+    // one nod, then sitting still: nodding only for the first few seconds
+    const once = long();
+    feed(once, 0, 1500, (t) => ({ pitch: wave(t) }));
+    feed(once, 1500, 30_000, () => ({ pitch: 0 }));
+    assert.equal(once.result().passed, false, "a single nod doesn't pass a long window");
+    assert.ok(once.result().share! < 0.3);
+    // nodding along the whole time
+    const along = long();
+    feed(along, 0, 30_000, (t) => ({ pitch: wave(t) }));
+    const r = along.result();
+    assert.equal(r.passed, true);
+    assert.ok(r.share! > 0.9);
+    assert.match(r.detail, /^nodding /);
+    // nodding for half of it
+    const half = long();
+    feed(half, 0, 15_000, (t) => ({ pitch: wave(t) }));
+    feed(half, 15_000, 30_000, () => ({ pitch: 0 }));
+    assert.equal(half.result().passed, false);
+  });
+
   it("frames without a face are skipped, not reset", () => {
     const c = check("nod");
     feed(c, 0, 300, () => ({ pitch: 0 }));

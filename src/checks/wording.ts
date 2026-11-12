@@ -103,7 +103,8 @@ type LabelSpec = Pick<PromptSpec, "check" | "holdSec"> & {
 
 /**
  * A gaze window, or an action window that scores by share (body poses,
- * mouth_closed, still), longer than LONG_WINDOW_SEC: scored by share, not by
+ * mouth_closed, still, stroking, hands_off, nod, shake_head), longer than
+ * LONG_WINDOW_SEC: scored by share, not by
  * the hold.
  */
 export function sustainedWindow(spec: LabelSpec): boolean {
@@ -125,7 +126,7 @@ export function progressLabel(spec: LabelSpec, share?: number): string {
       return `hold ${formatSec(spec.target === "eyes_closed" ? eyesClosedHoldSec(spec.holdSec) : spec.holdSec)}`;
     case "action":
       if (!sustainedWindow(spec)) return "hold";
-      return `${isPoseAction(spec.action) ? "in pose" : "held"} ${sharePercentText(share)}`;
+      return `${isPoseAction(spec.action) ? "in pose" : spec.action === "nod" ? "nodding" : spec.action === "shake_head" ? "shaking" : "held"} ${sharePercentText(share)}`;
     default:
       return "hold";
   }

@@ -3,7 +3,11 @@
 // nod / shake_head: oscillation of pitch / yaw. A swing is counted when the
 // angle moves at least `amplitude` degrees away from the last extreme in the
 // opposite direction (hysteresis, so jitter never counts); a cycle is two
-// consecutive swings (down-up or up-down) within maxCycleMs.
+// consecutive swings (down-up or up-down) within maxCycleMs. In windows longer
+// than LONG_WINDOW_SEC ("nod along with me") they score by share instead: the
+// viewer counts as nodding while the last swing is at most noddingGapMs old,
+// and passes with at least SUSTAINED_MIN_SHARE of the face time nodding and
+// one full nod.
 // eyes_closed / eyes_open / hand_raised / still / mouth_open / mouth_closed:
 // continuous holds. Frames without a face don't count and don't reset, except
 // for still (a face leaving the frame is movement).
@@ -45,6 +49,8 @@ export const ACTION_THRESHOLDS = {
   maxCycleMs: 3000,
   /** angle changes this small keep refreshing the time of the current extreme */
   jitterDeg: 1,
+  /** long nod / shake windows: still nodding while the last swing is at most this old (ms) */
+  noddingGapMs: 2500,
   eyesClosedMin: 0.5,
   eyesClosedMaxSec: 1.5,
   eyesOpenMax: 0.3,
@@ -73,8 +79,10 @@ export const ACTION_THRESHOLDS = {
 
 /** actions a long window scores by share instead of by one hold (see the top) */
 export function scoredByShare(action: PromptAction | undefined): boolean {
-  return isPoseAction(action) || action === "mouth_closed" || action === "still" || isStrokeAction(action);
+  return isPoseAction(action) || action === "mouth_closed" || action === "still" || isStrokeAction(action) || isHeadMotion(action);
 }
+
+const isHeadMotion = (action: PromptAction | undefined): boolean => action === "nod" || action === "shake_head";
 
 const isStrokeAction = (action: PromptAction | undefined): boolean => action === "stroking" || action === "hands_off";
 
@@ -139,6 +147,8 @@ interface Oscillation {
   readonly passed: boolean;
   readonly progress: number;
   readonly swings: number;
+  /** time of the last swing (ms), undefined before the first */
+  readonly lastSwingAt: number | undefined;
   reset(): void;
 }
 
@@ -149,6 +159,7 @@ function createOscillation(amplitude: number, maxCycleMs: number, jitter: number
   /** running extreme in the current direction (dir 1: max, dir -1: min) */
   let ext = { v: 0, t: 0 };
   let lastSwingStart: number | undefined;
+  let lastSwingAt: number | undefined;
   let swings = 0;
   let inCycle = 0;
   let passed = false;
@@ -156,6 +167,7 @@ function createOscillation(amplitude: number, maxCycleMs: number, jitter: number
 
   function swing(startT: number, t: number): void {
     swings++;
+    lastSwingAt = t;
     if (lastSwingStart !== undefined && t - lastSwingStart <= maxCycleMs) {
       passed = true;
       inCycle = 2;
@@ -206,11 +218,15 @@ function createOscillation(amplitude: number, maxCycleMs: number, jitter: number
     get swings() {
       return swings;
     },
+    get lastSwingAt() {
+      return lastSwingAt;
+    },
     reset() {
       dir = 0;
       hi = undefined;
       lo = undefined;
       lastSwingStart = undefined;
+      lastSwingAt = undefined;
       swings = inCycle = 0;
       passed = false;
       partial = 0;
@@ -228,14 +244,31 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
     const amp = action === "nod" ? (opts?.nodAmplitudeDeg ?? T.nodAmplitudeDeg) : (opts?.shakeAmplitudeDeg ?? T.shakeAmplitudeDeg);
     const osc = createOscillation(amp, opts?.maxCycleMs ?? T.maxCycleMs, T.jitterDeg);
     const label = action === "nod" ? "nod" : "head shake";
+    const sustained = isSustained(spec);
+    const share = createShareTracker({ maxDtMs: 250 });
+    const gap = T.noddingGapMs;
     return {
       spec,
       push(f) {
         if (!f.facePresent) return;
         const v = action === "nod" ? f.pitch : f.yaw;
-        if (v !== undefined) osc.push(f.t, v);
+        if (v === undefined) return;
+        osc.push(f.t, v);
+        const last = osc.lastSwingAt;
+        share.push(f.t, last !== undefined && f.t - last <= gap ? "in" : "out");
       },
       result() {
+        if (sustained) {
+          const sh = share.share;
+          const passed = osc.passed && sh !== undefined && sh >= SUSTAINED_MIN_SHARE;
+          const r: CheckResult = {
+            passed,
+            progress: passed ? 1 : Math.min(0.99, (sh ?? 0) / SUSTAINED_MIN_SHARE),
+            detail: `${action === "nod" ? "nodding" : "shaking"} ${sharePercentText(sh)}`,
+          };
+          if (sh !== undefined) r.share = sh;
+          return r;
+        }
         return {
           passed: osc.passed,
           progress: osc.progress,
@@ -244,6 +277,7 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
       },
       reset() {
         osc.reset();
+        share.reset();
       },
     };
   }

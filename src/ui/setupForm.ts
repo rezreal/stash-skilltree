@@ -137,8 +137,8 @@ export const GAZE_TARGET_HELP: Readonly<Record<string, string>> = {
 };
 
 export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
-  nod: "nod at least once (down and up)",
-  shake_head: "shake the head at least once",
+  nod: "nod at least once (down and up); in windows over 10 s: keep nodding along for most of the window",
+  shake_head: "shake the head at least once; in windows over 10 s: keep shaking it for most of the window",
   eyes_closed: "keep both eyes closed",
   eyes_open: "keep the eyes open (blinks are fine)",
   hand_raised: "raise a hand above the shoulder",

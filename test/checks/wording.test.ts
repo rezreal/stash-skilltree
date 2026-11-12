@@ -164,7 +164,9 @@ describe("long gaze windows on the banner", () => {
     assert.equal(v.instruction, "Kneel and sit on your heels");
     assert.equal(v.shareText, "in pose 90% · need 75%");
     assert.equal(progressLabel({ check: "action", holdSec: 2, action: "kneel_sit", start: 0, end: 10 }), "hold");
-    assert.equal(progressLabel({ check: "action", holdSec: 2, action: "nod", start: 0, end: 300 }), "hold");
+    // a long nod window is "nod along": the share of the time nodding
+    assert.equal(progressLabel({ check: "action", holdSec: 2, action: "nod", start: 0, end: 300 }, 0.8), "nodding 80% · need 75%");
+    assert.equal(progressLabel({ check: "action", holdSec: 2, action: "nod", start: 0, end: 10 }), "hold");
   });
 
   it("short windows keep the hold label and no share line", () => {
