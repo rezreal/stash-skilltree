@@ -5,25 +5,41 @@
 // Send (or Ctrl/Cmd+Enter) passes the prompt. Fields are editable; the
 // overlay host keeps the player's hotkeys out of them (OverlayHost.tsx).
 //
-// Photos: the camera button opens a viewfinder (mirrored, like the camera
-// PiP) on the session's running camera, or, when that is off, on a camera
-// of its own that the viewer's click starts and closing stops. Photos are
-// taken as previewed and held as object URLs in this component only; they
-// are dropped with the draft, never stored or uploaded.
+// Attachments: the camera button opens a viewfinder (mirrored, like the
+// camera PiP) on the session's running camera, or, when that is off, on a
+// camera of its own that the viewer's click starts and closing stops. Photos
+// are taken as previewed; videos record the camera with the microphone
+// (asked for on Record; without it they record silently) for at most
+// MAIL_VIDEO_MAX_SEC, and play back mirrored like the preview. Closing the
+// viewfinder or minimizing stops a recording and keeps it. Everything is
+// held as object URLs in this component only and dropped with the draft,
+// never stored or uploaded.
 import { classifyMediaError } from "../perception/errors.ts";
 import { formatCountdown } from "../player/format.ts";
-import { fitWithin, MAIL_PHOTO_LIMIT, type MailPrompt } from "../player/mail.ts";
+import { fitWithin, MAIL_ATTACHMENT_LIMIT, MAIL_VIDEO_MAX_SEC, pickRecorderType, type MailPrompt } from "../player/mail.ts";
 
 type Mode = "normal" | "min" | "max";
 
-interface Photo {
+interface Attachment {
   id: number;
+  kind: "photo" | "video";
   url: string;
+  /** video length in seconds */
+  sec?: number;
+}
+
+interface Recording {
+  recorder: MediaRecorder;
+  mic: MediaStream | null;
+  startedMs: number;
+  /** stop without keeping the clip (the draft went away) */
+  discard: boolean;
 }
 
 const ICON = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, "aria-hidden": true } as const;
 
 const stopTracks = (s: MediaStream) => s.getTracks().forEach((t) => t.stop());
+const canRecord = () => typeof MediaRecorder !== "undefined";
 
 /** a camera stream while `open`: the shared one if running, else one of our own */
 function useViewfinderStream(open: boolean, shared: MediaStream | null): { stream: MediaStream | null; error?: string } {
@@ -77,12 +93,18 @@ export function MailDraft(props: {
   const [body, setBody] = React.useState(prompt.draft.body);
   const [mode, setMode] = React.useState<Mode>("normal");
   const [finder, setFinder] = React.useState(false);
-  const [photos, setPhotos] = React.useState<Photo[]>([]);
-  const photosRef = React.useRef(photos);
-  photosRef.current = photos;
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const attachmentsRef = React.useRef(attachments);
+  attachmentsRef.current = attachments;
   const nextId = React.useRef(1);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const { stream, error } = useViewfinderStream(finder && mode !== "min", props.camera);
+  const viewing = finder && mode !== "min";
+  const { stream, error } = useViewfinderStream(viewing, props.camera);
+  const [recording, setRecording] = React.useState<Recording | undefined>(undefined);
+  const recordingRef = React.useRef(recording);
+  recordingRef.current = recording;
+  const [recNote, setRecNote] = React.useState<string | undefined>(undefined);
+  const [, tick] = React.useState(0);
 
   // the clip waits for this draft: it can't stay tucked away
   React.useEffect(() => {
@@ -99,10 +121,44 @@ export function MailDraft(props: {
     };
   }, [stream]);
 
-  // the photos go with the draft
-  React.useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+  const add = (a: Omit<Attachment, "id">) => setAttachments((list) => [...list, { id: nextId.current++, ...a }]);
 
-  const full = photos.length >= MAIL_PHOTO_LIMIT;
+  const stopRecording = React.useCallback(() => {
+    const rec = recordingRef.current;
+    if (rec && rec.recorder.state !== "inactive") rec.recorder.stop();
+  }, []);
+
+  // the viewfinder closed or the draft was minimized: the recording ends (and is kept)
+  React.useEffect(() => {
+    if (!viewing) stopRecording();
+  }, [viewing, stopRecording]);
+
+  // the elapsed time while recording; the limit stops it
+  React.useEffect(() => {
+    if (!recording) return;
+    const id = window.setInterval(() => {
+      tick((n) => (n + 1) % 1_000_000);
+      if (Date.now() - recording.startedMs >= MAIL_VIDEO_MAX_SEC * 1000) stopRecording();
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [recording, stopRecording]);
+
+  // the attachments go with the draft; a running recording is thrown away
+  React.useEffect(
+    () => () => {
+      const rec = recordingRef.current;
+      if (rec) {
+        rec.discard = true;
+        if (rec.recorder.state !== "inactive") rec.recorder.stop();
+        if (rec.mic) stopTracks(rec.mic);
+      }
+      attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url));
+    },
+    [],
+  );
+
+  const full = attachments.length >= MAIL_ATTACHMENT_LIMIT;
+
   const takePhoto = () => {
     const v = videoRef.current;
     if (!v || full) return;
@@ -119,19 +175,62 @@ export function MailDraft(props: {
     g.drawImage(v, 0, 0, width, height);
     canvas.toBlob(
       (blob) => {
-        if (!blob) return;
-        const photo = { id: nextId.current++, url: URL.createObjectURL(blob) };
-        setPhotos((list) => [...list, photo]);
+        if (blob) add({ kind: "photo", url: URL.createObjectURL(blob) });
       },
       "image/jpeg",
       0.85,
     );
   };
-  const removePhoto = (id: number) =>
-    setPhotos((list) => {
-      const gone = list.find((p) => p.id === id);
+
+  const startRecording = async () => {
+    if (!stream || full || recordingRef.current || !canRecord()) return;
+    setRecNote(undefined);
+    let mic: MediaStream | null = null;
+    try {
+      mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (err) {
+      setRecNote(`Recording without sound. ${classifyMediaError(err, "microphone", window.isSecureContext).message}`);
+    }
+    // the viewfinder may have closed while the browser asked
+    if (!videoRef.current?.srcObject) {
+      if (mic) stopTracks(mic);
+      return;
+    }
+    const tracks = [...stream.getVideoTracks(), ...(mic?.getAudioTracks() ?? [])];
+    const type = pickRecorderType((t) => MediaRecorder.isTypeSupported(t));
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(new MediaStream(tracks), type ? { mimeType: type } : undefined);
+    } catch {
+      if (mic) stopTracks(mic);
+      setRecNote("This browser can't record video.");
+      return;
+    }
+    const chunks: Blob[] = [];
+    const rec: Recording = { recorder, mic, startedMs: Date.now(), discard: false };
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      if (rec.mic) stopTracks(rec.mic);
+      if (recordingRef.current === rec) {
+        recordingRef.current = undefined;
+        setRecording(undefined);
+      }
+      if (rec.discard || chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: recorder.mimeType || type || "video/webm" });
+      add({ kind: "video", url: URL.createObjectURL(blob), sec: (Date.now() - rec.startedMs) / 1000 });
+    };
+    recorder.start(1000);
+    recordingRef.current = rec;
+    setRecording(rec);
+  };
+
+  const remove = (id: number) =>
+    setAttachments((list) => {
+      const gone = list.find((a) => a.id === id);
       if (gone) URL.revokeObjectURL(gone.url);
-      return list.filter((p) => p.id !== id);
+      return list.filter((a) => a.id !== id);
     });
 
   const title = subject.trim() || "New message";
@@ -142,6 +241,8 @@ export function MailDraft(props: {
       props.onSend();
     }
   };
+  const recSec = recording ? (Date.now() - recording.startedMs) / 1000 : 0;
+  const limitTitle = `At most ${MAIL_ATTACHMENT_LIMIT} attachments`;
 
   return (
     <div
@@ -200,30 +301,71 @@ export function MailDraft(props: {
               {error ? (
                 <p className="stp-small stp-orange stp-sp-mail-finder-error">{error}</p>
               ) : (
-                <video ref={videoRef} muted playsInline autoPlay aria-label="Camera preview" />
+                <div className={`stp-sp-mail-view${recording ? " is-rec" : ""}`}>
+                  <video ref={videoRef} muted playsInline autoPlay aria-label="Camera preview" />
+                  {recording && (
+                    <span className="stp-sp-mail-rec stp-mono" role="status">
+                      REC {formatCountdown(recSec)} / {formatCountdown(MAIL_VIDEO_MAX_SEC)}
+                    </span>
+                  )}
+                </div>
               )}
               <div className="stp-sp-mail-finder-actions">
                 <button
                   type="button"
                   className="stp-btn stp-btn-outline stp-btn-sm"
                   onClick={takePhoto}
-                  disabled={!stream || full}
-                  title={full ? `At most ${MAIL_PHOTO_LIMIT} photos` : "Take a photo"}
+                  disabled={!stream || full || !!recording}
+                  title={full ? limitTitle : "Take a photo"}
                 >
                   Take photo
                 </button>
+                {canRecord() &&
+                  (recording ? (
+                    <button type="button" className="stp-btn stp-btn-orange stp-btn-sm" onClick={stopRecording}>
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="stp-btn stp-btn-outline stp-btn-sm"
+                      onClick={() => void startRecording()}
+                      disabled={!stream || full}
+                      title={full ? limitTitle : `Record a video (up to ${MAIL_VIDEO_MAX_SEC} s)`}
+                    >
+                      Record video
+                    </button>
+                  ))}
                 <button type="button" className="stp-btn stp-btn-outline stp-btn-sm" onClick={() => setFinder(false)}>
                   Done
                 </button>
               </div>
+              {recNote && <p className="stp-small stp-muted stp-sp-mail-finder-note">{recNote}</p>}
             </div>
           )}
-          {photos.length > 0 && (
-            <div className="stp-sp-mail-photos" aria-label="Attached photos">
-              {photos.map((p, i) => (
-                <span key={p.id} className="stp-sp-mail-photo">
-                  <img src={p.url} alt={`Photo ${i + 1}`} />
-                  <button type="button" onClick={() => removePhoto(p.id)} aria-label={`Remove photo ${i + 1}`} title="Remove">
+          {attachments.length > 0 && (
+            <div className="stp-sp-mail-photos" aria-label="Attachments">
+              {attachments.map((a, i) => (
+                <span key={a.id} className={`stp-sp-mail-photo is-${a.kind}`}>
+                  {a.kind === "photo" ? (
+                    <img src={a.url} alt={`Photo ${i + 1}`} />
+                  ) : (
+                    <>
+                      <video
+                        src={a.url}
+                        playsInline
+                        preload="metadata"
+                        aria-label={`Video ${i + 1}, click to play`}
+                        onClick={(e) => {
+                          const v = e.currentTarget;
+                          if (v.paused) void v.play().catch(() => undefined);
+                          else v.pause();
+                        }}
+                      />
+                      <span className="stp-sp-mail-photo-len stp-mono">{formatCountdown(a.sec ?? 0)}</span>
+                    </>
+                  )}
+                  <button type="button" onClick={() => remove(a.id)} aria-label={`Remove attachment ${i + 1}`} title="Remove">
                     ×
                   </button>
                 </span>
@@ -241,9 +383,9 @@ export function MailDraft(props: {
               type="button"
               className={`stp-sp-mail-icon${finder ? " is-on" : ""}`}
               onClick={() => setFinder((f) => !f)}
-              aria-label="Attach a photo from your camera"
+              aria-label="Attach a photo or video from your camera"
               aria-pressed={finder}
-              title="Attach a photo from your camera"
+              title="Attach a photo or video from your camera"
             >
               <svg {...ICON}>
                 <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />

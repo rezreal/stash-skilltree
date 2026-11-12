@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { MarkerInput } from "../../src/core/types.ts";
-import { MAIL_END_MARGIN_SEC, fitWithin, mailHoldAt, mailPrompts, nextMail, parseMailTitle } from "../../src/player/mail.ts";
+import { MAIL_END_MARGIN_SEC, fitWithin, mailHoldAt, mailPrompts, nextMail, parseMailTitle, pickRecorderType } from "../../src/player/mail.ts";
 import { DEFAULT_PROMPT_WINDOWS, promptSpecs } from "../../src/prompts/specs.ts";
 
 const m = (id: string, seconds: number, extra: Partial<MarkerInput> = {}): MarkerInput => ({
@@ -78,4 +78,16 @@ test("fitWithin scales the longest side down to the maximum, never up", () => {
   assert.deepEqual(fitWithin(720, 1280, 640), { width: 360, height: 640 });
   assert.deepEqual(fitWithin(640, 480, 1280), { width: 640, height: 480 });
   assert.deepEqual(fitWithin(0, 480), { width: 0, height: 0 });
+});
+
+test("pickRecorderType: the first supported format, undefined without one", () => {
+  assert.equal(pickRecorderType(() => true), "video/webm;codecs=vp9,opus");
+  assert.equal(pickRecorderType((t) => t === "video/mp4"), "video/mp4");
+  assert.equal(pickRecorderType(() => false), undefined);
+  assert.equal(
+    pickRecorderType(() => {
+      throw new Error("no");
+    }),
+    undefined,
+  );
 });

@@ -70,8 +70,23 @@ export function mailHoldAt(prompt: MailPrompt, durationSec: number): number {
 
 /** longest side of a webcam photo attached to a draft (px) */
 export const MAIL_PHOTO_MAX_PX = 1280;
-/** photos one draft can hold */
-export const MAIL_PHOTO_LIMIT = 8;
+/** photos and videos one draft can hold */
+export const MAIL_ATTACHMENT_LIMIT = 8;
+/** a webcam video stops recording on its own after this long */
+export const MAIL_VIDEO_MAX_SEC = 60;
+
+const RECORDER_TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+
+/** the first recording format the browser supports, or undefined (let MediaRecorder pick) */
+export function pickRecorderType(isSupported: (type: string) => boolean): string | undefined {
+  return RECORDER_TYPES.find((t) => {
+    try {
+      return isSupported(t);
+    } catch {
+      return false;
+    }
+  });
+}
 
 /** a frame's size scaled down (never up) so its longest side fits max */
 export function fitWithin(width: number, height: number, max = MAIL_PHOTO_MAX_PX): { width: number; height: number } {
