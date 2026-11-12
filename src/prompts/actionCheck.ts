@@ -4,17 +4,24 @@
 // angle moves at least `amplitude` degrees away from the last extreme in the
 // opposite direction (hysteresis, so jitter never counts); a cycle is two
 // consecutive swings (down-up or up-down) within maxCycleMs.
-// eyes_closed / eyes_open / hand_raised / still: continuous holds.
-// Frames without a face don't count and don't reset, except for still
-// (a face leaving the frame is movement).
+// eyes_closed / eyes_open / hand_raised / still / mouth_open / mouth_closed:
+// continuous holds. Frames without a face don't count and don't reset, except
+// for still (a face leaving the frame is movement).
+// mouth_open / mouth_closed read the face's jawOpen blendshape; mouth_open
+// holds for min(holdSec, mouthOpenMaxSec), mouth_closed ("keep it in your
+// mouth") for the hold time.
+// hand_to_mouth: a hand at the mouth per the viewer pose (viewerFrame.ts
+// handToMouth), gated on the pose rather than the face, since the hand often
+// hides the face; holds for min(holdSec, handToMouthMaxSec).
 // Body-pose actions (arms_up, hands_on_head, hands_together, kneel, stand,
 // lie_down, the yoga poses; see posture.ts) hold for min(holdSec, poseMaxSec) and are gated
 // on the viewer pose, not the face (a face is often hidden when lying down);
 // time where the needed landmarks are missing is neither pass nor fail.
-// In windows longer than LONG_WINDOW_SEC a body pose is scored by share, like
-// a long gaze window: passed iff at least SUSTAINED_MIN_SHARE of the evidence
-// time was in the pose and at least the hold time of it (meditation-style
-// "stay kneeling for the whole part").
+// In windows longer than LONG_WINDOW_SEC a body pose, mouth_closed and still
+// are scored by share, like a long gaze window: passed iff at least
+// SUSTAINED_MIN_SHARE of the evidence time was in it and at least the hold
+// time of it (meditation-style "stay kneeling for the whole part", "hold it
+// in your mouth", "hold still").
 // Body poses also report what is missing right now (posture.ts hints, e.g.
 // "Sit back onto your heels"): a reason shows once it held POSE_HINT
 // .showMs, and goes away once the pose has been held for .clearMs, so the
@@ -25,7 +32,7 @@ import { createHoldTracker, createShareTracker, isSustained, sharePercentText, S
 import { assessPosture, isPoseAction, POSTURE_HINTS } from "./posture.ts";
 import type { PostureVerdict } from "./posture.ts";
 import type { HoldState } from "./hold.ts";
-import type { CheckResult, PromptSpec, ViewerFrame } from "./types.ts";
+import type { CheckResult, PromptAction, PromptSpec, ViewerFrame } from "./types.ts";
 
 export const ACTION_THRESHOLDS = {
   nodAmplitudeDeg: 8,
@@ -48,7 +55,22 @@ export const ACTION_THRESHOLDS = {
   poseMaxSec: 1.5,
   /** pose detection flicker shorter than this doesn't break a body-pose hold */
   poseFlickerMs: 250,
+  /** jawOpen at or above this is an open mouth */
+  mouthOpenMin: 0.35,
+  /** jawOpen at or below this is a closed mouth (lips together, cheeks may be full) */
+  mouthClosedMax: 0.15,
+  mouthOpenMaxSec: 1.5,
+  /** a jawOpen flicker shorter than this doesn't break a mouth hold */
+  mouthFlickerMs: 300,
+  handToMouthMaxSec: 1,
+  /** pose flicker shorter than this doesn't break a hand_to_mouth hold */
+  handToMouthFlickerMs: 300,
 } as const;
+
+/** actions a long window scores by share instead of by one hold (see the top) */
+export function scoredByShare(action: PromptAction | undefined): boolean {
+  return isPoseAction(action) || action === "mouth_closed" || action === "still";
+}
 
 export interface ActionCheckOptions {
   stillMotion?: number;
@@ -256,6 +278,23 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
       classify = (f) => (f.motion === undefined || !Number.isFinite(f.motion) ? "unknown" : f.motion <= limit ? "in" : "out");
       break;
     }
+    case "mouth_open":
+      needSec = Math.min(spec.holdSec, T.mouthOpenMaxSec);
+      tolerance = T.mouthFlickerMs;
+      label = "mouth open";
+      classify = (f) => (f.jawOpen === undefined ? "unknown" : f.jawOpen >= T.mouthOpenMin ? "in" : "out");
+      break;
+    case "mouth_closed":
+      tolerance = T.mouthFlickerMs;
+      label = "mouth closed";
+      classify = (f) => (f.jawOpen === undefined ? "unknown" : f.jawOpen <= T.mouthClosedMax ? "in" : "out");
+      break;
+    case "hand_to_mouth":
+      needSec = Math.min(spec.holdSec, T.handToMouthMaxSec);
+      tolerance = T.handToMouthFlickerMs;
+      label = "hand at mouth";
+      classify = (f) => (f.handToMouth === undefined ? "unknown" : f.handToMouth ? "in" : "out");
+      break;
     default:
       if (isPoseAction(action)) {
         needSec = Math.min(spec.holdSec, T.poseMaxSec);
@@ -273,8 +312,8 @@ export function createActionCheck(spec: PromptSpec, opts?: ActionCheckOptions): 
         classify = () => "unknown";
       }
   }
-  const faceGated = !isPoseAction(action);
-  const sustained = isPoseAction(action) && isSustained(spec);
+  const faceGated = !isPoseAction(action) && action !== "hand_to_mouth";
+  const sustained = scoredByShare(action) && isSustained(spec);
 
   const hold = createHoldTracker({ needMs: Math.max(0.1, needSec) * 1000, toleranceMs: tolerance, maxDtMs: 250 });
   const share = createShareTracker({ maxDtMs: 250 });

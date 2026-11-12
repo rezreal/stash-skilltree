@@ -40,6 +40,7 @@ GAZE_TARGETS = [
     "feet_floor", "screen_center", "off_screen", "eyes_closed",
 ]
 ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "still",
+           "mouth_open", "mouth_closed", "hand_to_mouth",
            "arms_up", "hands_on_head", "hands_together", "kneel",
            "kneel_sit", "stand", "lie_down",
            "cat", "cow", "puppy", "down_dog", "plank", "plow", "straddle",
@@ -70,7 +71,9 @@ computer can verify, of these four types:
   your eyes ... open them and look at my hands").
 - action: the viewer is told to do a visible body action. "action" is one of:
   nod, shake_head, eyes_closed, eyes_open, hand_raised, still (stay completely
-  still), arms_up, hands_on_head, hands_together, kneel, kneel_sit (kneel
+  still), mouth_open (open the mouth wide), mouth_closed (keep the mouth
+  closed, e.g. holding something in it), hand_to_mouth (hold a hand up to the
+  mouth), arms_up, hands_on_head, hands_together, kneel, kneel_sit (kneel
   sitting back on the heels, as in meditation; also yoga thunderbolt pose /
   vajrasana), stand, lie_down, and the yoga
   poses cat, cow, puppy (extended puppy pose), down_dog (downward-facing dog),

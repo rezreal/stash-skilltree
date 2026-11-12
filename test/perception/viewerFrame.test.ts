@@ -7,6 +7,7 @@ import {
   blendshapeScore,
   createViewerFrameMapper,
   handRaised,
+  handToMouth,
   meanDisplacement,
   personPresent,
 } from "../../src/perception/viewerFrame.ts";
@@ -20,6 +21,49 @@ function body(over: Partial<Record<keyof typeof POSE, NormPoint>> = {}, vis = 0.
   for (const [k, v] of Object.entries(over)) pts[POSE[k as keyof typeof POSE]] = v!;
   return pts;
 }
+
+describe("handToMouth", () => {
+  // shoulders 0.2 apart (x) in a 4:3 frame: shoulder width 0.267; mouth at (0.5, 0.42)
+  const head = {
+    nose: { x: 0.5, y: 0.38, visibility: 0.9 },
+    mouthLeft: { x: 0.48, y: 0.42, visibility: 0.9 },
+    mouthRight: { x: 0.52, y: 0.42, visibility: 0.9 },
+  };
+  const hidden = { x: 0.5, y: 0.42, visibility: 0.1 };
+
+  it("a fingertip at the mouth counts, hands in the lap don't", () => {
+    assert.equal(handToMouth(body(head)), false);
+    assert.equal(handToMouth(body({ ...head, leftIndex: { x: 0.51, y: 0.44, visibility: 0.9 } })), true);
+    assert.equal(handToMouth(body({ ...head, rightThumb: { x: 0.5, y: 0.55, visibility: 0.9 } })), false, "a chin's length below");
+  });
+
+  it("a wrist reaches further (palm or cupped hand at the lips)", () => {
+    const noFingers = { leftPinky: hidden, rightPinky: hidden, leftIndex: hidden, rightIndex: hidden, leftThumb: hidden, rightThumb: hidden };
+    assert.equal(handToMouth(body({ ...head, ...noFingers, leftWrist: { x: 0.5, y: 0.52, visibility: 0.9 } })), true);
+    assert.equal(handToMouth(body({ ...head, ...noFingers, leftWrist: { x: 0.5, y: 0.6, visibility: 0.9 } })), false);
+  });
+
+  it("falls back to the nose when the hand hides the mouth corners", () => {
+    const covered = { ...head, mouthLeft: hidden, mouthRight: hidden };
+    assert.equal(handToMouth(body({ ...covered, leftIndex: { x: 0.5, y: 0.4, visibility: 0.9 } })), true);
+  });
+
+  it("measures in the frame's aspect: shoulder width is horizontal, so a vertical offset counts less in a wide frame", () => {
+    const below = body({ ...head, leftIndex: { x: 0.5, y: 0.49, visibility: 0.9 } });
+    assert.equal(handToMouth(below, 4 / 3), true);
+    assert.equal(handToMouth(below, 1), false);
+  });
+
+  it("can't tell without shoulders, a mouth or any hand point", () => {
+    assert.equal(handToMouth(undefined), undefined);
+    assert.equal(handToMouth(body({ ...head, leftShoulder: { x: 0.6, y: 0.6, visibility: 0.2 } })), undefined);
+    assert.equal(handToMouth(body({ ...head, mouthLeft: hidden, mouthRight: hidden, nose: hidden })), undefined);
+    const noHands = Object.fromEntries(
+      (["leftWrist", "rightWrist", "leftPinky", "rightPinky", "leftIndex", "rightIndex", "leftThumb", "rightThumb"] as const).map((k) => [k, hidden]),
+    );
+    assert.equal(handToMouth(body({ ...head, ...noHands })), undefined);
+  });
+});
 
 describe("handRaised", () => {
   it("needs a wrist more than 0.1 above its own shoulder", () => {
@@ -67,7 +111,15 @@ describe("personPresent", () => {
 
 describe("createViewerFrameMapper", () => {
   const face = Array.from({ length: 478 }, (_, i) => ({ x: 0.5 + 0.001 * i, y: 0.4, z: 0, visibility: 0 }));
-  const shapes = [{ categories: [{ categoryName: "eyeBlinkLeft", score: 0.8 }, { categoryName: "eyeBlinkRight", score: 0.7 }] }];
+  const shapes = [
+    {
+      categories: [
+        { categoryName: "eyeBlinkLeft", score: 0.8 },
+        { categoryName: "eyeBlinkRight", score: 0.7 },
+        { categoryName: "jawOpen", score: 0.6 },
+      ],
+    },
+  ];
 
   it("maps face, blendshapes, head pose, pose and aspect", () => {
     const m = createViewerFrameMapper();
@@ -85,6 +137,8 @@ describe("createViewerFrameMapper", () => {
     assert.equal(f.eyeBlinkRight, 0.7);
     assert.ok(Math.abs(f.yaw! - 20) < 1e-6 && Math.abs(f.pitch! + 10) < 1e-6 && Math.abs(f.roll! - 5) < 1e-6);
     assert.equal(f.handRaised, true);
+    assert.equal(f.jawOpen, 0.6);
+    assert.equal(typeof f.handToMouth, "boolean");
     assert.equal(f.pose!.length, 33);
     assert.equal(f.aspect, 4 / 3);
     assert.equal(f.motion, undefined, "no previous frame");
@@ -112,7 +166,7 @@ describe("createViewerFrameMapper", () => {
 
   it("blendshapeScore finds by name", () => {
     assert.equal(blendshapeScore(shapes[0], "eyeBlinkRight"), 0.7);
-    assert.equal(blendshapeScore(shapes[0], "jawOpen"), undefined);
+    assert.equal(blendshapeScore(shapes[0], "mouthSmileLeft"), undefined);
     assert.equal(blendshapeScore(undefined, "jawOpen"), undefined);
   });
 });

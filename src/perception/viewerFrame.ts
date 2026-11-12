@@ -52,6 +52,58 @@ export function handRaised(pose: readonly NormPoint[] | undefined, opts: HandRai
   });
 }
 
+export const HAND_TO_MOUTH = {
+  /** a fingertip (pinky, index, thumb) this close to the mouth, in shoulder widths */
+  fingerReach: 0.3,
+  /** or the wrist this close (a cupped hand or palm at the lips), in shoulder widths */
+  wristReach: 0.45,
+  /** visibility hand points and the mouth need */
+  minVisibility: 0.3,
+  /** visibility the shoulders need for the scale */
+  shoulderVisibility: 0.5,
+} as const;
+
+/**
+ * Is a hand at the mouth? Distances are measured in shoulder widths, with x
+ * scaled by the frame aspect so they mean the same horizontally and
+ * vertically. The mouth is the midpoint of the mouth corners, or the nose
+ * when they're hidden (a hand in front of the mouth often hides them).
+ * undefined when the shoulders or the mouth can't be seen, or no hand point
+ * is visible: neither yes nor no.
+ */
+export function handToMouth(pose: readonly NormPoint[] | undefined, aspect = 4 / 3): boolean | undefined {
+  if (!pose) return undefined;
+  const H = HAND_TO_MOUTH;
+  const ls = pose[POSE.leftShoulder];
+  const rs = pose[POSE.rightShoulder];
+  if (!visible(ls, H.shoulderVisibility) || !visible(rs, H.shoulderVisibility)) return undefined;
+  const dist = (a: NormPoint, b: NormPoint) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+  const sw = dist(ls, rs);
+  if (!(sw > 0)) return undefined;
+  const ml = pose[POSE.mouthLeft];
+  const mr = pose[POSE.mouthRight];
+  const nose = pose[POSE.nose];
+  let mouth: NormPoint;
+  if (visible(ml, H.minVisibility) && visible(mr, H.minVisibility)) mouth = { x: (ml.x + mr.x) / 2, y: (ml.y + mr.y) / 2 };
+  else if (visible(nose, H.minVisibility)) mouth = nose;
+  else return undefined;
+  const fingers = [POSE.leftPinky, POSE.rightPinky, POSE.leftIndex, POSE.rightIndex, POSE.leftThumb, POSE.rightThumb];
+  const wrists = [POSE.leftWrist, POSE.rightWrist];
+  let seen = false;
+  for (const [points, reach] of [
+    [fingers, H.fingerReach],
+    [wrists, H.wristReach],
+  ] as const) {
+    for (const i of points) {
+      const p = pose[i];
+      if (!visible(p, H.minVisibility)) continue;
+      seen = true;
+      if (dist(p, mouth) <= reach * sw) return true;
+    }
+  }
+  return seen ? false : undefined;
+}
+
 /**
  * Mean Euclidean displacement (normalized units) over the landmarks present
  * and visible (>= minVisibility) in both frames. undefined when nothing is
@@ -132,12 +184,16 @@ export function createViewerFrameMapper(): ViewerFrameMapper {
       };
       if (pose) frame.pose = pose;
       if (r.aspect && Number.isFinite(r.aspect)) frame.aspect = r.aspect;
+      const atMouth = handToMouth(pose, frame.aspect);
+      if (atMouth !== undefined) frame.handToMouth = atMouth;
       if (facePresent) {
         const shapes = r.blendshapes?.[0];
         const l = blendshapeScore(shapes, "eyeBlinkLeft");
         const rr = blendshapeScore(shapes, "eyeBlinkRight");
         if (l !== undefined) frame.eyeBlinkLeft = l;
         if (rr !== undefined) frame.eyeBlinkRight = rr;
+        const jaw = blendshapeScore(shapes, "jawOpen");
+        if (jaw !== undefined) frame.jawOpen = jaw;
         const m = r.matrices?.[0];
         const hp = m ? headPoseFromMatrix(m.data) : undefined;
         if (hp) {

@@ -35,6 +35,10 @@ export const PROMPT_ACTIONS = [
   "eyes_open",
   "hand_raised",
   "still",
+  // mouth (face blendshape jawOpen) and a hand at the mouth (pose)
+  "mouth_open",
+  "mouth_closed",
+  "hand_to_mouth",
   // body pose of the viewer (ViewerFrame.pose)
   "arms_up",
   "hands_on_head",
@@ -129,6 +133,12 @@ export const POSE = {
   rightElbow: 14,
   leftWrist: 15,
   rightWrist: 16,
+  leftPinky: 17,
+  rightPinky: 18,
+  leftIndex: 19,
+  rightIndex: 20,
+  leftThumb: 21,
+  rightThumb: 22,
   leftHip: 23,
   rightHip: 24,
   leftKnee: 25,
@@ -173,6 +183,10 @@ export interface ViewerFrame {
   roll?: number;
   /** wrists above shoulders etc. */
   handRaised?: boolean;
+  /** 0..1 from face blendshapes (jawOpen): 0 closed, about 0.5+ wide open */
+  jawOpen?: number;
+  /** a hand at the mouth (pose); undefined when the pose can't tell */
+  handToMouth?: boolean;
   /** mean landmark motion since the previous frame, normalized units */
   motion?: number;
 }

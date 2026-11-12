@@ -121,6 +121,63 @@ describe("hand_raised / still", () => {
   });
 });
 
+describe("mouth_open / mouth_closed / hand_to_mouth", () => {
+  it("mouth_open: jawOpen >= 0.35 for min(holdSec, 1.5 s); a short dip doesn't break it", () => {
+    const c = check("mouth_open", 3);
+    feed(c, 0, 700, () => ({ jawOpen: 0.5 }));
+    feed(c, 700, 900, () => ({ jawOpen: 0.2 })); // 200 ms dip
+    feed(c, 900, 1400, () => ({ jawOpen: 0.5 }));
+    assert.equal(c.result().passed, false);
+    feed(c, 1400, 1800, () => ({ jawOpen: 0.5 })); // without the tolerance the run would have restarted at 900
+    assert.equal(c.result().passed, true);
+    const small = check("mouth_open");
+    feed(small, 0, 3000, () => ({ jawOpen: 0.25 })); // talking, not wide open
+    assert.equal(small.result().passed, false);
+  });
+
+  it("mouth_closed: jawOpen <= 0.15 for the hold; speaking breaks it", () => {
+    const c = check("mouth_closed", 2);
+    feed(c, 0, 1500, () => ({ jawOpen: 0.05 }));
+    feed(c, 1500, 2100, () => ({ jawOpen: 0.4 })); // says something
+    feed(c, 2100, 3900, () => ({ jawOpen: 0.08 }));
+    assert.equal(c.result().passed, false);
+    feed(c, 3900, 4200, () => ({ jawOpen: 0.08 }));
+    assert.equal(c.result().passed, true);
+    const noFace = check("mouth_closed", 1);
+    feed(noFace, 0, 3000, () => ({ facePresent: false }));
+    assert.equal(noFace.result().passed, false);
+  });
+
+  it("mouth_closed and still score long windows by share", () => {
+    const long = createActionCheck(spec({ check: "action", action: "mouth_closed", holdSec: 2, start: 0, end: 60 }));
+    feed(long, 0, 10_000, () => ({ jawOpen: 0.05 }));
+    feed(long, 10_000, 20_000, () => ({ jawOpen: 0.5 }));
+    let r = long.result();
+    assert.equal(r.passed, false, "half the time open");
+    assert.ok(r.share !== undefined && Math.abs(r.share - 0.5) < 0.02);
+    feed(long, 20_000, 60_000, () => ({ jawOpen: 0.05 }));
+    r = long.result();
+    assert.equal(r.passed, true);
+    const still = createActionCheck(spec({ check: "action", action: "still", holdSec: 2, start: 0, end: 30 }));
+    feed(still, 0, 3000, () => ({ motion: 0.001 }));
+    feed(still, 3000, 30_000, () => ({ motion: 0.02 }));
+    assert.equal(still.result().passed, false, "still for 3 of 30 s");
+  });
+
+  it("hand_to_mouth: holds for min(holdSec, 1 s), gated on the pose, not the face", () => {
+    const c = check("hand_to_mouth", 3);
+    feed(c, 0, 600, () => ({ facePresent: false, handToMouth: true }));
+    feed(c, 600, 1200, () => ({ handToMouth: false }));
+    feed(c, 1200, 2000, () => ({ facePresent: false, handToMouth: true }));
+    assert.equal(c.result().passed, false);
+    feed(c, 2000, 2300, () => ({ facePresent: false, handToMouth: true }));
+    assert.equal(c.result().passed, true);
+    const unseen = check("hand_to_mouth");
+    feed(unseen, 0, 3000, () => ({}));
+    assert.equal(unseen.result().passed, false);
+  });
+});
+
 describe("body-pose actions", () => {
   const UP = pose({ nose: [0.5, 0.3], leftShoulder: [0.4, 0.5], rightShoulder: [0.6, 0.5], leftWrist: [0.4, 0.05], rightWrist: [0.6, 0.05] });
   const DOWN = pose({ nose: [0.5, 0.3], leftShoulder: [0.4, 0.5], rightShoulder: [0.6, 0.5], leftWrist: [0.42, 0.8], rightWrist: [0.58, 0.8] });

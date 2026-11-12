@@ -2,6 +2,7 @@
 
 import { eyesClosedHoldSec, isSustained, shareText, type GazeMoment } from "../prompts/gazeCheck.ts";
 import { sharePercentText } from "../prompts/hold.ts";
+import { scoredByShare } from "../prompts/actionCheck.ts";
 import { isPoseAction } from "../prompts/posture.ts";
 import type { GazeTarget, PromptAction, PromptProgress, PromptSpec } from "../prompts/types.ts";
 
@@ -28,6 +29,9 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   eyes_open: "Keep your eyes open",
   hand_raised: "Raise a hand",
   still: "Hold still",
+  mouth_open: "Open your mouth",
+  mouth_closed: "Keep your mouth closed",
+  hand_to_mouth: "Hand to your mouth",
   arms_up: "Arms up",
   hands_on_head: "Hands on your head",
   hands_together: "Hands together",
@@ -96,11 +100,12 @@ type LabelSpec = Pick<PromptSpec, "check" | "holdSec"> & {
 };
 
 /**
- * A gaze or body-pose window longer than LONG_WINDOW_SEC: scored by share,
- * not by the hold.
+ * A gaze window, or an action window that scores by share (body poses,
+ * mouth_closed, still), longer than LONG_WINDOW_SEC: scored by share, not by
+ * the hold.
  */
 export function sustainedWindow(spec: LabelSpec): boolean {
-  if (spec.check !== "gaze" && !(spec.check === "action" && isPoseAction(spec.action))) return false;
+  if (spec.check !== "gaze" && !(spec.check === "action" && scoredByShare(spec.action))) return false;
   return spec.start !== undefined && spec.end !== undefined && isSustained({ start: spec.start, end: spec.end });
 }
 
@@ -117,7 +122,8 @@ export function progressLabel(spec: LabelSpec, share?: number): string {
       if (sustainedWindow(spec)) return shareText(spec.target, share);
       return `hold ${formatSec(spec.target === "eyes_closed" ? eyesClosedHoldSec(spec.holdSec) : spec.holdSec)}`;
     case "action":
-      return sustainedWindow(spec) ? `in pose ${sharePercentText(share)}` : "hold";
+      if (!sustainedWindow(spec)) return "hold";
+      return `${isPoseAction(spec.action) ? "in pose" : "held"} ${sharePercentText(share)}`;
     default:
       return "hold";
   }
