@@ -485,6 +485,29 @@ describe("classifyPosture", () => {
     assert.deepEqual(assessPosture("cobra", pose({ ...cobra, rightShoulder: [0.42, 0.62] })), { state: "unknown", hint: H.turnSide });
   });
 
+  it("butterfly: seated, soles together, heels in, knees out; facing the camera", () => {
+    const butterfly = {
+      leftShoulder: [0.44, 0.35],
+      rightShoulder: [0.56, 0.35],
+      leftHip: [0.47, 0.62],
+      rightHip: [0.53, 0.62],
+      leftKnee: [0.3, 0.66],
+      rightKnee: [0.7, 0.66],
+      leftAnkle: [0.48, 0.72],
+      rightAnkle: [0.52, 0.72],
+    } as const;
+    assert.deepEqual(assessPosture("butterfly", pose(butterfly)), { state: "in" });
+    // cross-legged: each foot under the other knee
+    assert.deepEqual(assessPosture("butterfly", pose({ ...butterfly, leftAnkle: [0.62, 0.7], rightAnkle: [0.38, 0.7] })), { state: "out", hint: H.feetTogether });
+    // soles together far out in front
+    assert.equal(assessPosture("butterfly", pose({ ...butterfly, leftKnee: [0.3, 0.72], rightKnee: [0.7, 0.72], leftAnkle: [0.48, 0.86], rightAnkle: [0.52, 0.86] })).hint, H.heelsIn);
+    // knees up together (feet flat in front)
+    assert.equal(assessPosture("butterfly", pose({ ...butterfly, leftKnee: [0.45, 0.5], rightKnee: [0.55, 0.5] })).hint, H.kneesOutSides);
+    assert.equal(assessPosture("butterfly", pose({ ...butterfly, leftShoulder: [0.24, 0.45], rightShoulder: [0.36, 0.38] })).hint, H.backStraight);
+    assert.equal(assessPosture("butterfly", pose(STANDING)).hint, H.sitDown);
+    assert.deepEqual(assessPosture("butterfly", pose({ ...butterfly, rightShoulder: [0.45, 0.35] })), { state: "unknown", hint: H.faceCamera });
+  });
+
   it("aspect changes angles", () => {
     // the same normalized points are flatter in a wide frame than in a tall one
     const p = pose({ leftShoulder: [0.2, 0.5], rightShoulder: [0.2, 0.5], leftHip: [0.5, 0.75], rightHip: [0.5, 0.75] });

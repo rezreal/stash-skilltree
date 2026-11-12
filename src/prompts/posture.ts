@@ -7,8 +7,8 @@
 //
 // Yoga poses: straightness of a limb survives the 2D projection, a bend
 // angle doesn't. So poses told apart by a bend (plank, down_dog, plow, puppy,
-// cobra) are only judged side-on to the camera, and the straddles, warrior
-// and tree, whose legs spread out sideways, only facing it; from the wrong
+// cobra) are only judged side-on to the camera, and the straddles, warrior,
+// tree and butterfly, whose legs spread out sideways, only facing it; from the wrong
 // side the answer is "unknown" with a hint to turn (also happy_baby and
 // savasana, lying poses that point at a camera at the feet). warrior is
 // warrior II (virabhadrasana II). cat, cow, child and forward_fold work
@@ -140,6 +140,16 @@ export const POSTURE = {
   treeFootOnLeg: 0.35,
   /** tree: lifted knee at least this far, horizontally, from the standing leg (knee out to the side) */
   treeKneeOut: 0.4,
+  /** butterfly: ankles at most this far apart (soles together) */
+  butterflyFeetApart: 0.35,
+  /** butterfly: feet at most this far from the middle of the hips (heels drawn in) */
+  butterflyHeelsIn: 0.8,
+  /** butterfly: knees at least this far apart horizontally (fallen out to the sides) */
+  butterflyKneesApart: 1,
+  /** butterfly: ankles at most this far below the hips (sitting, not standing) */
+  butterflyFeetBelowHips: 1,
+  /** butterfly: shoulder-hip line within this of vertical, degrees (sitting tall) */
+  butterflyTorsoMaxTiltDeg: 30,
   /** cobra: shoulders at least this far (torso lengths) above the hips (chest lifted) */
   cobraChestUp: 0.4,
   /** cobra: knees and ankles within this (torso lengths) of hip height (legs on the floor) */
@@ -188,6 +198,7 @@ export const POSE_ACTIONS = [
   "warrior",
   "tree",
   "cobra",
+  "butterfly",
 ] as const;
 export type PoseAction = (typeof POSE_ACTIONS)[number];
 
@@ -283,6 +294,9 @@ export const POSTURE_HINTS = {
   kneeOut: "Turn your bent knee out to the side",
   chestUp: "Lift your chest",
   handsUnder: "Press your hands into the floor under your shoulders",
+  feetTogether: "Bring the soles of your feet together",
+  heelsIn: "Draw your heels in toward you",
+  kneesOutSides: "Let your knees fall out to the sides",
 } as const;
 
 export interface PostureVerdict {
@@ -323,6 +337,7 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     warrior: H.showWhole,
     tree: H.showLegs,
     cobra: H.showWhole,
+    butterfly: H.showLegs,
   };
   const unknown: PostureVerdict = { state: "unknown", hint: unseen[action] };
   const IN: PostureVerdict = { state: "in" };
@@ -477,7 +492,8 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     case "savasana":
     case "warrior":
     case "tree":
-    case "cobra": {
+    case "cobra":
+    case "butterfly": {
       const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
       const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
       if (!sm || !hm) return unknown;
@@ -703,6 +719,19 @@ function yogaPose(action: PoseAction, b: Body): PostureVerdict | undefined {
         [offLeg(lifted.end) <= P.treeFootOnLeg * scale, H.footOnLeg],
         [!straight(lifted) && offLeg(lifted.joint!) >= P.treeKneeOut * scale, H.kneeOut],
         [90 - tiltFromHorizontal(sm, hm) <= P.uprightMaxTiltDeg, H.torsoUpright],
+      ]);
+    }
+
+    case "butterfly": {
+      if (legs.length < 2) return undefined;
+      if (b.side) return faceCamera;
+      const [l, r] = [legs[0]!, legs[1]!];
+      return first([
+        [all(legs, (g) => g.end.y - hm.y <= P.butterflyFeetBelowHips * scale && !straight(g)), H.sitDown],
+        [dist(l.end, r.end) <= P.butterflyFeetApart * scale, H.feetTogether],
+        [dist(mid(l.end, r.end), hm) <= P.butterflyHeelsIn * scale, H.heelsIn],
+        [Math.abs(l.joint!.x - r.joint!.x) >= P.butterflyKneesApart * scale, H.kneesOutSides],
+        [sm.y < hm.y && 90 - tiltFromHorizontal(sm, hm) <= P.butterflyTorsoMaxTiltDeg, H.backStraight],
       ]);
     }
 

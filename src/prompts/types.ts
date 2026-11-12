@@ -60,6 +60,7 @@ export const PROMPT_ACTIONS = [
   "warrior",
   "tree",
   "cobra",
+  "butterfly",
 ] as const;
 export type PromptAction = (typeof PROMPT_ACTIONS)[number];
 

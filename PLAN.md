@@ -143,7 +143,7 @@ Watch policy = rules composed per scene from its tags:
   raised, still, arms up, hands on head, hands together, kneel, kneel
   sitting on the heels, stand, lie down; yoga: cat, cow, extended puppy,
   downward dog, plank, plow, straddle stretch, upward seated straddle, child's
-  pose, standing forward fold, happy baby, savasana, upward salute, warrior II, tree, cobra; pose windows over 10 s are scored
+  pose, standing forward fold, happy baby, savasana, upward salute, warrior II, tree, cobra, butterfly; pose windows over 10 s are scored
   by the share of time in the pose), gaze targets on the person in the video (MediaPipe
   pose/face/hand on the video frames mapped to screen coordinates), spend
   prompts (hold-to-confirm or voice; declining fails the clip). A missed
