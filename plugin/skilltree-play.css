@@ -1251,10 +1251,17 @@
   align-self: stretch;
   aspect-ratio: 16 / 9;
   background: var(--stp-thumb);
+  min-width: 0;
+  overflow: hidden;
   position: relative;
+  /* without it the aspect ratio derives the width from the stretched height,
+     so a tall text column widens the thumbnail over the text beside it */
+  width: 100%;
 }
 
-.skilltree-play .stp-test-thumb img { display: block; height: 100%; object-fit: cover; width: 100%; }
+/* the image fills the box but never takes part in the layout: whatever its
+   natural size, it cannot grow the row or run into the text beside it */
+.skilltree-play .stp-test-thumb img { display: block; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; }
 .skilltree-play .stp-test-thumb .stp-duration { bottom: 6px; right: 6px; }
 .skilltree-play .stp-test-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 0; }
 .skilltree-play .stp-test-title { font-weight: 600; overflow-wrap: anywhere; }
