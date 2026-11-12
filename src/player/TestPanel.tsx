@@ -103,6 +103,10 @@ export function TestPanel(props: {
       (err: unknown) => setPromptTags({ status: "error", error: errorText(err) }),
     );
   }, [client, promptMarkers, promptTags.status]);
+  // a failed load is retried the next time the filter is switched on
+  React.useEffect(() => {
+    if (!promptMarkers && promptTags.status === "error") setPromptTags({ status: "idle" });
+  }, [promptMarkers, promptTags.status]);
 
   const tagKey = tags.map((t) => t.id).join(",");
   // the page belongs to one filter: a new filter starts at page 1
@@ -144,7 +148,17 @@ export function TestPanel(props: {
   const [results, setResults] = React.useState<Load<TestSearchPage>>({ status: "idle" });
   const [searching, setSearching] = React.useState(false);
   React.useEffect(() => {
-    if (criteria.promptMarkers && promptIds === undefined) return; // waits for the prompt tags
+    if (criteria.promptMarkers && promptIds === undefined) {
+      // Waiting for the prompt tags. Never leave the previous (unfiltered)
+      // page up as if it matched: show loading, or the failure.
+      setSearching(false);
+      setResults(
+        promptTags.status === "error"
+          ? { status: "error", error: `the prompt tags could not be loaded (${promptTags.error})` }
+          : { status: "loading" },
+      );
+      return;
+    }
     let live = true;
     // the previous page stays up (dimmed) while the next one loads
     setResults((prev) => (prev.status === "ready" ? prev : { status: "loading" }));
@@ -164,7 +178,7 @@ export function TestPanel(props: {
     return () => {
       live = false;
     };
-  }, [client, criteria, promptIds]);
+  }, [client, criteria, promptIds, promptTags.status]);
 
   const count = results.status === "ready" ? results.value.count : 0;
   const pages = pageCount(count);
