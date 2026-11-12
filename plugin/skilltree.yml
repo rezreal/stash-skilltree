@@ -2,7 +2,7 @@ name: Skilltree
 description: >-
   (Alpha) Turns the library into a skill tree of topics and levels that you
   unlock by watching, following and performing what the clips ask.
-version: 0.1.0
+version: 0.2.0
 url: https://github.com/stashapp/stash
 
 ui:
