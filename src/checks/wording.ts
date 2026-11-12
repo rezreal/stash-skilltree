@@ -52,6 +52,7 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   tree: "Tree pose",
   cobra: "Cobra pose",
   butterfly: "Butterfly stretch",
+  shoulder_stand: "Shoulder stand",
 };
 
 /** "their eyes", "the floor in front of their feet", ... */

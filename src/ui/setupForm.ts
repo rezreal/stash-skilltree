@@ -63,6 +63,7 @@ export const PROMPT_ACTIONS = [
   "tree",
   "cobra",
   "butterfly",
+  "shoulder_stand",
 ] as const;
 
 /** Written by the plugin while playing; shown read-only, never written here. */
@@ -163,6 +164,8 @@ export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
   tree: "yoga tree: standing on one straight leg, the other foot on its calf or thigh, knee out to the side (facing the camera)",
   cobra: "yoga cobra: lying on the belly, legs on the floor, chest lifted on the hands (side-on to the camera)",
   butterfly: "butterfly stretch (bound angle): seated, soles together, heels drawn in, knees out to the sides (facing the camera)",
+  shoulder_stand:
+    "yoga supported shoulder stand (salamba sarvangasana): on the shoulders, hips over them, straight legs up to the ceiling (side-on to the camera)",
 };
 
 export const REPLAY_HELP: Readonly<Record<string, string>> = {

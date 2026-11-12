@@ -508,6 +508,22 @@ describe("classifyPosture", () => {
     assert.deepEqual(assessPosture("butterfly", pose({ ...butterfly, rightShoulder: [0.45, 0.35] })), { state: "unknown", hint: H.faceCamera });
   });
 
+  it("shoulder_stand: on the shoulders, hips over them, legs straight up; not plow or headstand", () => {
+    const stand = { leftShoulder: [0.5, 0.82], leftHip: [0.52, 0.5], leftKnee: [0.53, 0.3], leftAnkle: [0.54, 0.1], nose: [0.4, 0.8] } as const;
+    assert.deepEqual(assessPosture("shoulder_stand", pose(stand)), { state: "in" });
+    assert.equal(classifyPosture("shoulder_stand", pose({ ...stand, nose: undefined })), "in"); // head hidden
+    // half shoulder stand: legs angled over the face
+    assert.deepEqual(assessPosture("shoulder_stand", pose({ ...stand, leftKnee: [0.62, 0.4], leftAnkle: [0.7, 0.3] })), { state: "out", hint: H.legsToCeiling });
+    const plow = { leftShoulder: [0.47, 0.82], leftHip: [0.45, 0.5], leftKnee: [0.6, 0.62], leftAnkle: [0.75, 0.8], nose: [0.55, 0.8] } as const;
+    assert.equal(assessPosture("shoulder_stand", pose(plow)).hint, H.legsToCeiling);
+    assert.equal(classifyPosture("plow", pose(stand)), "out");
+    // headstand: the head under the shoulders
+    assert.equal(assessPosture("shoulder_stand", pose({ ...stand, nose: [0.5, 0.97] })).hint, H.shouldersDown);
+    assert.equal(assessPosture("shoulder_stand", pose({ ...stand, leftKnee: [0.6, 0.3] })).hint, H.legsStraight);
+    assert.equal(assessPosture("shoulder_stand", pose(SAVASANA)).hint, H.hipsOverShoulders);
+    assert.deepEqual(assessPosture("shoulder_stand", pose({ ...stand, rightShoulder: [0.3, 0.82] })), { state: "unknown", hint: H.turnSide });
+  });
+
   it("aspect changes angles", () => {
     // the same normalized points are flatter in a wide frame than in a tall one
     const p = pose({ leftShoulder: [0.2, 0.5], rightShoulder: [0.2, 0.5], leftHip: [0.5, 0.75], rightHip: [0.5, 0.75] });

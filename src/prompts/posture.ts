@@ -6,7 +6,7 @@
 // missing the answer is "unknown" (neither pass nor fail).
 //
 // Yoga poses: straightness of a limb survives the 2D projection, a bend
-// angle doesn't. So poses told apart by a bend (plank, down_dog, plow, puppy,
+// angle doesn't. So poses told apart by a bend (plank, down_dog, plow, shoulder_stand, puppy,
 // cobra) are only judged side-on to the camera, and the straddles, warrior,
 // tree and butterfly, whose legs spread out sideways, only facing it; from the wrong
 // side the answer is "unknown" with a hint to turn (also happy_baby and
@@ -160,6 +160,16 @@ export const POSTURE = {
   cobraHandsUnderShoulders: 0.5,
   /** cobra: elbow angle above this, degrees (arms pushing up, not resting on the forearms) */
   cobraElbowMinDeg: 110,
+  /** shoulder_stand: hips at least this far above the shoulders */
+  shoulderStandHipsAboveShoulders: 0.6,
+  /** shoulder_stand: shoulder-hip line within this of vertical, degrees */
+  shoulderStandTorsoMaxTiltDeg: 40,
+  /** shoulder_stand: ankles at least this far above the hips (legs up) */
+  shoulderStandFeetAboveHips: 0.8,
+  /** shoulder_stand: shoulder-hip-ankle angle at least this, degrees (legs in line with the torso, not over the face) */
+  shoulderStandBodyMinDeg: 135,
+  /** shoulder_stand: head (nose) at most this far below the shoulders (lying on the floor; a headstand is far below) */
+  shoulderStandHeadBelowShoulders: 0.25,
   /** straddle: angle between the legs (hips to ankles) at least this, degrees */
   straddleMinDeg: 90,
   /** straddle: ankles at most this far below the hips (sitting, not standing) */
@@ -199,6 +209,7 @@ export const POSE_ACTIONS = [
   "tree",
   "cobra",
   "butterfly",
+  "shoulder_stand",
 ] as const;
 export type PoseAction = (typeof POSE_ACTIONS)[number];
 
@@ -297,6 +308,7 @@ export const POSTURE_HINTS = {
   feetTogether: "Bring the soles of your feet together",
   heelsIn: "Draw your heels in toward you",
   kneesOutSides: "Let your knees fall out to the sides",
+  legsToCeiling: "Point your legs straight up to the ceiling",
 } as const;
 
 export interface PostureVerdict {
@@ -338,6 +350,7 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     tree: H.showLegs,
     cobra: H.showWhole,
     butterfly: H.showLegs,
+    shoulder_stand: H.showWhole,
   };
   const unknown: PostureVerdict = { state: "unknown", hint: unseen[action] };
   const IN: PostureVerdict = { state: "in" };
@@ -493,7 +506,8 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     case "warrior":
     case "tree":
     case "cobra":
-    case "butterfly": {
+    case "butterfly":
+    case "shoulder_stand": {
       const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
       const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
       if (!sm || !hm) return unknown;
@@ -748,6 +762,22 @@ function yogaPose(action: PoseAction, b: Body): PostureVerdict | undefined {
           H.handsUnder,
         ],
         [all(arms, (a) => straight(a, P.cobraElbowMinDeg)), H.armsStraight],
+      ]);
+    }
+
+    case "shoulder_stand": {
+      if (legs.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      // the head may be hidden behind the body; then it isn't checked
+      const head = b.head;
+      return first([
+        [
+          sm.y - hm.y >= P.shoulderStandHipsAboveShoulders * torso && 90 - tiltFromHorizontal(sm, hm) <= P.shoulderStandTorsoMaxTiltDeg,
+          H.hipsOverShoulders,
+        ],
+        [head === undefined || head.y - sm.y <= P.shoulderStandHeadBelowShoulders * torso, H.shouldersDown],
+        [all(legs, (l) => hm.y - l.end.y >= P.shoulderStandFeetAboveHips * torso && angle(sm, hm, l.end) >= P.shoulderStandBodyMinDeg), H.legsToCeiling],
+        [all(legs, (l) => straight(l)), H.legsStraight],
       ]);
     }
 
