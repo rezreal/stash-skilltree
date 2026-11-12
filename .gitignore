@@ -3,3 +3,4 @@ node_modules/
 plugin/skilltree.js
 plugin/assets/
 .claude/
+__pycache__/
