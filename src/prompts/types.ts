@@ -43,7 +43,7 @@ export const PROMPT_ACTIONS = [
   "kneel_sit",
   "stand",
   "lie_down",
-  // yoga floor poses
+  // yoga poses
   "cat",
   "cow",
   "puppy",
@@ -57,6 +57,9 @@ export const PROMPT_ACTIONS = [
   "happy_baby",
   "savasana",
   "hastasana",
+  "warrior",
+  "tree",
+  "cobra",
 ] as const;
 export type PromptAction = (typeof PROMPT_ACTIONS)[number];
 

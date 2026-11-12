@@ -5,12 +5,13 @@
 // POSTURE.minVisibility are ignored; when the landmarks a pose needs are
 // missing the answer is "unknown" (neither pass nor fail).
 //
-// Floor poses (yoga): straightness of a limb survives the 2D projection, a
-// bend angle doesn't. So poses told apart by a bend (plank, down_dog, plow,
-// puppy) are only judged side-on to the camera, and the straddles, told apart
-// by how wide the legs are, only facing it; from the wrong side the answer is
-// "unknown" with a hint to turn (also happy_baby and savasana, lying poses
-// that point at a camera at the feet). cat, cow, child and forward_fold work
+// Yoga poses: straightness of a limb survives the 2D projection, a bend
+// angle doesn't. So poses told apart by a bend (plank, down_dog, plow, puppy,
+// cobra) are only judged side-on to the camera, and the straddles, warrior
+// and tree, whose legs spread out sideways, only facing it; from the wrong
+// side the answer is "unknown" with a hint to turn (also happy_baby and
+// savasana, lying poses that point at a camera at the feet). warrior is
+// warrior II (virabhadrasana II). cat, cow, child and forward_fold work
 // from either side (heights; the fold's hip angle only side-on). Thunderbolt
 // pose (vajrasana) is kneel_sit; hastasana (upward salute) is stand + arms_up
 // with straight arms. The view is read off the shoulder width: a frontal torso is ~0.75
@@ -123,6 +124,32 @@ export const POSTURE = {
   happyHandsToFeet: 0.5,
   /** savasana: knees, ankles and wrists within this (torso lengths) of hip height (resting on the floor) */
   savasanaOffFloor: 0.3,
+  /** warrior: ankles at least this far apart horizontally (wide stance) */
+  warriorFeetApart: 1.2,
+  /** warrior: front knee angle at most this, degrees */
+  warriorFrontKneeMaxDeg: 130,
+  /** warrior, tree: shoulder-hip line within this of vertical, degrees */
+  uprightMaxTiltDeg: 20,
+  /** warrior: each arm (shoulder-wrist) within this of horizontal, degrees */
+  warriorArmMaxTiltDeg: 20,
+  /** tree: standing ankle at least this far below the hips */
+  treeStandFootBelowHips: 0.8,
+  /** tree: lifted ankle at least this far above the standing one (off the floor) */
+  treeFootLifted: 0.3,
+  /** tree: lifted ankle at most this far, horizontally, from the standing leg (foot on the leg) */
+  treeFootOnLeg: 0.35,
+  /** tree: lifted knee at least this far, horizontally, from the standing leg (knee out to the side) */
+  treeKneeOut: 0.4,
+  /** cobra: shoulders at least this far (torso lengths) above the hips (chest lifted) */
+  cobraChestUp: 0.4,
+  /** cobra: knees and ankles within this (torso lengths) of hip height (legs on the floor) */
+  cobraLegsOffFloor: 0.3,
+  /** cobra: wrists at least this far (torso lengths) below the shoulders (pressing into the floor) */
+  cobraHandsBelowShoulders: 0.3,
+  /** cobra: wrists within this (torso lengths), horizontally, of the shoulders (hands under them) */
+  cobraHandsUnderShoulders: 0.5,
+  /** cobra: elbow angle above this, degrees (arms pushing up, not resting on the forearms) */
+  cobraElbowMinDeg: 110,
   /** straddle: angle between the legs (hips to ankles) at least this, degrees */
   straddleMinDeg: 90,
   /** straddle: ankles at most this far below the hips (sitting, not standing) */
@@ -158,6 +185,9 @@ export const POSE_ACTIONS = [
   "happy_baby",
   "savasana",
   "hastasana",
+  "warrior",
+  "tree",
+  "cobra",
 ] as const;
 export type PoseAction = (typeof POSE_ACTIONS)[number];
 
@@ -243,6 +273,16 @@ export const POSTURE_HINTS = {
   feetUp: "Lift your feet, soles to the ceiling",
   holdFeet: "Hold your feet",
   armsDown: "Rest your arms by your sides",
+  feetWide: "Step your feet wide apart",
+  bendFrontKnee: "Bend your front knee",
+  backLegStraight: "Straighten your back leg",
+  torsoUpright: "Keep your torso upright",
+  armsOut: "Stretch your arms out to the sides at shoulder height",
+  standOneLeg: "Stand on one straight leg",
+  footOnLeg: "Place one foot on your other leg",
+  kneeOut: "Turn your bent knee out to the side",
+  chestUp: "Lift your chest",
+  handsUnder: "Press your hands into the floor under your shoulders",
 } as const;
 
 export interface PostureVerdict {
@@ -280,6 +320,9 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     happy_baby: H.showWhole,
     savasana: H.showWhole,
     hastasana: H.showWhole,
+    warrior: H.showWhole,
+    tree: H.showLegs,
+    cobra: H.showWhole,
   };
   const unknown: PostureVerdict = { state: "unknown", hint: unseen[action] };
   const IN: PostureVerdict = { state: "in" };
@@ -431,7 +474,10 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
     case "child":
     case "forward_fold":
     case "happy_baby":
-    case "savasana": {
+    case "savasana":
+    case "warrior":
+    case "tree":
+    case "cobra": {
       const sm = ls && rs ? mid(ls, rs) : ls ?? rs;
       const hm = lh && rh ? mid(lh, rh) : lh ?? rh;
       if (!sm || !hm) return unknown;
@@ -459,7 +505,7 @@ export function assessPosture(action: PoseAction, pose: NormPoint[] | undefined,
       }
       const side = sw < POSTURE.sideMaxShoulderTorso * torso;
       const head = at(POSE.nose) ?? midOf(at(POSE.leftEye), at(POSE.rightEye)) ?? midOf(at(POSE.leftEar), at(POSE.rightEar));
-      return floorPose(action, { sm, hm, torso, scale, side, legs, arms, head }) ?? unknown;
+      return yogaPose(action, { sm, hm, torso, scale, side, legs, arms, head }) ?? unknown;
     }
   }
 }
@@ -492,11 +538,11 @@ const straight = (l: Limb, minDeg: number = POSTURE.straightMinDeg): boolean =>
   l.joint === undefined || angle(l.root, l.joint, l.end) > minDeg;
 
 /**
- * The yoga floor poses; undefined when the needed landmarks are missing.
+ * The yoga poses; undefined when the needed landmarks are missing.
  * Seen from a side that can't show the pose: unknown, with a hint to turn.
  * Checks run most basic first; the first one that fails gives the hint.
  */
-function floorPose(action: PoseAction, b: Body): PostureVerdict | undefined {
+function yogaPose(action: PoseAction, b: Body): PostureVerdict | undefined {
   const H = POSTURE_HINTS;
   const P = POSTURE;
   const { sm, hm, torso, scale, legs, arms } = b;
@@ -624,6 +670,55 @@ function floorPose(action: PoseAction, b: Body): PostureVerdict | undefined {
         [all(legs, (l) => low(l.joint!) && low(l.end)), H.legsDown],
         [all(legs, (l) => straight(l)), H.legsStraight],
         [all(arms, (a) => low(a.end) && dist(a.end, hm) <= torso), H.armsDown],
+      ]);
+    }
+
+    case "warrior": {
+      if (legs.length < 2 || arms.length < 2) return undefined;
+      if (b.side) return faceCamera;
+      const knees = legs.map((l) => angle(l.root, l.joint!, l.end));
+      return first([
+        [Math.abs(legs[0]!.end.x - legs[1]!.end.x) >= P.warriorFeetApart * scale, H.feetWide],
+        [Math.min(...knees) <= P.warriorFrontKneeMaxDeg, H.bendFrontKnee],
+        [Math.max(...knees) > P.straightMinDeg, H.backLegStraight],
+        [90 - tiltFromHorizontal(sm, hm) <= P.uprightMaxTiltDeg, H.torsoUpright],
+        [all(arms, (a) => straight(a) && tiltFromHorizontal(a.root, a.end) <= P.warriorArmMaxTiltDeg), H.armsOut],
+      ]);
+    }
+
+    case "tree": {
+      if (legs.length < 2) return undefined;
+      if (b.side) return faceCamera;
+      // the standing leg is the one whose foot is lower
+      const [stand, lifted] = legs[0]!.end.y >= legs[1]!.end.y ? [legs[0]!, legs[1]!] : [legs[1]!, legs[0]!];
+      /** horizontal distance of q from the standing leg's hip-ankle line */
+      const offLeg = (q: Q): number => {
+        const dy = stand.end.y - stand.root.y;
+        const x = dy === 0 ? stand.root.x : stand.root.x + ((stand.end.x - stand.root.x) * (q.y - stand.root.y)) / dy;
+        return Math.abs(q.x - x);
+      };
+      return first([
+        [stand.end.y - hm.y >= P.treeStandFootBelowHips * scale && straight(stand), H.standOneLeg],
+        [stand.end.y - lifted.end.y >= P.treeFootLifted * scale, H.footOnLeg],
+        [offLeg(lifted.end) <= P.treeFootOnLeg * scale, H.footOnLeg],
+        [!straight(lifted) && offLeg(lifted.joint!) >= P.treeKneeOut * scale, H.kneeOut],
+        [90 - tiltFromHorizontal(sm, hm) <= P.uprightMaxTiltDeg, H.torsoUpright],
+      ]);
+    }
+
+    case "cobra": {
+      if (legs.length === 0 || arms.length === 0) return undefined;
+      if (!b.side) return turnSide;
+      const low = (q: Q): boolean => Math.abs(q.y - hm.y) <= P.cobraLegsOffFloor * torso;
+      return first([
+        [all(legs, (l) => low(l.joint!) && low(l.end)), H.lieFlat],
+        [all(legs, (l) => straight(l)), H.legsStraight],
+        [hm.y - sm.y >= P.cobraChestUp * torso, H.chestUp],
+        [
+          all(arms, (a) => a.end.y - a.root.y >= P.cobraHandsBelowShoulders * torso && Math.abs(a.end.x - a.root.x) <= P.cobraHandsUnderShoulders * torso),
+          H.handsUnder,
+        ],
+        [all(arms, (a) => straight(a, P.cobraElbowMinDeg)), H.armsStraight],
       ]);
     }
 

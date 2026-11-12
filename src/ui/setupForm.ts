@@ -59,6 +59,9 @@ export const PROMPT_ACTIONS = [
   "happy_baby",
   "savasana",
   "hastasana",
+  "warrior",
+  "tree",
+  "cobra",
 ] as const;
 
 /** Written by the plugin while playing; shown read-only, never written here. */
@@ -155,6 +158,9 @@ export const PROMPT_ACTION_HELP: Readonly<Record<string, string>> = {
   happy_baby: "yoga happy baby: on the back, knees pulled toward the armpits, soles up, holding the feet (side-on to the camera)",
   savasana: "yoga corpse pose (savasana): lying flat on the back, legs long, arms by the sides (side-on to the camera)",
   hastasana: "yoga upward salute (hastasana): standing upright, both arms straight overhead (the camera must see the legs)",
+  warrior: "yoga warrior II: feet wide, front knee bent, back leg straight, arms out to the sides at shoulder height (facing the camera)",
+  tree: "yoga tree: standing on one straight leg, the other foot on its calf or thigh, knee out to the side (facing the camera)",
+  cobra: "yoga cobra: lying on the belly, legs on the floor, chest lifted on the hands (side-on to the camera)",
 };
 
 export const REPLAY_HELP: Readonly<Record<string, string>> = {

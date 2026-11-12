@@ -411,6 +411,80 @@ describe("classifyPosture", () => {
     assert.deepEqual(assessPosture("hastasana", pose({ ...salute, leftAnkle: undefined, rightAnkle: undefined })), { state: "unknown", hint: H.showLegs });
   });
 
+  it("warrior: wide stance, front knee bent, back leg straight, arms out; facing the camera", () => {
+    const warrior = {
+      leftShoulder: [0.45, 0.3],
+      rightShoulder: [0.55, 0.3],
+      leftElbow: [0.37, 0.3],
+      rightElbow: [0.63, 0.3],
+      leftWrist: [0.29, 0.3],
+      rightWrist: [0.71, 0.31],
+      leftHip: [0.47, 0.52],
+      rightHip: [0.53, 0.52],
+      leftKnee: [0.33, 0.58],
+      rightKnee: [0.6, 0.66],
+      leftAnkle: [0.33, 0.8],
+      rightAnkle: [0.67, 0.8],
+    } as const;
+    assert.deepEqual(assessPosture("warrior", pose(warrior)), { state: "in" });
+    assert.deepEqual(assessPosture("warrior", pose(STANDING_ARMS)), { state: "out", hint: H.feetWide });
+    // wide, both legs straight
+    assert.equal(assessPosture("warrior", pose({ ...warrior, leftKnee: [0.4, 0.66] })).hint, H.bendFrontKnee);
+    // wide squat: both knees bent
+    assert.equal(assessPosture("warrior", pose({ ...warrior, rightKnee: [0.67, 0.58] })).hint, H.backLegStraight);
+    // arms overhead (warrior I arms)
+    const armsUp = { ...warrior, leftElbow: [0.44, 0.17], rightElbow: [0.56, 0.17], leftWrist: [0.43, 0.04], rightWrist: [0.57, 0.04] } as const;
+    assert.equal(assessPosture("warrior", pose(armsUp)).hint, H.armsOut);
+    assert.deepEqual(assessPosture("warrior", pose({ ...warrior, rightShoulder: [0.46, 0.3] })), { state: "unknown", hint: H.faceCamera });
+    assert.deepEqual(assessPosture("warrior", pose({ ...warrior, rightWrist: undefined })), { state: "unknown", hint: H.showWhole });
+  });
+
+  it("tree: one straight leg, the other foot on it, knee out; facing the camera", () => {
+    const tree = {
+      leftShoulder: [0.45, 0.25],
+      rightShoulder: [0.55, 0.25],
+      leftHip: [0.47, 0.5],
+      rightHip: [0.53, 0.5],
+      leftKnee: [0.38, 0.62],
+      rightKnee: [0.53, 0.7],
+      leftAnkle: [0.51, 0.6],
+      rightAnkle: [0.53, 0.9],
+    } as const;
+    assert.deepEqual(assessPosture("tree", pose(tree)), { state: "in" });
+    // mirrored: standing on the left leg
+    const mirrored = { ...tree, leftKnee: [0.47, 0.7], leftAnkle: [0.47, 0.9], rightKnee: [0.62, 0.62], rightAnkle: [0.49, 0.6] } as const;
+    assert.equal(classifyPosture("tree", pose(mirrored)), "in");
+    assert.deepEqual(assessPosture("tree", pose(STANDING)), { state: "out", hint: H.footOnLeg });
+    // knee up, foot hanging free
+    assert.equal(assessPosture("tree", pose({ ...tree, leftAnkle: [0.4, 0.75] })).hint, H.footOnLeg);
+    // foot on the calf, knee pointing at the camera
+    assert.equal(assessPosture("tree", pose({ ...tree, leftKnee: [0.49, 0.62], leftAnkle: [0.52, 0.72] })).hint, H.kneeOut);
+    assert.equal(assessPosture("tree", pose({ ...tree, leftShoulder: [0.3, 0.32], rightShoulder: [0.4, 0.28] })).hint, H.torsoUpright);
+    assert.equal(assessPosture("tree", pose({ ...tree, rightKnee: [0.6, 0.7] })).hint, H.standOneLeg);
+    assert.deepEqual(assessPosture("tree", pose({ ...tree, rightShoulder: [0.46, 0.25] })), { state: "unknown", hint: H.faceCamera });
+  });
+
+  it("cobra: on the belly, legs down, chest lifted on the hands; side-on only", () => {
+    const cobra = {
+      leftShoulder: [0.62, 0.62],
+      leftElbow: [0.63, 0.72],
+      leftWrist: [0.62, 0.82],
+      leftHip: [0.45, 0.8],
+      leftKnee: [0.3, 0.81],
+      leftAnkle: [0.15, 0.82],
+      nose: [0.7, 0.5],
+    } as const;
+    assert.deepEqual(assessPosture("cobra", pose(cobra)), { state: "in" });
+    assert.deepEqual(assessPosture("cobra", pose(SAVASANA)), { state: "out", hint: H.chestUp });
+    // sphinx: on the forearms, hands out in front
+    const sphinx = { ...cobra, leftShoulder: [0.6, 0.68], leftElbow: [0.6, 0.82], leftWrist: [0.72, 0.82] } as const;
+    assert.equal(assessPosture("cobra", pose(sphinx)).hint, H.handsUnder);
+    assert.equal(assessPosture("cobra", pose({ ...cobra, leftElbow: [0.7, 0.72] })).hint, H.armsStraight);
+    assert.equal(assessPosture("cobra", pose(PLANK)).hint, H.chestUp);
+    assert.equal(assessPosture("cobra", pose(DOG)).hint, H.lieFlat);
+    assert.deepEqual(assessPosture("cobra", pose({ ...cobra, rightShoulder: [0.42, 0.62] })), { state: "unknown", hint: H.turnSide });
+  });
+
   it("aspect changes angles", () => {
     // the same normalized points are flatter in a wide frame than in a tall one
     const p = pose({ leftShoulder: [0.2, 0.5], rightShoulder: [0.2, 0.5], leftHip: [0.5, 0.75], rightHip: [0.5, 0.75] });

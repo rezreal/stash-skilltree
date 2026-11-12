@@ -44,7 +44,7 @@ ACTIONS = ["nod", "shake_head", "eyes_closed", "eyes_open", "hand_raised", "stil
            "kneel_sit", "stand", "lie_down",
            "cat", "cow", "puppy", "down_dog", "plank", "plow", "straddle",
            "straddle_up", "child", "forward_fold", "happy_baby", "savasana",
-           "hastasana"]
+           "hastasana", "warrior", "tree", "cobra"]
 TYPES = ["repeat", "gaze", "action", "spend"]
 
 # Seconds after the instruction ends during which the plugin checks compliance.
@@ -76,7 +76,10 @@ computer can verify, of these four types:
   plank, plow, straddle (seated straddle stretch, legs wide on the floor),
   straddle_up (upward seated straddle, legs lifted wide), child (child's
   pose), forward_fold (standing forward fold), happy_baby, savasana (corpse
-  pose), hastasana (upward salute: standing, arms straight overhead).
+  pose), hastasana (upward salute: standing, arms straight overhead),
+  warrior (warrior II: wide stance, front knee bent, arms out to the sides),
+  tree (standing on one leg, the other foot on it), cobra (on the belly,
+  chest lifted on the hands).
 - spend: the viewer is told to send/give/pay an amount of money, coins or
   tribute. "amount" = the number as an integer.
 

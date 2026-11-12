@@ -48,6 +48,9 @@ const ACTION_WORDS: Readonly<Record<PromptAction, string>> = {
   happy_baby: "Happy baby pose",
   savasana: "Savasana (corpse pose)",
   hastasana: "Upward salute (hastasana)",
+  warrior: "Warrior II",
+  tree: "Tree pose",
+  cobra: "Cobra pose",
 };
 
 /** "their eyes", "the floor in front of their feet", ... */
